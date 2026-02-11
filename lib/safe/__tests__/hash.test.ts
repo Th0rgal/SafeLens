@@ -1,59 +1,128 @@
+import { describe, it, expect } from "vitest";
 import { computeSafeTxHash, verifySafeTxHash } from "../hash";
 import type { Hex } from "viem";
+import {
+  COWSWAP_TWAP_TX,
+  CHAIN_ID,
+  EXPECTED_SAFE_TX_HASH,
+} from "./fixtures/cowswap-twap-tx";
 
-/**
- * Test Safe transaction hash computation
- *
- * This test uses a real Safe transaction to verify our hash computation
- * matches the expected Safe tx hash.
- */
-describe("Safe Transaction Hash", () => {
-  it("should compute correct Safe tx hash for a real transaction", () => {
-    // Real transaction data from a Safe multisig
-    // You can get this from Safe API: https://safe-transaction-mainnet.safe.global/api/v1/multisig-transactions/{safeTxHash}/
+describe("computeSafeTxHash", () => {
+  it("computes the correct EIP-712 hash for the CowSwap TWAP transaction", () => {
+    const tx = COWSWAP_TWAP_TX;
 
-    const params = {
-      safeAddress: "0x9fC3dc011b461664c835F2527fffb1169b3C213e" as Hex,
-      chainId: 1, // Ethereum Mainnet
-      to: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Hex, // Example: USDC contract
-      value: BigInt(0),
-      data: "0xa9059cbb0000000000000000000000001234567890123456789012345678901234567890000000000000000000000000000000000000000000000000000000003b9aca00" as Hex,
-      operation: 0 as const,
-      safeTxGas: BigInt(0),
-      baseGas: BigInt(0),
-      gasPrice: BigInt(0),
-      gasToken: "0x0000000000000000000000000000000000000000" as Hex,
-      refundReceiver: "0x0000000000000000000000000000000000000000" as Hex,
-      nonce: 42,
+    const computed = computeSafeTxHash({
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    });
+
+    expect(computed.toLowerCase()).toBe(EXPECTED_SAFE_TX_HASH.toLowerCase());
+  });
+
+  it("returns a valid 32-byte hash", () => {
+    const tx = COWSWAP_TWAP_TX;
+
+    const computed = computeSafeTxHash({
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    });
+
+    expect(computed).toMatch(/^0x[a-fA-F0-9]{64}$/);
+  });
+
+  it("produces different hashes for different nonces", () => {
+    const tx = COWSWAP_TWAP_TX;
+    const baseParams = {
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation as 0 | 1,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
     };
 
-    const computed = computeSafeTxHash(params);
+    const hash1 = computeSafeTxHash({ ...baseParams, nonce: 28 });
+    const hash2 = computeSafeTxHash({ ...baseParams, nonce: 29 });
 
-    // The computed hash should be a valid 32-byte hash
-    expect(computed).toMatch(/^0x[a-fA-F0-9]{64}$/);
-
-    console.log("Computed Safe TX Hash:", computed);
+    expect(hash1).not.toBe(hash2);
   });
 
-  it("should verify matching hashes correctly", () => {
-    const hash1 = "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
-    const hash2 = "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
+  it("produces different hashes for different chains", () => {
+    const tx = COWSWAP_TWAP_TX;
+    const baseParams = {
+      safeAddress: tx.safe as Hex,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation as 0 | 1,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    };
 
-    const result = verifySafeTxHash(hash1, hash2);
+    const hashMainnet = computeSafeTxHash({ ...baseParams, chainId: 1 });
+    const hashArbitrum = computeSafeTxHash({ ...baseParams, chainId: 42161 });
+
+    expect(hashMainnet).not.toBe(hashArbitrum);
+  });
+});
+
+describe("verifySafeTxHash", () => {
+  it("returns valid:true for matching hashes", () => {
+    const hash =
+      "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
+    const result = verifySafeTxHash(hash, hash);
 
     expect(result.valid).toBe(true);
-    expect(result.computed).toBe(hash1);
-    expect(result.expected).toBe(hash2);
+    expect(result.computed).toBe(hash);
+    expect(result.expected).toBe(hash);
   });
 
-  it("should detect mismatching hashes", () => {
-    const hash1 = "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
-    const hash2 = "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
+  it("returns valid:true for case-insensitive match", () => {
+    const lower =
+      "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
+    const upper =
+      "0x8BCBA9ED52545BDC89EEBC015757CDA83C2468D3F225CEA01C2A844B8A15CF17" as Hex;
+    const result = verifySafeTxHash(lower, upper);
 
+    expect(result.valid).toBe(true);
+  });
+
+  it("returns valid:false for mismatching hashes", () => {
+    const hash1 =
+      "0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17" as Hex;
+    const hash2 =
+      "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
     const result = verifySafeTxHash(hash1, hash2);
 
     expect(result.valid).toBe(false);
-    expect(result.computed).toBe(hash1);
-    expect(result.expected).toBe(hash2);
   });
 });

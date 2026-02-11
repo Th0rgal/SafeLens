@@ -1,4 +1,4 @@
-import { encodeAbiParameters, keccak256, toHex } from "viem";
+import { concat, encodeAbiParameters, keccak256, toHex } from "viem";
 import type { Hash, Hex } from "viem";
 
 /**
@@ -74,12 +74,9 @@ export function computeSafeTxHash(params: {
     )
   );
 
-  // Final EIP-712 hash
+  // Final EIP-712 hash: raw concatenation of "\x19\x01" || domainSeparator || safeTxHash
   const finalHash = keccak256(
-    encodeAbiParameters(
-      [{ type: "bytes1" }, { type: "bytes1" }, { type: "bytes32" }, { type: "bytes32" }],
-      ["0x19" as Hex, "0x01" as Hex, domainSeparator, safeTxHash]
-    )
+    concat(["0x1901", domainSeparator, safeTxHash])
   );
 
   return finalHash;

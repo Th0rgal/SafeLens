@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ export default function VerifyPage() {
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [verified, setVerified] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,10 +43,11 @@ export default function VerifyPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = useCallback((text: string, field: string) => {
     navigator.clipboard.writeText(text);
-    alert("Copied to clipboard!");
-  };
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  }, []);
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -128,10 +130,10 @@ export default function VerifyPage() {
                   <div className="flex items-center gap-2">
                     <code className="text-xs">{evidence.safeAddress}</code>
                     <button
-                      onClick={() => copyToClipboard(evidence.safeAddress)}
+                      onClick={() => copyToClipboard(evidence.safeAddress, "safeAddress")}
                       className="text-xs text-blue-600 hover:text-blue-800"
                     >
-                      Copy
+                      {copiedField === "safeAddress" ? "Copied!" : "Copy"}
                     </button>
                   </div>
                 </div>
@@ -141,10 +143,10 @@ export default function VerifyPage() {
                   <div className="flex items-center gap-2">
                     <code className="text-xs">{evidence.safeTxHash}</code>
                     <button
-                      onClick={() => copyToClipboard(evidence.safeTxHash)}
+                      onClick={() => copyToClipboard(evidence.safeTxHash, "safeTxHash")}
                       className="text-xs text-blue-600 hover:text-blue-800"
                     >
-                      Copy
+                      {copiedField === "safeTxHash" ? "Copied!" : "Copy"}
                     </button>
                   </div>
                 </div>
@@ -155,10 +157,10 @@ export default function VerifyPage() {
                     <div className="flex items-center gap-2">
                       <code className="text-xs">{evidence.ethereumTxHash}</code>
                       <button
-                        onClick={() => copyToClipboard(evidence.ethereumTxHash!)}
+                        onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
                         className="text-xs text-blue-600 hover:text-blue-800"
                       >
-                        Copy
+                        {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
                       </button>
                     </div>
                   </div>

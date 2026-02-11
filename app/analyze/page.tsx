@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ export default function AnalyzePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const handleAnalyze = async () => {
     setError(null);
@@ -44,12 +45,13 @@ export default function AnalyzePage() {
     }
   };
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     if (evidence) {
       navigator.clipboard.writeText(JSON.stringify(evidence, null, 2));
-      alert("Evidence copied to clipboard!");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-  };
+  }, [evidence]);
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -133,7 +135,7 @@ export default function AnalyzePage() {
                 Download JSON
               </Button>
               <Button onClick={handleCopy} variant="outline" className="flex-1">
-                Copy to Clipboard
+                {copied ? "Copied!" : "Copy to Clipboard"}
               </Button>
             </div>
           </CardContent>
