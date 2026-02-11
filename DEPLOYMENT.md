@@ -12,9 +12,9 @@
 
 5. Configure:
    - Framework Preset: **Next.js**
-   - Build Command: `npm run build` (default)
+   - Build Command: `bun run build`
    - Output Directory: `.next` (default)
-   - Install Command: `npm install` (default)
+   - Install Command: `bun install`
 
 6. Click "Deploy"
 
@@ -29,7 +29,7 @@ No environment variables required for the MVP! The app is completely client-side
 ### Build for Production
 
 ```bash
-npm run build
+bun run build
 ```
 
 This creates an optimized production build in `.next/`.
@@ -37,7 +37,7 @@ This creates an optimized production build in `.next/`.
 ### Start Production Server
 
 ```bash
-npm start
+bun start
 ```
 
 The app will run on http://localhost:3000
@@ -47,19 +47,19 @@ The app will run on http://localhost:3000
 Create a `Dockerfile`:
 
 ```dockerfile
-FROM node:18-alpine
+FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci --only=production
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile --production
 
 COPY . .
-RUN npm run build
+RUN bun run build
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["bun", "start"]
 ```
 
 Build and run:
@@ -86,7 +86,7 @@ module.exports = nextConfig
 
 2. Build:
 ```bash
-npm run build
+bun run build
 ```
 
 3. Deploy the `out/` directory to any static host

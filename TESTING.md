@@ -8,7 +8,7 @@ This document describes how to test the SafeLens application.
 
 1. Start the dev server:
 ```bash
-npm run dev
+bun dev
 ```
 
 2. Navigate to http://localhost:3000/analyze
@@ -178,7 +178,7 @@ Expected: ✅ Passes schema validation (may fail hash check if hash doesn't matc
 
 ### Bundle Size
 ```bash
-npm run build
+bun run build
 ```
 
 Expected:

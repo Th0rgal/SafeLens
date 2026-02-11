@@ -13,16 +13,16 @@ A minimal, trustless application for verifying Gnosis Safe multisig transactions
 
 ```bash
 # Install dependencies
-npm install
+bun install
 
 # Run development server
-npm run dev
+bun dev
 
 # Build for production
-npm run build
+bun run build
 
 # Start production server
-npm start
+bun start
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
