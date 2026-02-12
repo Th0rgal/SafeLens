@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { parseSafeUrl, getChainName } from "@/lib/safe/url-parser";
 import { fetchSafeTransaction } from "@/lib/safe/api";
 import { createEvidencePackage, downloadEvidencePackage } from "@/lib/package/creator";
+import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage } from "@/lib/types";
 
 export default function AnalyzePage() {
@@ -27,10 +28,10 @@ export default function AnalyzePage() {
       const urlData = parseSafeUrl(url);
 
       // Fetch transaction
-      const transaction = await fetchSafeTransaction(urlData.chainId, urlData.safeTxHash);
+      const tx = await fetchSafeTransaction(urlData.chainId, urlData.safeTxHash);
 
       // Create evidence package
-      const pkg = createEvidencePackage(transaction, urlData.chainId, url);
+      const pkg = createEvidencePackage(tx, urlData.chainId, url);
       setEvidence(pkg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to analyze transaction");
@@ -57,7 +58,7 @@ export default function AnalyzePage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">Analyze Safe Transaction</h1>
-        <p className="text-gray-600">
+        <p className="text-muted">
           Enter a Safe transaction URL to generate an evidence package
         </p>
       </div>
@@ -103,30 +104,30 @@ export default function AnalyzePage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <div className="font-medium text-gray-500">Chain</div>
+                <div className="font-medium text-muted">Chain</div>
                 <div className="font-mono">{getChainName(evidence.chainId)}</div>
               </div>
               <div>
-                <div className="font-medium text-gray-500">Safe Address</div>
-                <div className="font-mono text-xs">{evidence.safeAddress}</div>
+                <div className="font-medium text-muted">Safe Address</div>
+                <AddressDisplay address={evidence.safeAddress} />
               </div>
               <div>
-                <div className="font-medium text-gray-500">Safe TX Hash</div>
+                <div className="font-medium text-muted">Safe TX Hash</div>
                 <div className="font-mono text-xs">{evidence.safeTxHash}</div>
               </div>
               <div>
-                <div className="font-medium text-gray-500">Nonce</div>
+                <div className="font-medium text-muted">Nonce</div>
                 <div className="font-mono">{evidence.transaction.nonce}</div>
               </div>
               <div>
-                <div className="font-medium text-gray-500">Signatures</div>
+                <div className="font-medium text-muted">Signatures</div>
                 <div className="font-mono">
                   {evidence.confirmations.length} / {evidence.confirmationsRequired}
                 </div>
               </div>
               <div>
-                <div className="font-medium text-gray-500">Target</div>
-                <div className="font-mono text-xs">{evidence.transaction.to}</div>
+                <div className="font-medium text-muted">Target</div>
+                <AddressDisplay address={evidence.transaction.to} />
               </div>
             </div>
 
@@ -141,6 +142,7 @@ export default function AnalyzePage() {
           </CardContent>
         </Card>
       )}
+
     </div>
   );
 }

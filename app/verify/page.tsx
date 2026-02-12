@@ -1,13 +1,41 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CollapsibleCard } from "@/components/ui/collapsible-card";
+import { useToast } from "@/components/ui/toast";
 import { parseEvidencePackage } from "@/lib/package/validator";
 import { getChainName } from "@/lib/safe/url-parser";
+import { verifySignature, type SignatureCheckResult } from "@/lib/safe/signatures";
+import { TrustBadge } from "@/components/trust-badge";
+import { InterpretationCard } from "@/components/interpretation-card";
+import { CallArray } from "@/components/call-array";
+import { AddressDisplay } from "@/components/address-display";
+import { useSettingsConfig } from "@/lib/settings";
+import { identifyProposer, analyzeTarget, analyzeSigners, type TransactionWarning } from "@/lib/warnings/analyze";
+import { ShieldCheck, AlertTriangle, HelpCircle, UserRound } from "lucide-react";
 import type { EvidencePackage } from "@/lib/types";
+import type { Hash, Hex, Address } from "viem";
+
+const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
+  info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
+  warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
+  danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
+};
+
+function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
+  const style = WARNING_STYLES[warning.level];
+  const { Icon } = style;
+  return (
+    <div className={`flex items-center gap-2 rounded-md border ${style.border} ${style.bg} px-3 py-2 text-xs ${style.text} ${className ?? ""}`}>
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <span>{warning.message}</span>
+    </div>
+  );
+}
 
 export default function VerifyPage() {
   const [jsonInput, setJsonInput] = useState("");
@@ -15,6 +43,46 @@ export default function VerifyPage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [verified, setVerified] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(true);
+  const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
+  const { config } = useSettingsConfig();
+  const { success: toastSuccess } = useToast();
+
+  // Compute warnings from settings config
+  const proposer = evidence ? identifyProposer(evidence.confirmations) : null;
+  const targetWarnings = evidence && config
+    ? analyzeTarget(evidence.transaction.to, evidence.transaction.operation, config)
+    : [];
+  const signerWarnings = evidence && config
+    ? analyzeSigners(evidence.confirmations, config)
+    : {};
+
+  // Verify each signature locally when evidence is loaded
+  useEffect(() => {
+    if (!evidence) {
+      setSigResults({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function verifyAll() {
+      const results: Record<string, SignatureCheckResult> = {};
+      for (const conf of evidence!.confirmations) {
+        const result = await verifySignature(
+          evidence!.safeTxHash as Hash,
+          conf.signature as Hex,
+          conf.owner as Address
+        );
+        if (cancelled) return;
+        results[conf.owner] = result;
+      }
+      if (!cancelled) setSigResults(results);
+    }
+
+    verifyAll();
+    return () => { cancelled = true; };
+  }, [evidence]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -23,7 +91,7 @@ export default function VerifyPage() {
     try {
       const text = await file.text();
       setJsonInput(text);
-    } catch (err) {
+    } catch {
       setErrors(["Failed to read file"]);
     }
   };
@@ -38,6 +106,11 @@ export default function VerifyPage() {
     if (result.valid && result.evidence) {
       setEvidence(result.evidence);
       setVerified(true);
+      setUploadOpen(false);
+      toastSuccess(
+        "Verification Successful",
+        "The evidence package is valid and the Safe transaction hash has been successfully recomputed and verified."
+      );
     } else {
       setErrors(result.errors);
     }
@@ -53,26 +126,26 @@ export default function VerifyPage() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">Verify Evidence Package</h1>
-        <p className="text-gray-600">
+        <p className="text-muted">
           Upload or paste an evidence package to verify its authenticity
         </p>
       </div>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Upload Evidence</CardTitle>
-          <CardDescription>
-            Upload a JSON file or paste the evidence package content
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard
+        title="Upload Evidence"
+        description="Upload a JSON file or paste the evidence package content"
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        className="mb-6"
+      >
+        <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Upload File</label>
             <input
               type="file"
               accept=".json,application/json"
               onChange={handleFileUpload}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-gray-900 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-gray-900/90"
+              className="block w-full text-sm text-muted file:mr-4 file:rounded-md file:border file:border-border/[0.10] file:bg-surface-2/40 file:px-3 file:py-2 file:text-sm file:font-medium file:text-fg hover:file:border-border/[0.14] hover:file:bg-surface-2/55"
             />
           </div>
 
@@ -89,8 +162,8 @@ export default function VerifyPage() {
           <Button onClick={handleVerify} disabled={!jsonInput} className="w-full">
             Verify Evidence
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleCard>
 
       {errors.length > 0 && (
         <Alert variant="destructive" className="mb-6">
@@ -107,12 +180,13 @@ export default function VerifyPage() {
 
       {verified && evidence && (
         <div className="space-y-6">
-          <Alert className="border-green-500 bg-green-50">
-            <AlertTitle className="text-green-900">✓ Verification Successful</AlertTitle>
-            <AlertDescription className="text-green-800">
-              The evidence package is valid and the Safe transaction hash has been successfully recomputed and verified.
-            </AlertDescription>
-          </Alert>
+          {evidence.dataDecoded && (
+            <InterpretationCard
+              dataDecoded={evidence.dataDecoded}
+              txTo={evidence.transaction.to}
+              txOperation={evidence.transaction.operation}
+            />
+          )}
 
           <Card>
             <CardHeader>
@@ -121,30 +195,38 @@ export default function VerifyPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <div className="mb-1 text-sm font-medium text-gray-500">Chain</div>
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                    Chain <TrustBadge level="self-verified" />
+                  </div>
                   <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
                 </div>
 
                 <div>
-                  <div className="mb-1 text-sm font-medium text-gray-500">Safe Address</div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs">{evidence.safeAddress}</code>
-                    <button
-                      onClick={() => copyToClipboard(evidence.safeAddress, "safeAddress")}
-                      className="text-xs text-blue-600 hover:text-blue-800"
-                    >
-                      {copiedField === "safeAddress" ? "Copied!" : "Copy"}
-                    </button>
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                    Safe Address <TrustBadge level="self-verified" />
                   </div>
+                  <AddressDisplay address={evidence.safeAddress} />
                 </div>
 
+                {proposer && (
+                  <div>
+                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                      <UserRound className="h-3.5 w-3.5" />
+                      Proposed by
+                    </div>
+                    <AddressDisplay address={proposer} />
+                  </div>
+                )}
+
                 <div className="md:col-span-2">
-                  <div className="mb-1 text-sm font-medium text-gray-500">Safe TX Hash</div>
+                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                    Safe TX Hash <TrustBadge level="self-verified" />
+                  </div>
                   <div className="flex items-center gap-2">
                     <code className="text-xs">{evidence.safeTxHash}</code>
                     <button
                       onClick={() => copyToClipboard(evidence.safeTxHash, "safeTxHash")}
-                      className="text-xs text-blue-600 hover:text-blue-800"
+                      className="text-xs text-accent hover:text-accent-hover"
                     >
                       {copiedField === "safeTxHash" ? "Copied!" : "Copy"}
                     </button>
@@ -153,12 +235,14 @@ export default function VerifyPage() {
 
                 {evidence.ethereumTxHash && (
                   <div className="md:col-span-2">
-                    <div className="mb-1 text-sm font-medium text-gray-500">Ethereum TX Hash</div>
+                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                      Ethereum TX Hash <TrustBadge level="api-sourced" />
+                    </div>
                     <div className="flex items-center gap-2">
                       <code className="text-xs">{evidence.ethereumTxHash}</code>
                       <button
                         onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
-                        className="text-xs text-blue-600 hover:text-blue-800"
+                        className="text-xs text-accent hover:text-accent-hover"
                       >
                         {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
                       </button>
@@ -171,103 +255,125 @@ export default function VerifyPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Transaction Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-500">Target Contract:</span>
-                  <code className="text-xs">{evidence.transaction.to}</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-500">Value:</span>
-                  <code className="text-xs">{evidence.transaction.value} wei</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-500">Operation:</span>
-                  <span>{evidence.transaction.operation === 0 ? "Call" : "DelegateCall"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium text-gray-500">Nonce:</span>
-                  <span>{evidence.transaction.nonce}</span>
-                </div>
-                {evidence.transaction.data && (
-                  <div>
-                    <div className="mb-1 font-medium text-gray-500">Calldata:</div>
-                    <code className="block break-all rounded bg-gray-100 p-2 text-xs">
-                      {evidence.transaction.data}
-                    </code>
-                  </div>
+              <div className="flex items-center gap-2">
+                <CardTitle>Signatures</CardTitle>
+                {Object.keys(sigResults).length > 0 ? (
+                  Object.values(sigResults).every((r) => r.status === "valid") ? (
+                    <TrustBadge level="self-verified" />
+                  ) : (
+                    <TrustBadge level="api-sourced" />
+                  )
+                ) : (
+                  <TrustBadge level="api-sourced" />
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Signatures</CardTitle>
               <CardDescription>
                 {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {evidence.confirmations.map((conf, i) => (
-                  <div key={i} className="rounded border border-gray-200 p-3">
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-xs font-medium text-gray-500">Owner {i + 1}</span>
-                      <span className="text-xs text-gray-500">{new Date(conf.submissionDate).toLocaleString()}</span>
+                {evidence.confirmations.map((conf, i) => {
+                  const sigResult = sigResults[conf.owner];
+                  return (
+                    <div key={i} className="rounded-md border border-border/[0.08] glass-subtle p-3 shadow-glass-sm">
+                      <div className="mb-1 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-muted">Owner {i + 1}</span>
+                          {sigResult ? (
+                            sigResult.status === "valid" ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-emerald-400" title="Signature verified locally">
+                                <ShieldCheck className="h-3 w-3" />
+                                Verified
+                              </span>
+                            ) : sigResult.status === "invalid" ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-red-400" title={`Recovered: ${sigResult.recoveredSigner}`}>
+                                <AlertTriangle className="h-3 w-3" />
+                                Invalid
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-amber-400" title={sigResult.reason}>
+                                <HelpCircle className="h-3 w-3" />
+                                {sigResult.reason}
+                              </span>
+                            )
+                          ) : (
+                            <span className="text-xs text-muted">Verifying…</span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
+                      </div>
+                      <AddressDisplay address={conf.owner} />
+                      {signerWarnings[conf.owner]?.map((w, j) => (
+                        <WarningBanner key={j} warning={w} className="mt-1.5" />
+                      ))}
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
+                          Show signature
+                        </summary>
+                        <code className="mt-1 block break-all text-xs text-muted">
+                          {conf.signature}
+                        </code>
+                      </details>
                     </div>
-                    <code className="block text-xs text-gray-700">{conf.owner}</code>
-                    <details className="mt-2">
-                      <summary className="cursor-pointer text-xs text-blue-600 hover:text-blue-800">
-                        Show signature
-                      </summary>
-                      <code className="mt-1 block break-all text-xs text-gray-600">
-                        {conf.signature}
-                      </code>
-                    </details>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Sources of Truth</CardTitle>
-              <CardDescription>
-                Data sources used to create this evidence package
-              </CardDescription>
+              <CardTitle>Transaction Details</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <div className="font-medium text-gray-500">Safe API:</div>
-                  <a
-                    href={evidence.sources.safeApiUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                  >
-                    {evidence.sources.safeApiUrl}
-                  </a>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 font-medium text-muted">
+                    Target Contract <TrustBadge level="self-verified" />
+                  </span>
+                  <AddressDisplay address={evidence.transaction.to} />
                 </div>
-                <div>
-                  <div className="font-medium text-gray-500">Transaction URL:</div>
-                  <a
-                    href={evidence.sources.transactionUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="break-all text-blue-600 hover:underline"
-                  >
-                    {evidence.sources.transactionUrl}
-                  </a>
+                {targetWarnings.map((w, i) => (
+                  <WarningBanner key={i} warning={w} />
+                ))}
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-2 font-medium text-muted">
+                    Value <TrustBadge level="self-verified" />
+                  </span>
+                  <code className="text-xs">{evidence.transaction.value} wei</code>
                 </div>
-                <div>
-                  <div className="font-medium text-gray-500">Packaged At:</div>
-                  <span>{new Date(evidence.packagedAt).toLocaleString()}</span>
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-2 font-medium text-muted">
+                    Operation <TrustBadge level="self-verified" />
+                  </span>
+                  <span>{evidence.transaction.operation === 0 ? "Call" : "DelegateCall"}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="flex items-center gap-2 font-medium text-muted">
+                    Nonce <TrustBadge level="self-verified" />
+                  </span>
+                  <span>{evidence.transaction.nonce}</span>
+                </div>
+                {evidence.dataDecoded && (
+                  <CallArray
+                    dataDecoded={evidence.dataDecoded}
+                    txTo={evidence.transaction.to}
+                    txValue={evidence.transaction.value}
+                    txOperation={evidence.transaction.operation}
+                    txData={evidence.transaction.data}
+                  />
+                )}
+                {evidence.transaction.data && (
+                  <div>
+                    <div className="mb-1 flex items-center gap-2 font-medium text-muted">
+                      Calldata <TrustBadge level="self-verified" />
+                    </div>
+                    <code className="block break-all rounded-md border border-border/[0.08] glass-subtle p-2 text-xs">
+                      {evidence.transaction.data}
+                    </code>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
