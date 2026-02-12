@@ -33,6 +33,7 @@ export function createEvidencePackage(
     })),
     confirmationsRequired: transaction.confirmationsRequired,
     ethereumTxHash: transaction.transactionHash,
+    dataDecoded: transaction.dataDecoded ?? null,
     sources: {
       safeApiUrl: getSafeApiUrl(chainId),
       transactionUrl,

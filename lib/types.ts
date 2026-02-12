@@ -87,6 +87,7 @@ export const evidencePackageSchema = z.object({
   ),
   confirmationsRequired: z.number(),
   ethereumTxHash: hashSchema.nullable().optional(),
+  dataDecoded: z.any().nullable().optional(),
   sources: z.object({
     safeApiUrl: z.string().url(),
     transactionUrl: z.string().url(),
