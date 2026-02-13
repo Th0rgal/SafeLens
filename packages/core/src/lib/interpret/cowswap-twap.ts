@@ -5,12 +5,7 @@
  * TWAP (Time-Weighted Average Price) orders via the Composable Order Framework.
  */
 
-import type {
-  Interpretation,
-  CowSwapTwapDetails,
-  TokenInfo,
-  Interpreter,
-} from "./types";
+import type { CowSwapTwapDetails, TokenInfo, Interpreter } from "./types";
 
 // ── Well-known addresses (Ethereum Mainnet) ────────────────────────────
 
@@ -251,9 +246,11 @@ export const interpretCowSwapTwap: Interpreter = (
   };
 
   return {
+    id: "cowswap-twap",
     protocol: "CoW Swap",
     action: "TWAP Order",
+    severity: "info",
     summary: `TWAP Sell ${totalSellFormatted} ${sellSymbol} → ${buySymbol} (${Number(order.n)} parts over ${formatDuration(totalDuration)})`,
-    details: details as unknown as Record<string, unknown>,
+    details,
   };
 };

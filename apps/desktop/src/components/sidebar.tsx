@@ -34,18 +34,20 @@ export function Sidebar({
   const fp = useMemo(() => settingsFingerprint(config), [config]);
   const [fpOpen, setFpOpen] = useState(false);
   const asideRef = useRef<HTMLElement>(null);
+  const blurDebugEnabled = import.meta.env.VITE_DEBUG_BLUR === "1";
 
   useEffect(() => {
+    if (!blurDebugEnabled) return;
     if (!asideRef.current) return;
     return attachBlurDiagnostics(asideRef.current);
-  }, []);
+  }, [blurDebugEnabled]);
 
   return (
     <aside ref={asideRef} className="glass-sidebar flex h-full w-[220px] shrink-0 flex-col border-r border-white/[0.06]">
-      {/* Draggable titlebar spacer for macOS traffic lights */}
-      <div className="h-[52px] shrink-0" data-tauri-drag-region="" />
+      {/* Spacer for macOS traffic lights (drag handled by App-level overlay) */}
+      <div className="h-[52px] shrink-0" />
 
-      <div className="px-5 pb-4" data-tauri-drag-region="">
+      <div className="px-5 pb-4">
         <h1 className="text-lg font-semibold tracking-tight">SafeLens</h1>
         <p className="text-xs text-muted">Offline verifier</p>
       </div>

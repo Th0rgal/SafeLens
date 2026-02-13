@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { useToast } from "@/components/ui/toast";
 import {
   parseEvidencePackage,
@@ -15,7 +14,7 @@ import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload } from "lucide-react";
+import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
@@ -117,11 +116,13 @@ export default function VerifyScreen() {
     setTimeout(() => setCopiedField(null), 2000);
   }, []);
 
-  const signaturesTrustLevel: TrustLevel = Object.values(sigResults).some(
-    (result) => result.status === "unsupported"
-  )
-    ? "api-sourced"
-    : "self-verified";
+  const signatureResults = Object.values(sigResults);
+  const signaturesTrustLevel: TrustLevel =
+    signatureResults.length === 0
+      ? "api-sourced"
+      : signatureResults.some((result) => result.status === "unsupported")
+        ? "api-sourced"
+        : "self-verified";
 
   return (
     <div className="space-y-6">
@@ -132,48 +133,57 @@ export default function VerifyScreen() {
         </p>
       </div>
 
-      <CollapsibleCard
-        title="Upload Evidence"
-        description="Upload a JSON file or paste the evidence package content"
-        open={uploadOpen}
-        onOpenChange={setUploadOpen}
-        className="mb-6"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-sm font-medium">Upload File</label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".json,application/json"
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full justify-center gap-2"
-            >
-              <Upload className="h-4 w-4" />
-              Choose File
-            </Button>
-          </div>
+      {uploadOpen ? (
+        <Card className="mb-6">
+          <CardHeader className="cursor-pointer select-none" onClick={() => setUploadOpen(false)}>
+            <CardTitle>Upload Evidence</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium">Upload File</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full justify-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Choose File
+                </Button>
+              </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium">Or Paste JSON</label>
-            <Textarea
-              placeholder='{"version": "1.0", "safeAddress": "0x...", ...}'
-              value={jsonInput}
-              onChange={(e) => setJsonInput(e.target.value)}
-              className="min-h-[200px] font-mono text-xs"
-            />
-          </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium">Or Paste JSON</label>
+                <Textarea
+                  placeholder='{"version": "1.0", "safeAddress": "0x...", ...}'
+                  value={jsonInput}
+                  onChange={(e) => setJsonInput(e.target.value)}
+                  className="min-h-[200px] font-mono text-xs"
+                />
+              </div>
 
-          <Button onClick={handleVerify} disabled={!jsonInput} className="w-full">
-            Verify Evidence
-          </Button>
-        </div>
-      </CollapsibleCard>
+              <Button onClick={handleVerify} disabled={!jsonInput} className="w-full">
+                Verify Evidence
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <button
+          onClick={() => setUploadOpen(true)}
+          className="mb-6 flex items-center gap-1.5 text-sm text-muted hover:text-fg transition-colors"
+        >
+          <ChevronRight className="h-3.5 w-3.5" />
+          Upload Evidence
+        </button>
+      )}
 
       {errors.length > 0 && (
         <Alert variant="destructive" className="mb-6">
@@ -195,6 +205,9 @@ export default function VerifyScreen() {
               dataDecoded={evidence.dataDecoded}
               txTo={evidence.transaction.to}
               txOperation={evidence.transaction.operation}
+              context={{
+                currentThreshold: evidence.confirmationsRequired,
+              }}
             />
           )}
 

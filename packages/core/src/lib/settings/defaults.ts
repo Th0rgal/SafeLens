@@ -3,16 +3,8 @@ import type { SettingsConfig } from "./types";
 export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
   version: "1.0",
   chains: {
-    "1": {
-      name: "Ethereum",
-      rpcUrl: "https://eth.llamarpc.com",
-      safeApiUrl: "https://safe-transaction-mainnet.safe.global",
-    },
-    "100": {
-      name: "Gnosis",
-      rpcUrl: "https://rpc.ankr.com/gnosis",
-      safeApiUrl: "https://safe-transaction-gnosis-chain.safe.global",
-    },
+    "1": { name: "Ethereum" },
+    "100": { name: "Gnosis" },
   },
   addressBook: [
     { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "EF#1", chainId: 1 },

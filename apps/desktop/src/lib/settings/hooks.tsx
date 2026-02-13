@@ -28,8 +28,12 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveConfig = useCallback(async (newConfig: SettingsConfig) => {
-    await saveSettingsConfig(settingsStore, newConfig);
     setConfig(newConfig);
+    try {
+      await saveSettingsConfig(settingsStore, newConfig);
+    } catch {
+      // Persistence may fail in dev mode — in-memory state is still updated
+    }
   }, []);
 
   const resetConfig = useCallback(async () => {

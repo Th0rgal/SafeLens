@@ -32,24 +32,31 @@ function getParam(params: DecodedParam[], name: string): string | undefined {
   return params.find((p) => p.name === name)?.value as string | undefined;
 }
 
+/** Wrap a SafePolicyChangeDetails into a full Interpretation. */
+function policyResult(
+  summary: string,
+  details: SafePolicyChangeDetails,
+): Extract<Interpretation, { id: "safe-policy" }> {
+  return {
+    id: "safe-policy",
+    protocol: "Safe",
+    action: "Policy Change",
+    severity: "critical",
+    summary,
+    details,
+  };
+}
+
 function interpretChangeThreshold(
   params: DecodedParam[],
   txTo: string,
 ): Interpretation {
   const newThreshold = getParam(params, "_threshold") ?? "?";
-
-  const details: SafePolicyChangeDetails = {
+  return policyResult(`Change signing threshold to ${newThreshold}`, {
     changeType: "changeThreshold",
     safeAddress: txTo,
     newThreshold: Number(newThreshold),
-  };
-
-  return {
-    protocol: "Safe",
-    action: "Policy Change",
-    summary: `Change signing threshold to ${newThreshold}`,
-    details: details as unknown as Record<string, unknown>,
-  };
+  });
 }
 
 function interpretAddOwner(
@@ -58,20 +65,12 @@ function interpretAddOwner(
 ): Interpretation {
   const owner = getParam(params, "owner") ?? "?";
   const threshold = getParam(params, "_threshold") ?? "?";
-
-  const details: SafePolicyChangeDetails = {
+  return policyResult(`Add owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`, {
     changeType: "addOwnerWithThreshold",
     safeAddress: txTo,
     newOwner: owner,
     newThreshold: Number(threshold),
-  };
-
-  return {
-    protocol: "Safe",
-    action: "Policy Change",
-    summary: `Add owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`,
-    details: details as unknown as Record<string, unknown>,
-  };
+  });
 }
 
 function interpretRemoveOwner(
@@ -80,20 +79,12 @@ function interpretRemoveOwner(
 ): Interpretation {
   const owner = getParam(params, "owner") ?? "?";
   const threshold = getParam(params, "_threshold") ?? "?";
-
-  const details: SafePolicyChangeDetails = {
+  return policyResult(`Remove owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`, {
     changeType: "removeOwner",
     safeAddress: txTo,
     removedOwner: owner,
     newThreshold: Number(threshold),
-  };
-
-  return {
-    protocol: "Safe",
-    action: "Policy Change",
-    summary: `Remove owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`,
-    details: details as unknown as Record<string, unknown>,
-  };
+  });
 }
 
 function interpretSwapOwner(
@@ -102,20 +93,12 @@ function interpretSwapOwner(
 ): Interpretation {
   const oldOwner = getParam(params, "oldOwner") ?? "?";
   const newOwner = getParam(params, "newOwner") ?? "?";
-
-  const details: SafePolicyChangeDetails = {
+  return policyResult(`Replace owner ${oldOwner.slice(0, 10)}… with ${newOwner.slice(0, 10)}…`, {
     changeType: "swapOwner",
     safeAddress: txTo,
     removedOwner: oldOwner,
     newOwner: newOwner,
-  };
-
-  return {
-    protocol: "Safe",
-    action: "Policy Change",
-    summary: `Replace owner ${oldOwner.slice(0, 10)}… with ${newOwner.slice(0, 10)}…`,
-    details: details as unknown as Record<string, unknown>,
-  };
+  });
 }
 
 /**

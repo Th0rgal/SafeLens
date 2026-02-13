@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { interpretCowSwapTwap, decodeTwapOrderData } from "../cowswap";
+import { interpretCowSwapTwap, decodeTwapOrderData } from "../cowswap-twap";
 import { interpretTransaction } from "../index";
 import type { CowSwapTwapDetails } from "../types";
 import { COWSWAP_TWAP_TX } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
@@ -120,7 +120,7 @@ describe("interpretCowSwapTwap", () => {
       TX.to,
       TX.operation
     );
-    const details = result!.details as unknown as CowSwapTwapDetails;
+    const details = result!.details as CowSwapTwapDetails;
 
     expect(details.sellToken.symbol).toBe("WETH");
     expect(details.buyToken.symbol).toBe("DAI");
@@ -139,7 +139,7 @@ describe("interpretCowSwapTwap", () => {
       TX.to,
       TX.operation
     );
-    const details = result!.details as unknown as CowSwapTwapDetails;
+    const details = result!.details as CowSwapTwapDetails;
 
     expect(details.approval).toBeDefined();
     expect(details.approval!.token.symbol).toBe("WETH");

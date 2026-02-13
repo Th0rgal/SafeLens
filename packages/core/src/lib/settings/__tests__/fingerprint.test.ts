@@ -5,7 +5,7 @@ import type { SettingsConfig } from "../types";
 const baseConfig: SettingsConfig = {
   version: "1.0",
   chains: {
-    "1": { name: "Ethereum", rpcUrl: "https://eth.llamarpc.com", safeApiUrl: "https://safe.global" },
+    "1": { name: "Ethereum" },
   },
   addressBook: [
     { address: "0x1111111111111111111111111111111111111111", name: "Alice" },
@@ -68,23 +68,11 @@ describe("computeConfigFingerprint", () => {
     expect(a).not.toBe(b);
   });
 
-  it("changes when a chain RPC URL changes", async () => {
-    const modified: SettingsConfig = {
-      ...baseConfig,
-      chains: {
-        "1": { name: "Ethereum", rpcUrl: "https://evil-rpc.com", safeApiUrl: "https://safe.global" },
-      },
-    };
-    const a = await computeConfigFingerprint(baseConfig);
-    const b = await computeConfigFingerprint(modified);
-    expect(a).not.toBe(b);
-  });
-
   it("changes when a chain name changes", async () => {
     const modified: SettingsConfig = {
       ...baseConfig,
       chains: {
-        "1": { name: "Mainnet", rpcUrl: "https://eth.llamarpc.com", safeApiUrl: "https://safe.global" },
+        "1": { name: "Mainnet" },
       },
     };
     const a = await computeConfigFingerprint(baseConfig);

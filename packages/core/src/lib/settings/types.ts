@@ -2,8 +2,6 @@ import { z } from "zod";
 
 export const chainConfigSchema = z.object({
   name: z.string().min(1),
-  rpcUrl: z.string().url().optional(),
-  safeApiUrl: z.string().url().optional(),
 });
 
 export const addressBookEntrySchema = z.object({

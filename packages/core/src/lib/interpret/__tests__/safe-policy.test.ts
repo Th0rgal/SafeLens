@@ -34,7 +34,7 @@ describe("interpretSafePolicy", () => {
         POLICY_CHANGE_TX.to,
         POLICY_CHANGE_TX.operation,
       );
-      const details = result!.details as unknown as SafePolicyChangeDetails;
+      const details = result!.details as SafePolicyChangeDetails;
 
       expect(details.changeType).toBe("changeThreshold");
       expect(details.newThreshold).toBe(2);
@@ -61,7 +61,7 @@ describe("interpretSafePolicy", () => {
 
     it("includes the new owner and threshold in details", () => {
       const result = interpretSafePolicy(ADD_OWNER_TX, POLICY_CHANGE_TX.to, 0);
-      const details = result!.details as unknown as SafePolicyChangeDetails;
+      const details = result!.details as SafePolicyChangeDetails;
 
       expect(details.changeType).toBe("addOwnerWithThreshold");
       expect(details.newOwner).toBe("0xd779332c5A52566Dada11A075a735b18DAa6c1f4");
@@ -93,7 +93,7 @@ describe("interpretSafePolicy", () => {
 
     it("includes the removed owner and new threshold", () => {
       const result = interpretSafePolicy(REMOVE_OWNER_TX, POLICY_CHANGE_TX.to, 0);
-      const details = result!.details as unknown as SafePolicyChangeDetails;
+      const details = result!.details as SafePolicyChangeDetails;
 
       expect(details.changeType).toBe("removeOwner");
       expect(details.removedOwner).toBe("0xd779332c5A52566Dada11A075a735b18DAa6c1f4");
@@ -119,7 +119,7 @@ describe("interpretSafePolicy", () => {
 
     it("includes old and new owner in details", () => {
       const result = interpretSafePolicy(SWAP_OWNER_TX, POLICY_CHANGE_TX.to, 0);
-      const details = result!.details as unknown as SafePolicyChangeDetails;
+      const details = result!.details as SafePolicyChangeDetails;
 
       expect(details.changeType).toBe("swapOwner");
       expect(details.removedOwner).toBe("0xd779332c5A52566Dada11A075a735b18DAa6c1f4");

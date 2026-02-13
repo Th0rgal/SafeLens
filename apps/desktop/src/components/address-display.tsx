@@ -39,10 +39,14 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
 
   const handleSave = useCallback(async () => {
     if (!config || !nameInput.trim()) return;
-    await saveConfig({
-      ...config,
-      addressBook: [...config.addressBook, { address, name: nameInput.trim() }],
-    });
+    try {
+      await saveConfig({
+        ...config,
+        addressBook: [...config.addressBook, { address, name: nameInput.trim() }],
+      });
+    } catch {
+      // Store write may fail in dev mode — state update still applied by provider
+    }
     setAdding(false);
     setNameInput("");
     setOpen(false);

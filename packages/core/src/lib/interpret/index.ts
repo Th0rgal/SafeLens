@@ -1,15 +1,26 @@
 /**
  * Transaction interpretation registry.
  *
- * Add new protocol interpreters here. Each interpreter is tried in order;
- * the first one that returns a non-null result wins.
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │  SUPPORTED PROTOCOLS                                           │
+ * │                                                                 │
+ * │  id              │ protocol  │ action        │ severity         │
+ * │  ────────────────┼───────────┼───────────────┼─────────────     │
+ * │  cowswap-twap    │ CoW Swap  │ TWAP Order    │ info             │
+ * │  safe-policy     │ Safe      │ Policy Change │ critical         │
+ * │                                                                 │
+ * │  To add a new protocol, follow the checklist in ./types.ts.    │
+ * └─────────────────────────────────────────────────────────────────┘
  */
 
 import type { Interpretation, Interpreter } from "./types";
-import { interpretCowSwapTwap } from "./cowswap";
+import { interpretCowSwapTwap } from "./cowswap-twap";
 import { interpretSafePolicy } from "./safe-policy";
 
-const interpreters: Interpreter[] = [
+// ── Interpreter registry ────────────────────────────────────────────
+// Each interpreter is tried in order; the first non-null result wins.
+
+const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,
   interpretSafePolicy,
 ];
@@ -17,21 +28,24 @@ const interpreters: Interpreter[] = [
 /**
  * Attempt to interpret a Safe transaction's decoded data.
  *
- * @param dataDecoded  - The `dataDecoded` field from the Safe Transaction Service API
- * @param txTo         - The `to` address of the Safe transaction
- * @param txOperation  - 0 for Call, 1 for DelegateCall
- * @returns An interpretation if one matches, or null
+ * @returns A typed Interpretation variant if a protocol is recognized, or null.
  */
 export function interpretTransaction(
   dataDecoded: unknown,
   txTo: string,
-  txOperation: number
+  txOperation: number,
 ): Interpretation | null {
-  for (const interpret of interpreters) {
+  for (const interpret of INTERPRETERS) {
     const result = interpret(dataDecoded, txTo, txOperation);
     if (result) return result;
   }
   return null;
 }
 
-export type { Interpretation, CowSwapTwapDetails, SafePolicyChangeDetails } from "./types";
+export type {
+  Interpretation,
+  Severity,
+  CowSwapTwapDetails,
+  SafePolicyChangeDetails,
+  TokenInfo,
+} from "./types";

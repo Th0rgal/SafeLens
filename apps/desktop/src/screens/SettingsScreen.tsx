@@ -32,8 +32,6 @@ export default function SettingsScreen() {
 
   const [newChainId, setNewChainId] = useState("");
   const [newChainName, setNewChainName] = useState("");
-  const [newChainRpc, setNewChainRpc] = useState("");
-  const [newChainSafeApi, setNewChainSafeApi] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
@@ -116,16 +114,10 @@ export default function SettingsScreen() {
     if (!newChainId || !newChainName) return;
     setChainEntries((prev) => [
       ...prev,
-      [newChainId, {
-        name: newChainName,
-        rpcUrl: newChainRpc || undefined,
-        safeApiUrl: newChainSafeApi || undefined,
-      }],
+      [newChainId, { name: newChainName }],
     ]);
     setNewChainId("");
     setNewChainName("");
-    setNewChainRpc("");
-    setNewChainSafeApi("");
   };
 
   return (
@@ -134,7 +126,7 @@ export default function SettingsScreen() {
         <div>
           <h2 className="mb-2 text-2xl font-bold">Settings</h2>
           <p className="text-muted">
-            Configure chain endpoints, import and export settings.
+            Configure chains, import and export settings.
           </p>
         </div>
         {isModified && (
@@ -161,7 +153,7 @@ export default function SettingsScreen() {
           <CardContent className="space-y-2">
             {chainEntries.map(([chainId, chain], index) => (
               <div key={index} className="flex items-start gap-2">
-                <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
+                <div className="grid flex-1 grid-cols-2 gap-2">
                   <Input
                     value={chainId}
                     onChange={(e) => renameChain(index, e.target.value)}
@@ -173,18 +165,6 @@ export default function SettingsScreen() {
                     placeholder="Name"
                     className="text-xs"
                   />
-                  <Input
-                    value={chain.rpcUrl ?? ""}
-                    onChange={(e) => updateChain(index, { rpcUrl: e.target.value || undefined })}
-                    placeholder="RPC URL"
-                    className="text-xs"
-                  />
-                  <Input
-                    value={chain.safeApiUrl ?? ""}
-                    onChange={(e) => updateChain(index, { safeApiUrl: e.target.value || undefined })}
-                    placeholder="Safe API URL"
-                    className="text-xs"
-                  />
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
                   <X className="h-3.5 w-3.5" />
@@ -192,11 +172,9 @@ export default function SettingsScreen() {
               </div>
             ))}
             <div className="flex items-start gap-2 border-t border-border/15 pt-2">
-              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
+              <div className="grid flex-1 grid-cols-2 gap-2">
                 <Input value={newChainId} onChange={(e) => setNewChainId(e.target.value)} placeholder="Chain ID" className="text-xs" />
                 <Input value={newChainName} onChange={(e) => setNewChainName(e.target.value)} placeholder="Name" className="text-xs" />
-                <Input value={newChainRpc} onChange={(e) => setNewChainRpc(e.target.value)} placeholder="RPC URL" className="text-xs" />
-                <Input value={newChainSafeApi} onChange={(e) => setNewChainSafeApi(e.target.value)} placeholder="Safe API URL" className="text-xs" />
               </div>
               <Button variant="ghost" size="icon" onClick={handleAddChain} disabled={!newChainId || !newChainName} className="h-9 w-9 shrink-0">
                 <Plus className="h-3.5 w-3.5" />

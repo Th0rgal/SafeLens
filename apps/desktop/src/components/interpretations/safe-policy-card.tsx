@@ -1,9 +1,11 @@
 import type { SafePolicyChangeDetails } from "@safelens/core";
+import type { EvidenceContext } from "./registry";
 import { AddressDisplay } from "@/components/address-display";
 import { AlertTriangle } from "lucide-react";
 
 interface SafePolicyCardProps {
   details: SafePolicyChangeDetails;
+  context?: EvidenceContext;
 }
 
 const CHANGE_DESCRIPTIONS: Record<string, string> = {
@@ -13,7 +15,12 @@ const CHANGE_DESCRIPTIONS: Record<string, string> = {
   swapOwner: "This transaction replaces one signer with another.",
 };
 
-export function SafePolicyCard({ details }: SafePolicyCardProps) {
+export function SafePolicyCard({ details, context }: SafePolicyCardProps) {
+  const showThresholdChange =
+    details.newThreshold !== undefined &&
+    context?.currentThreshold !== undefined &&
+    details.newThreshold !== context.currentThreshold;
+
   return (
     <div className="space-y-3 text-sm">
       <div className="flex items-start gap-2.5 rounded-md border border-red-500/25 bg-red-500/10 px-3 py-2.5">
@@ -23,22 +30,32 @@ export function SafePolicyCard({ details }: SafePolicyCardProps) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+      <div className="space-y-3">
         <div>
-          <span className="font-medium text-red-400/60">Safe</span>
+          <span className="font-medium text-muted">Safe</span>
           <div><AddressDisplay address={details.safeAddress} /></div>
         </div>
 
         {details.newThreshold !== undefined && (
           <div>
-            <span className="font-medium text-red-400/60">New Threshold</span>
-            <div className="font-mono text-red-300">{details.newThreshold}</div>
+            <span className="font-medium text-muted">Threshold</span>
+            <div className="flex items-center gap-2 font-mono">
+              {showThresholdChange ? (
+                <>
+                  <span>{context!.currentThreshold}</span>
+                  <span className="text-muted">&rarr;</span>
+                  <span>{details.newThreshold}</span>
+                </>
+              ) : (
+                <span>{details.newThreshold}</span>
+              )}
+            </div>
           </div>
         )}
 
         {details.newOwner && (
           <div>
-            <span className="font-medium text-red-400/60">
+            <span className="font-medium text-muted">
               {details.changeType === "swapOwner" ? "New Owner" : "Owner Added"}
             </span>
             <div><AddressDisplay address={details.newOwner} /></div>
@@ -47,7 +64,7 @@ export function SafePolicyCard({ details }: SafePolicyCardProps) {
 
         {details.removedOwner && (
           <div>
-            <span className="font-medium text-red-400/60">
+            <span className="font-medium text-muted">
               {details.changeType === "swapOwner" ? "Replaced Owner" : "Owner Removed"}
             </span>
             <div><AddressDisplay address={details.removedOwner} /></div>

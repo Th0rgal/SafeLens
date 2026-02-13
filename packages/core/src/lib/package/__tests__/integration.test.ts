@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { createEvidencePackage, exportEvidencePackage } from "../creator";
 import { parseEvidencePackage } from "../validator";
 import { interpretTransaction } from "../../interpret";
-import type { CowSwapTwapDetails } from "../../interpret";
 import {
   COWSWAP_TWAP_TX,
   CHAIN_ID,
@@ -33,10 +32,12 @@ describe("evidence package round-trip", () => {
     );
 
     expect(interpretation).not.toBeNull();
+    expect(interpretation!.id).toBe("cowswap-twap");
     expect(interpretation!.protocol).toBe("CoW Swap");
     expect(interpretation!.action).toBe("TWAP Order");
 
-    const details = interpretation!.details as unknown as CowSwapTwapDetails;
+    // The discriminated union narrows details when id === "cowswap-twap"
+    const { details } = interpretation as Extract<typeof interpretation, { id: "cowswap-twap" }>;
     expect(details.sellToken.symbol).toBe("WETH");
     expect(details.buyToken.symbol).toBe("DAI");
     expect(details.numberOfParts).toBe(12);

@@ -135,3 +135,9 @@ a {
     color: rgb(var(--foreground-secondary));
   }
 }
+
+/* Debug drag regions — toggle with Cmd+Shift+D */
+.debug-drag .drag-region {
+  background: rgba(255, 0, 0, 0.25) !important;
+  outline: 2px dashed red;
+}
