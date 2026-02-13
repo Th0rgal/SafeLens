@@ -183,11 +183,14 @@ export default function SettingsScreen() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={handleExport} variant="outline" size="sm">Export</Button>
-          <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm">Import</Button>
-          <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
-          <Button onClick={handleReset} variant="ghost" size="sm">Reset</Button>
+        <div className="space-y-2">
+          <p className="text-xs text-muted">Export and import includes chains, address book, and contract registry.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleExport} variant="outline" size="sm">Export</Button>
+            <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm">Import</Button>
+            <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+            <Button onClick={handleReset} variant="ghost" size="sm">Reset</Button>
+          </div>
         </div>
       </div>
     </div>
