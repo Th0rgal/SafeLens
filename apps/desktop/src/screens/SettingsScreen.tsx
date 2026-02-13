@@ -5,20 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import {
-  exportSettingsConfig,
   settingsConfigSchema,
   type SettingsConfig,
   type ChainConfig,
 } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { createTauriSettingsStore } from "@/lib/settings/store";
 import { save } from "@tauri-apps/api/dialog";
 import { writeTextFile } from "@tauri-apps/api/fs";
 
 export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
-  const store = useMemo(() => createTauriSettingsStore(), []);
 
   const [draft, setDraft] = useState<SettingsConfig | null>(null);
   const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>([]);
@@ -79,7 +76,7 @@ export default function SettingsScreen() {
 
   const handleExport = async () => {
     try {
-      const json = await exportSettingsConfig(store);
+      const json = JSON.stringify(settingsConfigSchema.parse(savedConfig), null, 2);
       const path = await save({
         defaultPath: "safelens-settings.json",
         filters: [{ name: "JSON", extensions: ["json"] }],
