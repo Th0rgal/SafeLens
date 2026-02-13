@@ -9,6 +9,8 @@
  */
 
 import type { Interpretation, SafePolicyChangeDetails, Interpreter } from "./types";
+import { analyzeTransaction } from "../safe/warnings";
+import type { Hex } from "viem";
 
 interface DecodedParam {
   name?: string;
@@ -36,14 +38,32 @@ function getParam(params: DecodedParam[], name: string): string | undefined {
 function policyResult(
   summary: string,
   details: SafePolicyChangeDetails,
+  txTo: string,
+  txData: string = "0x",
+  txValue: bigint = 0n,
+  txOperation: number = 0,
+  method?: string,
 ): Extract<Interpretation, { id: "safe-policy" }> {
+  // Generate warnings for this transaction
+  const warnings = analyzeTransaction({
+    safeAddress: txTo as Hex,
+    to: txTo as Hex,
+    value: txValue,
+    data: txData as Hex,
+    operation: txOperation as 0 | 1,
+    decodedMethod: method,
+  });
+
   return {
     id: "safe-policy",
     protocol: "Safe",
     action: "Policy Change",
     severity: "critical",
     summary,
-    details,
+    details: {
+      ...details,
+      warnings,
+    },
   };
 }
 
@@ -52,11 +72,19 @@ function interpretChangeThreshold(
   txTo: string,
 ): Interpretation {
   const newThreshold = getParam(params, "_threshold") ?? "?";
-  return policyResult(`Change signing threshold to ${newThreshold}`, {
-    changeType: "changeThreshold",
-    safeAddress: txTo,
-    newThreshold: Number(newThreshold),
-  });
+  return policyResult(
+    `Change signing threshold to ${newThreshold}`,
+    {
+      changeType: "changeThreshold",
+      safeAddress: txTo,
+      newThreshold: Number(newThreshold),
+    },
+    txTo,
+    "0x",
+    0n,
+    0,
+    "changeThreshold"
+  );
 }
 
 function interpretAddOwner(
@@ -65,12 +93,20 @@ function interpretAddOwner(
 ): Interpretation {
   const owner = getParam(params, "owner") ?? "?";
   const threshold = getParam(params, "_threshold") ?? "?";
-  return policyResult(`Add owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`, {
-    changeType: "addOwnerWithThreshold",
-    safeAddress: txTo,
-    newOwner: owner,
-    newThreshold: Number(threshold),
-  });
+  return policyResult(
+    `Add owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`,
+    {
+      changeType: "addOwnerWithThreshold",
+      safeAddress: txTo,
+      newOwner: owner,
+      newThreshold: Number(threshold),
+    },
+    txTo,
+    "0x",
+    0n,
+    0,
+    "addOwnerWithThreshold"
+  );
 }
 
 function interpretRemoveOwner(
@@ -79,12 +115,20 @@ function interpretRemoveOwner(
 ): Interpretation {
   const owner = getParam(params, "owner") ?? "?";
   const threshold = getParam(params, "_threshold") ?? "?";
-  return policyResult(`Remove owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`, {
-    changeType: "removeOwner",
-    safeAddress: txTo,
-    removedOwner: owner,
-    newThreshold: Number(threshold),
-  });
+  return policyResult(
+    `Remove owner ${owner.slice(0, 10)}… and set threshold to ${threshold}`,
+    {
+      changeType: "removeOwner",
+      safeAddress: txTo,
+      removedOwner: owner,
+      newThreshold: Number(threshold),
+    },
+    txTo,
+    "0x",
+    0n,
+    0,
+    "removeOwner"
+  );
 }
 
 function interpretSwapOwner(
@@ -93,12 +137,20 @@ function interpretSwapOwner(
 ): Interpretation {
   const oldOwner = getParam(params, "oldOwner") ?? "?";
   const newOwner = getParam(params, "newOwner") ?? "?";
-  return policyResult(`Replace owner ${oldOwner.slice(0, 10)}… with ${newOwner.slice(0, 10)}…`, {
-    changeType: "swapOwner",
-    safeAddress: txTo,
-    removedOwner: oldOwner,
-    newOwner: newOwner,
-  });
+  return policyResult(
+    `Replace owner ${oldOwner.slice(0, 10)}… with ${newOwner.slice(0, 10)}…`,
+    {
+      changeType: "swapOwner",
+      safeAddress: txTo,
+      removedOwner: oldOwner,
+      newOwner: newOwner,
+    },
+    txTo,
+    "0x",
+    0n,
+    0,
+    "swapOwner"
+  );
 }
 
 /**

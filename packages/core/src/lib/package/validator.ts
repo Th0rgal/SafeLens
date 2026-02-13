@@ -1,6 +1,7 @@
 import { evidencePackageSchema, EvidencePackage } from "../types";
-import { computeSafeTxHash, verifySafeTxHash } from "../safe/hash";
+import { computeSafeTxHashDetailed, verifySafeTxHashDetailed } from "../safe/hash";
 import type { Hex } from "viem";
+import type { SafeTxHashDetails } from "../safe/hash";
 
 /**
  * Validate an evidence package
@@ -9,6 +10,7 @@ export function validateEvidencePackage(json: unknown): {
   valid: boolean;
   evidence?: EvidencePackage;
   errors: string[];
+  hashDetails?: SafeTxHashDetails;
 } {
   const errors: string[] = [];
 
@@ -16,8 +18,8 @@ export function validateEvidencePackage(json: unknown): {
   try {
     const evidence = evidencePackageSchema.parse(json);
 
-    // Step 2: Recompute Safe tx hash
-    const computed = computeSafeTxHash({
+    // Step 2: Recompute Safe tx hash with detailed intermediate hashes
+    const hashDetails = computeSafeTxHashDetailed({
       safeAddress: evidence.safeAddress as Hex,
       chainId: evidence.chainId,
       to: evidence.transaction.to as Hex,
@@ -32,7 +34,7 @@ export function validateEvidencePackage(json: unknown): {
       nonce: evidence.transaction.nonce,
     });
 
-    const hashVerification = verifySafeTxHash(computed, evidence.safeTxHash as Hex);
+    const hashVerification = verifySafeTxHashDetailed(hashDetails, evidence.safeTxHash as Hex);
 
     if (!hashVerification.valid) {
       errors.push(
@@ -44,6 +46,7 @@ export function validateEvidencePackage(json: unknown): {
       valid: errors.length === 0,
       evidence,
       errors,
+      hashDetails,
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -66,6 +69,7 @@ export function parseEvidencePackage(jsonString: string): {
   valid: boolean;
   evidence?: EvidencePackage;
   errors: string[];
+  hashDetails?: SafeTxHashDetails;
 } {
   try {
     const json = JSON.parse(jsonString);

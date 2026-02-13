@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeSafeTxHash, verifySafeTxHash } from "../hash";
+import { computeSafeTxHash, computeSafeTxHashDetailed, verifySafeTxHash, verifySafeTxHashDetailed } from "../hash";
 import type { Hex } from "viem";
 import {
   COWSWAP_TWAP_TX,
@@ -124,5 +124,115 @@ describe("verifySafeTxHash", () => {
     const result = verifySafeTxHash(hash1, hash2);
 
     expect(result.valid).toBe(false);
+  });
+});
+
+describe("computeSafeTxHashDetailed", () => {
+  it("returns detailed hash information including intermediate hashes", () => {
+    const tx = COWSWAP_TWAP_TX;
+
+    const details = computeSafeTxHashDetailed({
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    });
+
+    // Should have all three hashes
+    expect(details.safeTxHash).toBeDefined();
+    expect(details.domainSeparator).toBeDefined();
+    expect(details.messageHash).toBeDefined();
+
+    // All should be valid 32-byte hashes
+    expect(details.safeTxHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(details.domainSeparator).toMatch(/^0x[a-fA-F0-9]{64}$/);
+    expect(details.messageHash).toMatch(/^0x[a-fA-F0-9]{64}$/);
+
+    // Final hash should match expected
+    expect(details.safeTxHash.toLowerCase()).toBe(EXPECTED_SAFE_TX_HASH.toLowerCase());
+  });
+
+  it("is compatible with simple computeSafeTxHash function", () => {
+    const tx = COWSWAP_TWAP_TX;
+    const params = {
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    };
+
+    const simple = computeSafeTxHash(params);
+    const detailed = computeSafeTxHashDetailed(params);
+
+    expect(simple).toBe(detailed.safeTxHash);
+  });
+});
+
+describe("verifySafeTxHashDetailed", () => {
+  it("returns detailed verification with intermediate hashes", () => {
+    const tx = COWSWAP_TWAP_TX;
+    const details = computeSafeTxHashDetailed({
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    });
+
+    const verification = verifySafeTxHashDetailed(details, EXPECTED_SAFE_TX_HASH as Hex);
+
+    expect(verification.valid).toBe(true);
+    expect(verification.computed).toBe(details.safeTxHash);
+    expect(verification.expected).toBe(EXPECTED_SAFE_TX_HASH);
+    expect(verification.details).toBeDefined();
+    expect(verification.details?.domainSeparator).toBe(details.domainSeparator);
+    expect(verification.details?.messageHash).toBe(details.messageHash);
+  });
+
+  it("returns valid:false for mismatching hash with details", () => {
+    const tx = COWSWAP_TWAP_TX;
+    const details = computeSafeTxHashDetailed({
+      safeAddress: tx.safe as Hex,
+      chainId: CHAIN_ID,
+      to: tx.to as Hex,
+      value: BigInt(tx.value),
+      data: (tx.data || "0x") as Hex,
+      operation: tx.operation,
+      safeTxGas: BigInt(tx.safeTxGas),
+      baseGas: BigInt(tx.baseGas),
+      gasPrice: BigInt(tx.gasPrice),
+      gasToken: tx.gasToken as Hex,
+      refundReceiver: tx.refundReceiver as Hex,
+      nonce: tx.nonce,
+    });
+
+    const wrongHash = "0x1111111111111111111111111111111111111111111111111111111111111111" as Hex;
+    const verification = verifySafeTxHashDetailed(details, wrongHash);
+
+    expect(verification.valid).toBe(false);
+    expect(verification.details).toBeDefined();
   });
 });

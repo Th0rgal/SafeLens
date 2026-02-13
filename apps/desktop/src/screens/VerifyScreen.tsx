@@ -13,9 +13,10 @@ import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
+import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel } from "@safelens/core";
+import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -44,6 +45,7 @@ export default function VerifyScreen() {
   const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
   const [proposer, setProposer] = useState<string | null>(null);
   const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
+  const [hashDetails, setHashDetails] = useState<SafeTxHashDetails | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -98,11 +100,13 @@ export default function VerifyScreen() {
     setEvidence(null);
     setErrors([]);
     setVerified(false);
+    setHashDetails(undefined);
 
     const result = parseEvidencePackage(jsonInput);
 
     if (result.valid && result.evidence) {
       setEvidence(result.evidence);
+      setHashDetails(result.hashDetails);
       setVerified(true);
       setUploadOpen(false);
       toastSuccess(
@@ -249,15 +253,10 @@ export default function VerifyScreen() {
                   <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
                     Safe TX Hash <TrustBadge level="self-verified" />
                   </div>
-                  <div className="flex items-center gap-2">
-                    <code className="text-xs">{evidence.safeTxHash}</code>
-                    <button
-                      onClick={() => copyToClipboard(evidence.safeTxHash, "safeTxHash")}
-                      className="text-xs text-accent hover:text-accent-hover"
-                    >
-                      {copiedField === "safeTxHash" ? "Copied!" : "Copy"}
-                    </button>
-                  </div>
+                  <HashVerificationDetails
+                    safeTxHash={evidence.safeTxHash}
+                    details={hashDetails}
+                  />
                 </div>
 
                 {evidence.ethereumTxHash && (

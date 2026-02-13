@@ -2,10 +2,26 @@ import { concat, encodeAbiParameters, keccak256, toHex } from "viem";
 import type { Hash, Hex } from "viem";
 
 /**
+ * Detailed Safe transaction hash computation result
+ * Includes intermediate hashes for hardware wallet verification
+ */
+export interface SafeTxHashDetails {
+  /** Final EIP-712 hash (what hardware wallets display as "safeTxHash") */
+  safeTxHash: Hash;
+  /** Domain separator hash (for verification) */
+  domainSeparator: Hash;
+  /** Message hash (SafeTx struct hash, for verification) */
+  messageHash: Hash;
+}
+
+/**
  * Compute Safe transaction hash using EIP-712
  * This follows the Safe contract's implementation
+ *
+ * Returns detailed hash information including intermediate hashes
+ * for hardware wallet verification (Ledger/Trezor display these separately)
  */
-export function computeSafeTxHash(params: {
+export function computeSafeTxHashDetailed(params: {
   safeAddress: Hex;
   chainId: number;
   to: Hex;
@@ -18,7 +34,7 @@ export function computeSafeTxHash(params: {
   gasToken: Hex;
   refundReceiver: Hex;
   nonce: number;
-}): Hash {
+}): SafeTxHashDetails {
   // EIP-712 domain separator
   const domainSeparator = keccak256(
     encodeAbiParameters(
@@ -79,11 +95,48 @@ export function computeSafeTxHash(params: {
     concat(["0x1901", domainSeparator, safeTxHash])
   );
 
-  return finalHash;
+  return {
+    safeTxHash: finalHash,
+    domainSeparator,
+    messageHash: safeTxHash,
+  };
+}
+
+/**
+ * Compute Safe transaction hash using EIP-712 (simple version)
+ * Returns only the final hash for backward compatibility
+ */
+export function computeSafeTxHash(params: {
+  safeAddress: Hex;
+  chainId: number;
+  to: Hex;
+  value: bigint;
+  data: Hex;
+  operation: 0 | 1;
+  safeTxGas: bigint;
+  baseGas: bigint;
+  gasPrice: bigint;
+  gasToken: Hex;
+  refundReceiver: Hex;
+  nonce: number;
+}): Hash {
+  return computeSafeTxHashDetailed(params).safeTxHash;
+}
+
+/**
+ * Enhanced verification result with intermediate hashes
+ */
+export interface SafeTxHashVerification {
+  valid: boolean;
+  computed: Hash;
+  expected: Hash;
+  /** Intermediate hashes for hardware wallet verification */
+  details?: SafeTxHashDetails;
 }
 
 /**
  * Verify that a computed Safe tx hash matches the expected hash
+ * (simple version for backward compatibility)
  */
 export function verifySafeTxHash(
   computed: Hash,
@@ -93,5 +146,21 @@ export function verifySafeTxHash(
     valid: computed.toLowerCase() === expected.toLowerCase(),
     computed,
     expected,
+  };
+}
+
+/**
+ * Verify Safe tx hash with detailed intermediate hashes
+ * Useful for hardware wallet verification (Ledger/Trezor)
+ */
+export function verifySafeTxHashDetailed(
+  details: SafeTxHashDetails,
+  expected: Hash
+): SafeTxHashVerification {
+  return {
+    valid: details.safeTxHash.toLowerCase() === expected.toLowerCase(),
+    computed: details.safeTxHash,
+    expected,
+    details,
   };
 }

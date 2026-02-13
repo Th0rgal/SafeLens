@@ -95,6 +95,13 @@ export interface SafePolicyChangeDetails {
   newOwner?: string;
   /** Owner being removed (for removeOwner, swapOwner). */
   removedOwner?: string;
+  /** Security warnings for this transaction */
+  warnings?: Array<{
+    level: "info" | "warning" | "critical";
+    title: string;
+    description: string;
+    context?: Record<string, string>;
+  }>;
 }
 
 /** ERC-7730 generic interpretation details. */
