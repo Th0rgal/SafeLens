@@ -1,31 +1,23 @@
-import { appDataDir, join } from "@tauri-apps/api/path";
-import { exists, readTextFile, writeTextFile } from "@tauri-apps/api/fs";
+import { BaseDirectory, exists, readTextFile, writeTextFile } from "@tauri-apps/api/fs";
 import type { SettingsStore } from "@safelens/core";
 
 const SETTINGS_FILE = "safelens-settings.json";
-
-async function getSettingsPath(): Promise<string> {
-  const dir = await appDataDir();
-  return await join(dir, SETTINGS_FILE);
-}
+const SETTINGS_DIR = { dir: BaseDirectory.AppData };
 
 export function createTauriSettingsStore(): SettingsStore {
   return {
     async read() {
-      const path = await getSettingsPath();
-      const fileExists = await exists(path);
+      const fileExists = await exists(SETTINGS_FILE, SETTINGS_DIR);
       if (!fileExists) return null;
-      return await readTextFile(path);
+      return await readTextFile(SETTINGS_FILE, SETTINGS_DIR);
     },
     async write(payload: string) {
-      const path = await getSettingsPath();
-      await writeTextFile(path, payload);
+      await writeTextFile(SETTINGS_FILE, payload, SETTINGS_DIR);
     },
     async remove() {
-      const path = await getSettingsPath();
-      const fileExists = await exists(path);
+      const fileExists = await exists(SETTINGS_FILE, SETTINGS_DIR);
       if (!fileExists) return;
-      await writeTextFile(path, "");
+      await writeTextFile(SETTINGS_FILE, "", SETTINGS_DIR);
     },
   };
 }

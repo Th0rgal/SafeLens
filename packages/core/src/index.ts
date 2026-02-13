@@ -4,7 +4,11 @@ export * from "./lib/safe/api";
 export * from "./lib/safe/hash";
 export * from "./lib/safe/signatures";
 export * from "./lib/safe/url-parser";
-export * from "./lib/safe/warnings";
+export { analyzeTransaction, getHighestWarningLevel } from "./lib/safe/warnings";
+export type {
+  WarningLevel as SafeWarningLevel,
+  TransactionWarning as SafeTransactionWarning,
+} from "./lib/safe/warnings";
 
 export * from "./lib/package/creator";
 export * from "./lib/package/validator";
