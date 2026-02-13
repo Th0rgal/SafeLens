@@ -1,16 +1,16 @@
 :root {
-  --radius: 0.5rem;
+  --radius: 0.375rem;
 
-  --background: 13 17 14;
-  --background-elevated: 25 29 24;
-  --background-tertiary: 39 45 38;
-  --background-inset: 22 27 21;
+  --background: 13 14 16;
+  --background-elevated: 24 25 28;
+  --background-tertiary: 38 39 44;
+  --background-inset: 21 22 25;
 
   --foreground: 232 228 214;
   --foreground-secondary: 191 186 172;
   --foreground-tertiary: 148 143 129;
 
-  --border: 73 80 70;
+  --border: 70 73 80;
 
   --accent: 176 126 82;
   --accent-hover: 196 150 101;
