@@ -159,39 +159,36 @@ export function wrapText(text: string, maxWidth: number): string[] {
 }
 
 export function box(content: string, title?: string): string {
-  // Use consistent width for all boxes
-  const contentWidth = getContentWidth();
-  const width = contentWidth + 4; // Add padding for borders
-
   const lines = content.split("\n");
   const processedLines: string[] = [];
 
-  // Process each line to handle wrapping and truncation
+  // First pass: collect all lines as-is (no truncation)
   for (const line of lines) {
-    const stripped = stripAnsi(line);
-    const maxLineWidth = contentWidth - 2; // Account for internal padding
-
-    if (stripped.length <= maxLineWidth) {
-      processedLines.push(line);
-    } else {
-      // Truncate long lines while preserving ANSI codes
-      const truncated = truncateMiddle(stripped, maxLineWidth);
-      processedLines.push(truncated);
-    }
+    processedLines.push(line);
   }
+
+  // Calculate the actual width needed based on content
+  const contentWidth = getContentWidth();
+  const maxContentLineWidth = Math.max(
+    ...processedLines.map(l => stripAnsi(l).length),
+    title ? stripAnsi(title).length : 0
+  );
+
+  // Use the larger of: our target width or what's needed to fit content
+  // But cap at terminal width - 8 to leave margins
+  const terminalWidth = getTerminalWidth();
+  const actualContentWidth = Math.min(
+    Math.max(contentWidth, maxContentLineWidth + 2),
+    terminalWidth - 8
+  );
+  const width = actualContentWidth + 4; // Add padding for borders
 
   let output = colors.gray("┌" + "─".repeat(width - 2) + "┐") + "\n";
 
   if (title) {
     const titleStripped = stripAnsi(title);
-    if (titleStripped.length > width - 4) {
-      const truncated = truncateMiddle(titleStripped, width - 4);
-      const padding = width - truncated.length - 4;
-      output += colors.gray("│ ") + colors.bold(truncated) + " ".repeat(Math.max(0, padding)) + colors.gray(" │") + "\n";
-    } else {
-      const padding = width - titleStripped.length - 4;
-      output += colors.gray("│ ") + colors.bold(title) + " ".repeat(padding) + colors.gray(" │") + "\n";
-    }
+    const padding = width - titleStripped.length - 4;
+    output += colors.gray("│ ") + colors.bold(title) + " ".repeat(Math.max(0, padding)) + colors.gray(" │") + "\n";
     output += colors.gray("├" + "─".repeat(width - 2) + "┤") + "\n";
   }
 
@@ -223,27 +220,9 @@ function stripAnsi(text: string): string {
 }
 
 export function table(rows: Array<[string, string]>, keyWidth: number = 20): string {
-  const terminalWidth = getTerminalWidth();
-  const maxValueWidth = terminalWidth - keyWidth - 10; // Leave room for padding and labels
-
   return rows.map(([key, value]) => {
     const padding = " ".repeat(Math.max(0, keyWidth - stripAnsi(key).length));
-    const valueStripped = stripAnsi(value);
-
-    // Truncate value if it's too long
-    let displayValue = value;
-    if (valueStripped.length > maxValueWidth && maxValueWidth > 20) {
-      const truncated = truncateMiddle(valueStripped, maxValueWidth);
-      // Try to preserve color codes from original value
-      if (value.includes("\x1b[")) {
-        // If value has colors, apply cyan to truncated text
-        displayValue = code(truncated);
-      } else {
-        displayValue = truncated;
-      }
-    }
-
-    return `${label(key)}${padding} ${displayValue}`;
+    return `${label(key)}${padding} ${value}`;
   }).join("\n");
 }
 
