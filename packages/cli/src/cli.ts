@@ -2,6 +2,7 @@
 import {
   type EvidencePackage,
   type EvidenceVerificationReport,
+  type SettingsConfig,
   parseSafeUrl,
   fetchSafeTransaction,
   createEvidencePackage,
@@ -15,6 +16,7 @@ import {
   getChainName,
   interpretTransaction,
   computeSafeTxHashDetailed,
+  resolveAddress,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -112,6 +114,22 @@ function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSo
   }
 }
 
+/**
+ * Format an address with name resolution from address book
+ * Known addresses show their name in bold green
+ * Unknown addresses show full address in orange
+ */
+function formatAddressWithName(address: string, settings: SettingsConfig | null): string {
+  if (settings) {
+    const name = resolveAddress(address, settings);
+    if (name) {
+      return colors.bold(colors.green(name));
+    }
+  }
+  // Orange color for unknown addresses (using yellow + red mix approximation)
+  return `\x1b[38;5;214m${address}\x1b[0m`; // Orange color (256-color mode)
+}
+
 function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
   if (warnings.length === 0) return "";
 
@@ -133,7 +151,8 @@ function printWarningsSection(warnings: Array<{ level: string; message: string }
 function printVerificationText(
   evidence: EvidencePackage,
   report: EvidenceVerificationReport,
-  title: string
+  title: string,
+  settings: SettingsConfig | null = null
 ) {
   const { proposer, targetWarnings, signatures, hashDetails } = report;
   const { summary } = signatures;
@@ -160,7 +179,7 @@ function printVerificationText(
   console.log(box(
     table([
       ["Chain", `${code(getChainName(evidence.chainId))} (${evidence.chainId}) ${trustBadge("self-verified")}`],
-      ["Safe Address", `${formatAddress(evidence.safeAddress)} ${trustBadge("self-verified")}`],
+      ["Safe Address", `${formatAddressWithName(evidence.safeAddress, settings)} ${trustBadge("self-verified")}`],
       ["Safe URL", evidence.sources?.transactionUrl ? formatUrl(evidence.sources.transactionUrl) : label("N/A")],
     ], 15),
     "Transaction Overview"
@@ -196,7 +215,7 @@ function printVerificationText(
   console.log("");
   console.log(box(
     table([
-      ["Target Contract", `${formatAddress(evidence.transaction.to)} ${trustBadge("self-verified")}`],
+      ["Target Contract", `${formatAddressWithName(evidence.transaction.to, settings)} ${trustBadge("self-verified")}`],
       ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
       ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
       ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
@@ -224,7 +243,7 @@ function printVerificationText(
   ];
 
   if (proposer) {
-    signaturesRows.push(["Proposed by", formatAddress(proposer)]);
+    signaturesRows.push(["Proposed by", formatAddressWithName(proposer, settings)]);
   }
 
   console.log(box(
@@ -272,7 +291,7 @@ async function runAnalyze(args: string[]) {
     return;
   }
 
-  printVerificationText(evidence, report, "Analysis complete.");
+  printVerificationText(evidence, report, "Analysis complete.", settings);
 }
 
 async function loadSettingsForVerify(args: string[]) {
@@ -322,7 +341,7 @@ async function runVerify(args: string[]) {
     return;
   }
 
-  printVerificationText(evidence, report, "Evidence verified.");
+  printVerificationText(evidence, report, "Evidence verified.", settings);
 }
 
 async function runSources() {
