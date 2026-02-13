@@ -15,7 +15,7 @@ import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { useSettingsConfig } from "@/lib/settings";
-import { identifyProposer, analyzeTarget, analyzeSigners, type TransactionWarning } from "@/lib/warnings/analyze";
+import { identifyProposer, analyzeTarget, type TransactionWarning } from "@/lib/warnings/analyze";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound } from "lucide-react";
 import type { EvidencePackage } from "@/lib/types";
 import type { Hash, Hex, Address } from "viem";
@@ -53,10 +53,6 @@ export default function VerifyPage() {
   const targetWarnings = evidence && config
     ? analyzeTarget(evidence.transaction.to, evidence.transaction.operation, config)
     : [];
-  const signerWarnings = evidence && config
-    ? analyzeSigners(evidence.confirmations, config)
-    : {};
-
   // Verify each signature locally when evidence is loaded
   useEffect(() => {
     if (!evidence) {
@@ -304,9 +300,6 @@ export default function VerifyPage() {
                         <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
                       </div>
                       <AddressDisplay address={conf.owner} />
-                      {signerWarnings[conf.owner]?.map((w, j) => (
-                        <WarningBanner key={j} warning={w} className="mt-1.5" />
-                      ))}
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
                           Show signature

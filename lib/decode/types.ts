@@ -17,18 +17,12 @@ export interface DecodedInnerTransaction {
   dataDecoded?: DecodedCall | null;
 }
 
-export interface ParamSummary {
-  name: string;
-  type: string;
-  displayValue: string;
-}
-
 export interface CallStep {
   index: number;
   to: string;
   value: string;
   operation: number;
   method: string | null;
-  params: ParamSummary[];
+  params: DecodedParam[];
   rawData: string;
 }

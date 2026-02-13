@@ -1,47 +1,8 @@
-import type { CallStep, DecodedParam, ParamSummary } from "./types";
+import type { CallStep, DecodedParam } from "./types";
 
-function isAddress(type: string): boolean {
-  return type === "address";
-}
-
-function formatParamValue(param: DecodedParam): string {
-  const { type, value } = param;
-
-  // Address — keep full for AddressDisplay to resolve
-  if (isAddress(type)) {
-    return typeof value === "string" ? value : String(value);
-  }
-
-  // Tuple types — show as [type]
-  if (type.startsWith("(")) {
-    return `[${type}]`;
-  }
-
-  // Bytes / hex — truncate
-  if (typeof value === "string" && value.startsWith("0x")) {
-    if (value.length > 20) {
-      return `${value.slice(0, 10)}…${value.slice(-6)}`;
-    }
-    return value;
-  }
-
-  // Large numbers — truncate
-  const str = String(value);
-  if (/^\d+$/.test(str) && str.length > 12) {
-    return `${str.slice(0, 5)}…`;
-  }
-
-  // Boolean / short strings
-  return str;
-}
-
-function summarizeParams(params?: DecodedParam[]): ParamSummary[] {
+function passParams(params?: DecodedParam[]): DecodedParam[] {
   if (!params || params.length === 0) return [];
-  return params.map((p) => ({
-    name: p.name,
-    type: p.type,
-    displayValue: formatParamValue(p),
-  }));
+  return params.map((p) => ({ name: p.name, type: p.type, value: p.value }));
 }
 
 export function normalizeCallSteps(
@@ -86,7 +47,7 @@ export function normalizeCallSteps(
       value: tx.value ?? "0",
       operation: tx.operation ?? 0,
       method: tx.dataDecoded?.method ?? null,
-      params: summarizeParams(
+      params: passParams(
         tx.dataDecoded?.parameters as DecodedParam[] | undefined
       ),
       rawData: tx.data ?? "",
@@ -101,7 +62,7 @@ export function normalizeCallSteps(
       value: txValue,
       operation: txOperation,
       method: decoded.method,
-      params: summarizeParams(decoded.parameters as DecodedParam[] | undefined),
+      params: passParams(decoded.parameters as DecodedParam[] | undefined),
       rawData: txData ?? "",
     },
   ];
