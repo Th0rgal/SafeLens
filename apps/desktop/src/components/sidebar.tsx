@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ShieldCheck, BookUser, Settings, Fingerprint } from "lucide-react";
+import { ShieldCheck, Library, Settings, Fingerprint } from "lucide-react";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { attachBlurDiagnostics } from "@/lib/debug/blur-diagnostics";
 
 const NAV_ITEMS = [
   { id: "verify", label: "Verify", icon: ShieldCheck },
-  { id: "address-book", label: "Address Book", icon: BookUser },
+  { id: "address-book", label: "Registries", icon: Library },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
