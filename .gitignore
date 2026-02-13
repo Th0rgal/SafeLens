@@ -11,6 +11,8 @@ package-lock.json
 # next.js
 /.next/
 /out/
+apps/generator/.next/
+apps/generator/out/
 
 # vite
 /apps/desktop/dist
@@ -18,6 +20,8 @@ package-lock.json
 # tauri
 /apps/desktop/src-tauri/target
 /apps/desktop/src-tauri/.tauri
+/apps/desktop/src-tauri/Cargo.lock
+/apps/desktop/src-tauri/icons
 
 # production
 /build
@@ -39,6 +43,8 @@ yarn-error.log*
 
 # playwright MCP
 .playwright-mcp/
+# local assistant cache
+/.opencode/
 
 # typescript
 *.tsbuildinfo
@@ -46,4 +52,5 @@ next-env.d.ts
 
 # screenshots
 ui-*.png
+safelens-*.png
 ralph.txt
