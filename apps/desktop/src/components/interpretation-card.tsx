@@ -26,13 +26,13 @@ export function InterpretationCard({
   if (!interpretation) return null;
 
   return (
-    <Card className="border border-accent/20 bg-accent/5">
+    <Card className="border border-border/20 bg-surface/35">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
-          <span className="rounded bg-accent px-2 py-0.5 text-xs font-medium text-white">
+          <span className="rounded bg-surface-2/75 px-2 py-0.5 text-xs font-medium text-fg">
             {interpretation.protocol}
           </span>
-          <span className="rounded bg-accent/20 px-2 py-0.5 text-xs font-medium text-accent-hover">
+          <span className="rounded bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
             {interpretation.action}
           </span>
         </div>

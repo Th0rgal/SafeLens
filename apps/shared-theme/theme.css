@@ -1,19 +1,19 @@
 :root {
   --radius: 0.5rem;
 
-  --background: 12 8 6;
-  --background-elevated: 22 15 11;
-  --background-tertiary: 35 24 18;
-  --background-inset: 16 11 8;
+  --background: 13 17 14;
+  --background-elevated: 25 29 24;
+  --background-tertiary: 39 45 38;
+  --background-inset: 22 27 21;
 
-  --foreground: 244 236 228;
-  --foreground-secondary: 201 186 171;
-  --foreground-tertiary: 157 139 123;
+  --foreground: 232 228 214;
+  --foreground-secondary: 191 186 172;
+  --foreground-tertiary: 148 143 129;
 
-  --border: 89 69 53;
+  --border: 73 80 70;
 
-  --accent: 205 132 76;
-  --accent-hover: 224 156 100;
+  --accent: 176 126 82;
+  --accent-hover: 196 150 101;
 }
 
 html {
@@ -22,13 +22,30 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 800px at 20% -10%, rgba(205, 132, 76, 0.18), transparent 60%),
-    radial-gradient(900px 700px at 110% 10%, rgba(120, 82, 50, 0.22), transparent 55%),
-    rgb(var(--background));
+    rgb(var(--background)),
+    linear-gradient(
+      170deg,
+      rgb(var(--background)),
+      rgb(var(--background-elevated)) 48%,
+      rgb(var(--background-tertiary))
+    );
+  position: relative;
   color: rgb(var(--foreground));
-  font-family: "Space Grotesk", "Avenir Next", "Helvetica Neue", sans-serif;
+  font-family: "Inter", "Avenir Next", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 18px 18px, 18px 18px;
+  opacity: 0.35;
 }
 
 a {
@@ -57,29 +74,29 @@ a {
 }
 
 .glass {
-  background: rgb(var(--background-elevated) / 0.86);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  background: rgb(var(--background-elevated) / 0.84);
+  backdrop-filter: blur(8px) saturate(115%);
+  -webkit-backdrop-filter: blur(8px) saturate(115%);
 }
 
 .glass-subtle {
-  background: rgb(var(--background-elevated) / 0.80);
-  backdrop-filter: blur(12px) saturate(135%);
-  -webkit-backdrop-filter: blur(12px) saturate(135%);
+  background: rgb(var(--background-elevated) / 0.78);
+  backdrop-filter: blur(8px) saturate(110%);
+  -webkit-backdrop-filter: blur(8px) saturate(110%);
 }
 
 .glass-panel {
   background: rgb(var(--background-tertiary) / 0.94);
-  border: 1px solid rgb(var(--border) / 0.14);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgb(var(--border) / 0.18);
+  backdrop-filter: blur(7px) saturate(112%);
+  -webkit-backdrop-filter: blur(7px) saturate(112%);
   box-shadow: inset 0 1px 0 rgb(var(--border) / 0.12);
 }
 
 .glass-field {
-  background: rgb(var(--background-inset) / 0.94);
-  backdrop-filter: blur(10px) saturate(135%);
-  -webkit-backdrop-filter: blur(10px) saturate(135%);
+  background: rgb(var(--background-inset) / 0.92);
+  backdrop-filter: blur(6px) saturate(110%);
+  -webkit-backdrop-filter: blur(6px) saturate(110%);
   box-shadow: inset 0 1px 0 rgb(var(--border) / 0.10);
 }
 

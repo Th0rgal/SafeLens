@@ -30,8 +30,8 @@ export const sharedTailwindThemeConfig: Omit<Config, "content"> = {
         },
       },
       boxShadow: {
-        "glass-sm": "0 10px 30px -22px rgba(0,0,0,0.75)",
-        glass: "0 24px 70px -48px rgba(0,0,0,0.85)",
+        "glass-sm": "0 8px 24px -18px rgba(0, 0, 0, 0.72)",
+        glass: "0 18px 48px -30px rgba(0, 0, 0, 0.82)",
       },
     },
   },
