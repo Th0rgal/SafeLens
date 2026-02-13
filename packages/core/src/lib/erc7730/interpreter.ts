@@ -170,15 +170,33 @@ export interface ERC7730Details {
 }
 
 /**
+ * Get all unique chain IDs from the descriptor index.
+ */
+function getIndexChainIds(index: DescriptorIndex): number[] {
+  const chainIds = new Set<number>();
+  
+  for (const descriptor of index.descriptors) {
+    const deployments = [
+      ...(descriptor.context.contract?.deployments ?? []),
+      ...(descriptor.context.eip712?.deployments ?? []),
+    ];
+    for (const deployment of deployments) {
+      chainIds.add(deployment.chainId);
+    }
+  }
+  
+  return Array.from(chainIds);
+}
+
+/**
  * Create an ERC-7730 interpreter bound to a descriptor index.
  *
  * @param index The descriptor index to use for lookups
- * @param chainId The chain ID (default: 1 for Ethereum mainnet)
  */
-export function createERC7730Interpreter(
-  index: DescriptorIndex,
-  chainId: number = 1
-) {
+export function createERC7730Interpreter(index: DescriptorIndex) {
+  // Get all chain IDs present in the index
+  const chainIds = getIndexChainIds(index);
+  
   return function interpretERC7730(
     dataDecoded: unknown,
     txTo: string,
@@ -197,51 +215,53 @@ export function createERC7730Interpreter(
 
     const decoded = dataDecoded as DataDecoded;
 
-    // Lookup the format entry by method name
-    const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
-    if (!entry) {
-      return null;
-    }
+    // Try to find a match on any chain in the index
+    for (const chainId of chainIds) {
+      const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
+      if (entry) {
+        // Extract and format all fields
+        const fields: ERC7730Details["fields"] = [];
 
-    // Extract and format all fields
-    const fields: ERC7730Details["fields"] = [];
+        for (const fieldDef of entry.formatEntry.fields) {
+          if (!fieldDef.path) continue;
 
-    for (const fieldDef of entry.formatEntry.fields) {
-      if (!fieldDef.path) continue;
+          const rawValue = extractValue(
+            fieldDef.path,
+            decoded,
+            txValue,
+            txFrom,
+            txTo
+          );
 
-      const rawValue = extractValue(
-        fieldDef.path,
-        decoded,
-        txValue,
-        txFrom,
-        txTo
-      );
+          if (rawValue === null) {
+            // Field not found — skip it
+            continue;
+          }
 
-      if (rawValue === null) {
-        // Field not found — skip it
-        continue;
+          const formattedValue = formatValue(
+            rawValue,
+            fieldDef,
+            entry.descriptor
+          );
+
+          fields.push({
+            label: fieldDef.label,
+            value: formattedValue,
+            format: fieldDef.format ?? "raw",
+          });
+        }
+
+        return {
+          id: "erc7730",
+          protocol: entry.descriptor.metadata.owner,
+          action: entry.formatEntry.intent,
+          severity: "info",
+          summary: entry.formatEntry.intent,
+          details: { fields },
+        };
       }
-
-      const formattedValue = formatValue(
-        rawValue,
-        fieldDef,
-        entry.descriptor
-      );
-
-      fields.push({
-        label: fieldDef.label,
-        value: formattedValue,
-        format: fieldDef.format ?? "raw",
-      });
     }
 
-    return {
-      id: "erc7730",
-      protocol: entry.descriptor.metadata.owner,
-      action: entry.formatEntry.intent,
-      severity: "info",
-      summary: entry.formatEntry.intent,
-      details: { fields },
-    };
+    return null;
   };
 }

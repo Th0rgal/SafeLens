@@ -24,7 +24,8 @@ import { getGlobalIndex } from "../erc7730/global-index";
 // Each interpreter is tried in order; the first non-null result wins.
 // Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
 
-const erc7730Interpreter = createERC7730Interpreter(getGlobalIndex(), 1);
+// Create the ERC-7730 interpreter (now checks all chains in the global index)
+const erc7730Interpreter = createERC7730Interpreter(getGlobalIndex());
 
 const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,
