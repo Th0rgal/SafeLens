@@ -7,14 +7,14 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun --cwd apps/generator dev",
-    "dev:generator": "bun --cwd apps/generator dev",
-    "dev:desktop": "bun --cwd apps/desktop dev",
-    "dev:tauri": "bun --cwd apps/desktop tauri dev",
-    "build": "bun --cwd apps/generator build && bun --cwd apps/desktop build",
-    "build:tauri": "bun --cwd apps/desktop tauri build",
-    "test": "bun --cwd packages/core test && bun --cwd packages/cli test && bun --cwd apps/generator test && bun --cwd apps/desktop test",
-    "type-check": "bun --cwd packages/core type-check && bun --cwd packages/cli type-check && bun --cwd apps/generator type-check && bun --cwd apps/desktop type-check",
-    "lint": "bun --cwd apps/generator lint"
+    "dev": "bun run --cwd apps/generator dev",
+    "dev:generator": "bun run --cwd apps/generator dev",
+    "dev:desktop": "bun run --cwd apps/desktop dev",
+    "dev:tauri": "bun run --cwd apps/desktop tauri dev",
+    "build": "bun run --cwd apps/generator build && bun run --cwd apps/desktop build",
+    "build:tauri": "bun run --cwd apps/desktop tauri build",
+    "test": "bun run --cwd packages/core test && bun run --cwd packages/cli test && bun run --cwd apps/generator test && bun run --cwd apps/desktop test",
+    "type-check": "bun run --cwd packages/core type-check && bun run --cwd packages/cli type-check && bun run --cwd apps/generator type-check && bun run --cwd apps/desktop type-check",
+    "lint": "bun run --cwd apps/generator lint"
   }
 }

@@ -9,7 +9,8 @@ export function createTauriSettingsStore(): SettingsStore {
     async read() {
       const fileExists = await exists(SETTINGS_FILE, SETTINGS_DIR);
       if (!fileExists) return null;
-      return await readTextFile(SETTINGS_FILE, SETTINGS_DIR);
+      const raw = await readTextFile(SETTINGS_FILE, SETTINGS_DIR);
+      return raw.trim().length > 0 ? raw : null;
     },
     async write(payload: string) {
       await writeTextFile(SETTINGS_FILE, payload, SETTINGS_DIR);

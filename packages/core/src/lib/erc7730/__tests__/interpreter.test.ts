@@ -41,7 +41,7 @@ describe("createERC7730Interpreter", () => {
     };
 
     const index = buildIndex([descriptor]);
-    const interpret = createERC7730Interpreter(index, 1);
+    const interpret = createERC7730Interpreter(index);
 
     const dataDecoded = {
       method: "submit",
@@ -96,7 +96,7 @@ describe("createERC7730Interpreter", () => {
     };
 
     const index = buildIndex([descriptor]);
-    const interpret = createERC7730Interpreter(index, 1);
+    const interpret = createERC7730Interpreter(index);
 
     const dataDecoded = {
       method: "submit",
@@ -140,7 +140,7 @@ describe("createERC7730Interpreter", () => {
     };
 
     const index = buildIndex([descriptor]);
-    const interpret = createERC7730Interpreter(index, 1);
+    const interpret = createERC7730Interpreter(index);
 
     const dataDecoded = {
       method: "unknownMethod",
@@ -188,7 +188,7 @@ describe("createERC7730Interpreter", () => {
     };
 
     const index = buildIndex([descriptor]);
-    const interpret = createERC7730Interpreter(index, 1);
+    const interpret = createERC7730Interpreter(index);
 
     const dataDecoded = {
       method: "testMethod",

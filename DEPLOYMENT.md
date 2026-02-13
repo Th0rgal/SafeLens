@@ -13,15 +13,15 @@
 ### Manual
 
 ```bash
-bun --cwd apps/generator build
-bun --cwd apps/generator start
+bun run --cwd apps/generator build
+bun run --cwd apps/generator start
 ```
 
 ## Desktop Verifier (Tauri)
 
 ```bash
-bun --cwd apps/desktop build
-bun --cwd apps/desktop tauri build
+bun run --cwd apps/desktop build
+bun run --cwd apps/desktop tauri build
 ```
 
 ## Notes
