@@ -66,6 +66,22 @@ export interface CowSwapTwapDetails {
   };
 }
 
+/** Safe policy change details */
+export interface SafePolicyChangeDetails {
+  /** Which Safe method was called */
+  changeType: "changeThreshold" | "addOwnerWithThreshold" | "removeOwner" | "swapOwner";
+  /** The Safe address being modified */
+  safeAddress: string;
+  /** New threshold (for changeThreshold, addOwnerWithThreshold, removeOwner) */
+  newThreshold?: number;
+  /** Owner being added (for addOwnerWithThreshold, swapOwner) */
+  newOwner?: string;
+  /** Owner being removed (for removeOwner, swapOwner) */
+  removedOwner?: string;
+  /** Previous owner in linked list (for removeOwner, swapOwner — internal) */
+  prevOwner?: string;
+}
+
 /** An interpreter function: returns null if it doesn't recognise the tx */
 export type Interpreter = (
   dataDecoded: unknown,

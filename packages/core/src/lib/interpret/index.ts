@@ -7,13 +7,11 @@
 
 import type { Interpretation, Interpreter } from "./types";
 import { interpretCowSwapTwap } from "./cowswap";
+import { interpretSafePolicy } from "./safe-policy";
 
 const interpreters: Interpreter[] = [
   interpretCowSwapTwap,
-  // Add more interpreters here as needed:
-  // interpretAaveV3,
-  // interpretUniswapV3,
-  // interpretENS,
+  interpretSafePolicy,
 ];
 
 /**
@@ -36,4 +34,4 @@ export function interpretTransaction(
   return null;
 }
 
-export type { Interpretation, CowSwapTwapDetails } from "./types";
+export type { Interpretation, CowSwapTwapDetails, SafePolicyChangeDetails } from "./types";
