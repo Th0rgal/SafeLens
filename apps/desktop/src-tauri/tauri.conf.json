@@ -17,7 +17,7 @@
         "readFile": true,
         "writeFile": true,
         "exists": true,
-        "createDir": false,
+        "createDir": true,
         "removeFile": false,
         "scope": [
           "$APPDATA/**",
@@ -26,8 +26,12 @@
           "$DOCUMENT/**"
         ]
       },
-      "dialog": { "all": true },
-      "path": { "all": true },
+      "dialog": {
+        "all": true
+      },
+      "path": {
+        "all": true
+      },
       "window": {
         "all": false,
         "startDragging": true,
