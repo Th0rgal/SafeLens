@@ -151,8 +151,7 @@ describe("CLI verify output", () => {
     expect(result.stdout).toContain("Valid Signatures");
     expect(result.stdout).toContain("Warnings");
     expect(result.stdout).toContain("DelegateCall to MultiSend 1.4.1");
-    expect(result.stdout).toContain("Sources of Truth");
-    expect(result.stdout).toContain("Evidence package integrity");
+    // Sources of Truth section removed - not shown in app
   });
 
   it("suppresses warnings in text output with --no-settings", async () => {
@@ -218,8 +217,7 @@ describe("CLI verify output", () => {
     expect(result.stdout).toContain("DelegateCall to MultiSend 1.4.1");
     expect(result.stdout).toContain("Signatures");
     expect(result.stdout).toContain("1");  // Valid signatures count
-    expect(result.stdout).toContain("Sources of Truth");
-    expect(result.stdout).toContain("Signature checks");
+    // Sources of Truth section removed - not shown in app
   });
 
   it("prints sources documentation command", async () => {

@@ -92,6 +92,25 @@ export function getTerminalWidth(): number {
 }
 
 /**
+ * Get consistent content width for all boxes and sections
+ * Uses most of terminal width on wide screens, with reasonable limits
+ */
+export function getContentWidth(): number {
+  const terminalWidth = getTerminalWidth();
+
+  // Use most of terminal width, but cap at reasonable limits
+  if (terminalWidth >= 140) {
+    return Math.min(terminalWidth - 8, 160); // Wide terminal: use almost full width
+  } else if (terminalWidth >= 100) {
+    return terminalWidth - 8; // Medium-wide: use most of width
+  } else if (terminalWidth >= 80) {
+    return 72; // Standard terminal: comfortable width
+  } else {
+    return Math.max(40, terminalWidth - 8); // Narrow: leave minimal margin
+  }
+}
+
+/**
  * Truncate a string in the middle with ellipsis if it exceeds maxLength
  */
 export function truncateMiddle(text: string, maxLength: number): string {
@@ -140,8 +159,9 @@ export function wrapText(text: string, maxWidth: number): string[] {
 }
 
 export function box(content: string, title?: string): string {
-  const terminalWidth = getTerminalWidth();
-  const maxBoxWidth = Math.max(40, Math.min(terminalWidth - 4, 100));
+  // Use consistent width for all boxes
+  const contentWidth = getContentWidth();
+  const width = contentWidth + 4; // Add padding for borders
 
   const lines = content.split("\n");
   const processedLines: string[] = [];
@@ -149,24 +169,16 @@ export function box(content: string, title?: string): string {
   // Process each line to handle wrapping and truncation
   for (const line of lines) {
     const stripped = stripAnsi(line);
-    const maxLineWidth = maxBoxWidth - 4; // Account for box borders and padding
+    const maxLineWidth = contentWidth - 2; // Account for internal padding
 
     if (stripped.length <= maxLineWidth) {
       processedLines.push(line);
     } else {
-      // For lines with ANSI codes, we need to preserve them while wrapping
-      // For now, truncate long lines with ANSI codes
+      // Truncate long lines while preserving ANSI codes
       const truncated = truncateMiddle(stripped, maxLineWidth);
       processedLines.push(truncated);
     }
   }
-
-  const contentWidth = Math.min(
-    Math.max(...processedLines.map(l => stripAnsi(l).length)),
-    maxBoxWidth - 4
-  );
-
-  const width = contentWidth + 4;
 
   let output = colors.gray("┌" + "─".repeat(width - 2) + "┐") + "\n";
 

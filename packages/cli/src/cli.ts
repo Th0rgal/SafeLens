@@ -114,8 +114,7 @@ function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSo
 function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
   if (warnings.length === 0) return "";
 
-  const lines: string[] = [];
-  lines.push(section("⚠  Warnings"));
+  const warningLines: string[] = [];
 
   for (const warning of warnings) {
     const levelBadge = warning.level === "critical"
@@ -124,10 +123,10 @@ function printWarningsSection(warnings: Array<{ level: string; message: string }
         ? colors.bgYellow(" MEDIUM ")
         : colors.bgBlue(" LOW ");
 
-    lines.push(bullet(`${levelBadge} ${warning.message}`));
+    warningLines.push(bullet(`${levelBadge} ${warning.message}`));
   }
 
-  return lines.join("\n");
+  return box(warningLines.join("\n"), "⚠  Warnings");
 }
 
 function printVerificationText(
@@ -135,11 +134,10 @@ function printVerificationText(
   report: EvidenceVerificationReport,
   title: string
 ) {
-  const { proposer, targetWarnings, signatures, sources, hashDetails } = report;
+  const { proposer, targetWarnings, signatures, hashDetails } = report;
   const { summary } = signatures;
 
   console.log("\n" + heading(title));
-  console.log("");
 
   // ── Transaction Interpretation ──────────────────────────────────────
   if (evidence.dataDecoded) {
@@ -150,12 +148,13 @@ function printVerificationText(
     );
 
     if (interpretation) {
-      console.log(renderInterpretation(interpretation));
       console.log("");
+      console.log(renderInterpretation(interpretation));
     }
   }
 
   // ── Transaction Overview ────────────────────────────────────────────
+  console.log("");
   console.log(box(
     table([
       ["Chain", `${code(getChainName(evidence.chainId))} (${evidence.chainId}) ${trustBadge("self-verified")}`],
@@ -164,35 +163,35 @@ function printVerificationText(
     ], 15),
     "Transaction Overview"
   ));
-  console.log("");
 
   // ── Hash Verification ───────────────────────────────────────────────
-  console.log(section("🔐 Hash Verification"));
   console.log("");
-  console.log(table([
-    ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
-  ], 15));
+  console.log(box(
+    (() => {
+      const rows: Array<[string, string]> = [
+        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
+      ];
 
-  if (hashDetails) {
-    console.log("");
-    console.log(label("  Intermediate hashes for hardware wallet verification:"));
-    console.log("");
-    console.log(table([
-      ["  Domain Separator", formatAddress(hashDetails.domainSeparator)],
-      ["  Message Hash", formatAddress(hashDetails.messageHash)],
-    ], 20));
-    console.log(label("  " + colors.dim("Final hash = keccak256(0x1901 || domainSeparator || messageHash)")));
-  }
+      if (hashDetails) {
+        rows.push(
+          ["Domain Separator", `${formatAddress(hashDetails.domainSeparator)} ${colors.dim("(hw wallet)")}`],
+          ["Message Hash", `${formatAddress(hashDetails.messageHash)} ${colors.dim("(hw wallet)")}`]
+        );
+      }
 
-  if (evidence.ethereumTxHash) {
-    console.log("");
-    console.log(table([
-      ["Ethereum TX Hash", `${formatAddress(evidence.ethereumTxHash)} ${trustBadge("api-sourced")}`],
-    ], 18));
-  }
-  console.log("");
+      if (evidence.ethereumTxHash) {
+        rows.push(
+          ["Ethereum TX Hash", `${formatAddress(evidence.ethereumTxHash)} ${trustBadge("api-sourced")}`]
+        );
+      }
+
+      return table(rows, 18);
+    })(),
+    "🔐 Hash Verification"
+  ));
 
   // ── Transaction Details ─────────────────────────────────────────────
+  console.log("");
   console.log(box(
     table([
       ["Target Contract", `${formatAddress(evidence.transaction.to)} ${trustBadge("self-verified")}`],
@@ -202,38 +201,35 @@ function printVerificationText(
     ], 18),
     "Transaction Details"
   ));
-  console.log("");
 
   // ── Warnings ────────────────────────────────────────────────────────
   const warningsOutput = printWarningsSection(targetWarnings);
   if (warningsOutput) {
-    console.log(warningsOutput);
     console.log("");
+    console.log(warningsOutput);
   }
 
   // ── Signatures ──────────────────────────────────────────────────────
   const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
 
-  console.log(section("✍️  Signatures") + " " + trustBadge(signaturesTrustLevel));
   console.log("");
-  console.log(table([
+  const signaturesRows: Array<[string, string]> = [
     ["Valid Signatures", colors.green(String(summary.valid))],
     ["Invalid Signatures", summary.invalid > 0 ? colors.red(String(summary.invalid)) : colors.gray(String(summary.invalid))],
     ["Unsupported", summary.unsupported > 0 ? colors.yellow(String(summary.unsupported)) : colors.gray(String(summary.unsupported))],
     ["Total", colors.bold(String(summary.total))],
     ["Required", colors.bold(`${evidence.confirmations.length}/${evidence.confirmationsRequired}`)],
-  ], 20));
+  ];
 
   if (proposer) {
-    console.log("");
-    console.log(table([["Proposed by", formatAddress(proposer)]], 15));
+    signaturesRows.push(["Proposed by", formatAddress(proposer)]);
   }
-  console.log("");
 
-  // ── Sources of Truth ────────────────────────────────────────────────
-  console.log(section("📋 Sources of Truth"));
-  console.log("");
-  printSourceFactsFromList(sources);
+  console.log(box(
+    table(signaturesRows, 18),
+    "✍️  Signatures " + trustBadge(signaturesTrustLevel)
+  ));
+
   console.log("");
 }
 

@@ -19,6 +19,7 @@ import {
   bullet,
   box,
   indent,
+  formatAddress,
 } from "./formatter";
 
 export function renderInterpretation(interpretation: Interpretation): string {
@@ -53,7 +54,7 @@ function renderCowSwapTwap(details: CowSwapTwapDetails): string {
   const lines: string[] = [];
 
   lines.push(section("Order Details"));
-  lines.push(bullet(`Receiver: ${code(details.receiver)}`));
+  lines.push(bullet(`Receiver: ${formatAddress(details.receiver)}`));
   lines.push(bullet(`Number of Parts: ${code(String(details.numberOfParts))}`));
 
   lines.push("");
@@ -96,14 +97,14 @@ function renderSafePolicy(details: SafePolicyChangeDetails): string {
 
   lines.push(section("Policy Change"));
   lines.push(bullet(`Type: ${colors.bold(details.changeType)}`));
-  lines.push(bullet(`Safe: ${code(details.safeAddress)}`));
+  lines.push(bullet(`Safe: ${formatAddress(details.safeAddress)}`));
 
   if (details.newOwner) {
-    lines.push(bullet(`${colors.green("New Owner:")} ${code(details.newOwner)}`));
+    lines.push(bullet(`${colors.green("New Owner:")} ${formatAddress(details.newOwner)}`));
   }
 
   if (details.removedOwner) {
-    lines.push(bullet(`${colors.red("Removed Owner:")} ${code(details.removedOwner)}`));
+    lines.push(bullet(`${colors.red("Removed Owner:")} ${formatAddress(details.removedOwner)}`));
   }
 
   if (details.newThreshold !== undefined) {
