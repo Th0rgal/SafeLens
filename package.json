@@ -11,7 +11,7 @@
     "dev:generator": "bun --cwd apps/generator dev",
     "dev:desktop": "bun --cwd apps/desktop dev",
     "build": "bun --cwd apps/generator build && bun --cwd apps/desktop build",
-    "test": "bun --cwd packages/core test",
+    "test": "bun --cwd packages/core test && bun --cwd packages/cli test",
     "type-check": "bun --cwd packages/core type-check && bun --cwd apps/generator type-check",
     "lint": "bun --cwd apps/generator lint"
   }

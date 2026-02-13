@@ -14,6 +14,7 @@ import {
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
+import { getFlag, getPositionals, hasFlag } from "./args";
 
 function printHelp() {
   console.log(`SafeLens CLI
@@ -31,16 +32,6 @@ Examples:
 `);
 }
 
-function getFlag(args: string[], flag: string): string | undefined {
-  const index = args.indexOf(flag);
-  if (index === -1) return undefined;
-  return args[index + 1];
-}
-
-function hasFlag(args: string[], flag: string): boolean {
-  return args.includes(flag);
-}
-
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -50,7 +41,7 @@ async function readStdin(): Promise<string> {
 }
 
 async function runAnalyze(args: string[]) {
-  const url = args.find((arg) => !arg.startsWith("--"));
+  const [url] = getPositionals(args);
   if (!url) {
     console.error("Missing Safe transaction URL.");
     process.exit(1);

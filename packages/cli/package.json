@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "bun ./src/cli.ts",
+    "test": "bun test",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
