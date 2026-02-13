@@ -1,66 +1,123 @@
 # SafeLens
 
-SafeLens is a minimal, trustless toolkit for generating and verifying Gnosis Safe multisig evidence with as little trust as possible.
+SafeLens is a minimal toolkit for working with Gnosis Safe multisig evidence:
 
-## What lives where
+- Generate an `evidence.json` package from a Safe transaction URL.
+- Verify signatures and hashes locally with minimal trust.
+- Keep settings and checks reproducible across tools.
 
-- `apps/generator` — Next.js app to generate `evidence.json` from Safe URLs
-- `apps/desktop` — Tauri + Vite desktop app to verify evidence completely offline
-- `packages/core` — shared logic (hashing, schema validation, warnings, parsing)
-- `packages/cli` — CLI-first interface built on top of `@safelens/core`
+## Project structure
 
-## Quick start
+- `apps/generator`: Next.js webapp that creates and exports `evidence.json`.
+- `apps/desktop`: Tauri + Vite desktop app that verifies evidence offline.
+- `packages/core`: Shared validation, hashing, signature verification, and warning logic.
+- `packages/cli`: CLI wrapper over the same core logic.
+
+## Requirements
+
+- [Bun](https://bun.sh)
+
+Install deps:
 
 ```bash
 bun install
 ```
 
-### Generator (Next.js)
+## Run locally
+
+From the repo root:
 
 ```bash
-bun --cwd apps/generator dev
+bun run dev
 ```
 
-Open `http://localhost:3000` to generate evidence packages.
+Starts the generator webapp at `http://localhost:3000`.
 
-### Desktop verifier (Tauri)
+Run desktop verifier dev mode:
 
 ```bash
-bun --cwd apps/desktop dev
+bun run dev:tauri
 ```
 
-Then in another terminal:
+That command builds the desktop frontend bundle and starts the Tauri shell.
+
+If you want just the desktop web frontend (without launching Tauri):
 
 ```bash
-bun --cwd apps/desktop tauri dev
+bun run dev:desktop
 ```
 
-### CLI
+## Core flows
+
+### 1) Generate evidence
+
+#### Web app
+
+- Open generator at `http://localhost:3000`.
+- Paste/enter a Safe transaction URL and export `evidence.json`.
+
+#### CLI
 
 ```bash
-bun --cwd packages/cli dev --help
+bun --cwd packages/cli dev analyze "https://app.safe.global/transactions/tx?..." --out evidence.json
 ```
 
-Examples:
+### 2) Verify evidence
+
+#### Desktop app
+
+- Open the app.
+- Load the generated JSON file.
+- Verification runs locally using bundled crypto and local settings.
+
+#### CLI
 
 ```bash
-bun --cwd packages/cli dev -- analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
-bun --cwd packages/cli dev -- verify --file evidence.json
-bun --cwd packages/cli dev -- settings init
+bun --cwd packages/cli dev verify --file evidence.json
+bun --cwd packages/cli dev verify --file evidence.json --format json
 ```
 
-## Offline-first verification
+### 3) Settings
 
-- The desktop verifier never calls the network for verification.
-- Settings are stored on disk as JSON and can be exported/imported.
-- The CLI uses `~/.safelens/settings.json` by default.
+- Shared settings file is JSON (address book and contract registry).
+- CLI default: `~/.safelens/settings.json`.
+- Desktop default: app data folder (`safelens-settings.json`).
+- You can initialize a CLI settings file with:
 
-## Security notes
+```bash
+bun --cwd packages/cli dev settings init
+```
 
-- All critical data (Safe tx hashes) are recomputed locally.
-- Evidence packages are validated with Zod.
-- EIP-712 compliant hash computation.
+Show sources used in a verification:
 
-## License
+```bash
+bun --cwd packages/cli dev sources
+```
 
-MIT
+## Build and release
+
+```bash
+bun run build
+```
+
+Builds generator and desktop frontend assets.
+
+```bash
+bun run build:tauri
+```
+
+Builds full desktop distributable.
+
+## Notes
+
+- Desktop verification is designed to stay offline during `verify`.
+- The CLI is the primary interface for scripting and reproducible checks.
+- `evidence.json` is the main interoperability boundary between all components.
+
+## Local cleanup
+
+Useful for keeping a clean working tree:
+
+```bash
+rm -rf apps/generator/.next apps/desktop/src-tauri/target apps/desktop/src-tauri/.tauri apps/desktop/src-tauri/Cargo.lock .opencode
+```
