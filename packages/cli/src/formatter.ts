@@ -159,29 +159,11 @@ export function wrapText(text: string, maxWidth: number): string[] {
 }
 
 export function box(content: string, title?: string): string {
-  const lines = content.split("\n");
-  const processedLines: string[] = [];
-
-  // First pass: collect all lines as-is (no truncation)
-  for (const line of lines) {
-    processedLines.push(line);
-  }
-
-  // Calculate the actual width needed based on content
+  // Use consistent width for all boxes
   const contentWidth = getContentWidth();
-  const maxContentLineWidth = Math.max(
-    ...processedLines.map(l => stripAnsi(l).length),
-    title ? stripAnsi(title).length : 0
-  );
+  const width = contentWidth + 4; // Add padding for borders
 
-  // Use the larger of: our target width or what's needed to fit content
-  // But cap at terminal width - 8 to leave margins
-  const terminalWidth = getTerminalWidth();
-  const actualContentWidth = Math.min(
-    Math.max(contentWidth, maxContentLineWidth + 2),
-    terminalWidth - 8
-  );
-  const width = actualContentWidth + 4; // Add padding for borders
+  const lines = content.split("\n");
 
   let output = colors.gray("┌" + "─".repeat(width - 2) + "┐") + "\n";
 
@@ -192,7 +174,7 @@ export function box(content: string, title?: string): string {
     output += colors.gray("├" + "─".repeat(width - 2) + "┤") + "\n";
   }
 
-  for (const line of processedLines) {
+  for (const line of lines) {
     const stripped = stripAnsi(line);
     const padding = width - stripped.length - 4;
     output += colors.gray("│ ") + line + " ".repeat(Math.max(0, padding)) + colors.gray(" │") + "\n";
@@ -220,9 +202,24 @@ function stripAnsi(text: string): string {
 }
 
 export function table(rows: Array<[string, string]>, keyWidth: number = 20): string {
+  const contentWidth = getContentWidth();
+  const maxValueWidth = contentWidth - keyWidth - 3; // Leave room for key, padding, and space
+
   return rows.map(([key, value]) => {
     const padding = " ".repeat(Math.max(0, keyWidth - stripAnsi(key).length));
-    return `${label(key)}${padding} ${value}`;
+    const valueStripped = stripAnsi(value);
+
+    // If value fits on one line, return it as-is
+    if (valueStripped.length <= maxValueWidth) {
+      return `${label(key)}${padding} ${value}`;
+    }
+
+    // Value is too long - wrap to second line
+    // First line: just the key
+    const firstLine = `${label(key)}${padding}`;
+    // Second line: indent and show full value
+    const indent = " ".repeat(keyWidth + 1);
+    return `${firstLine}\n${indent}${value}`;
   }).join("\n");
 }
 
