@@ -2,8 +2,8 @@
  * ERC-7730 module exports.
  */
 
-export { parseDescriptor, parseDescriptorFromString } from "./parser.js";
-export type { ParseResult, ParseError } from "./parser.js";
+export { parseDescriptor, parseDescriptorFromString } from "./parser";
+export type { ParseResult, ParseError } from "./parser";
 
 export {
   resolveDescriptor,
@@ -11,7 +11,7 @@ export {
   resolveFieldDefinition,
   resolveRef,
   resolveMetadataConstants,
-} from "./resolve.js";
+} from "./resolve";
 
 export {
   buildIndex,
@@ -21,13 +21,13 @@ export {
   computeSelector,
   isSelector,
   normalizeFormatKey,
-} from "./index.js";
-export type { DescriptorIndex, IndexEntry } from "./index.js";
+} from "./index";
+export type { DescriptorIndex, IndexEntry } from "./index";
 
-export { createERC7730Interpreter } from "./interpreter.js";
-export type { ERC7730Details } from "./interpreter.js";
+export { createERC7730Interpreter } from "./interpreter";
+export type { ERC7730Details } from "./interpreter";
 
-export { bundledDescriptors } from "./descriptors/index.js";
+export { bundledDescriptors } from "./descriptors/index";
 
 export type {
   ERC7730Descriptor,
@@ -46,4 +46,4 @@ export type {
   ContractContext,
   EIP712Context,
   Context,
-} from "./types.js";
+} from "./types";

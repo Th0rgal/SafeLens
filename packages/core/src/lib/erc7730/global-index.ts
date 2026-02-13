@@ -5,10 +5,10 @@
  * a ready-to-use index for the interpreter.
  */
 
-import { buildIndex } from "./index.js";
-import type { DescriptorIndex } from "./index.js";
-import { parseDescriptor } from "./parser.js";
-import { bundledDescriptors } from "./descriptors/index.js";
+import { buildIndex } from "./index";
+import type { DescriptorIndex } from "./index";
+import { parseDescriptor } from "./parser";
+import { bundledDescriptors } from "./descriptors/index";
 
 let globalIndex: DescriptorIndex | null = null;
 

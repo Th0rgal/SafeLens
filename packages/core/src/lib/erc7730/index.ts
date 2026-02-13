@@ -5,8 +5,8 @@
  */
 
 import { keccak256, toBytes, toHex } from "viem";
-import type { ERC7730Descriptor, FormatEntry } from "./types.js";
-import { resolveDescriptor } from "./resolve.js";
+import type { ERC7730Descriptor, FormatEntry } from "./types";
+import { resolveDescriptor } from "./resolve";
 
 // ── Index types ─────────────────────────────────────────────────────
 

@@ -6,10 +6,10 @@
  */
 
 import { formatUnits } from "viem";
-import type { Interpretation } from "../interpret/types.js";
-import type { DescriptorIndex } from "./index.js";
-import { lookupFormatByMethodName } from "./index.js";
-import type { FieldDefinition, ERC7730Descriptor } from "./types.js";
+import type { Interpretation } from "../interpret/types";
+import type { DescriptorIndex } from "./index";
+import { lookupFormatByMethodName } from "./index";
+import type { FieldDefinition, ERC7730Descriptor } from "./types";
 
 // ── Field value extraction ──────────────────────────────────────────
 

@@ -11,7 +11,7 @@ import type {
   ERC7730Descriptor,
   FieldDefinition,
   FormatEntry,
-} from "./types.js";
+} from "./types";
 
 /**
  * Resolve a $ref pointer in a field definition.

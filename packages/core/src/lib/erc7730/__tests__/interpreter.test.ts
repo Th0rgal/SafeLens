@@ -63,13 +63,16 @@ describe("createERC7730Interpreter", () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result!.id).toBe("erc7730");
-    expect(result!.protocol).toBe("Lido");
-    expect(result!.action).toBe("Stake ETH to receive stETH");
-    expect(result!.details.fields).toHaveLength(2);
-    expect(result!.details.fields[0].label).toBe("Amount");
-    expect(result!.details.fields[0].value).toContain("ETH");
-    expect(result!.details.fields[1].label).toBe("Referral");
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.protocol).toBe("Lido");
+    expect(result.action).toBe("Stake ETH to receive stETH");
+    expect(result.details.fields).toHaveLength(2);
+    expect(result.details.fields[0].label).toBe("Amount");
+    expect(result.details.fields[0].value).toContain("ETH");
+    expect(result.details.fields[1].label).toBe("Referral");
   });
 
   it("returns null for unknown contract", () => {
@@ -205,7 +208,11 @@ describe("createERC7730Interpreter", () => {
     );
 
     expect(result).not.toBeNull();
-    expect(result!.details.fields).toHaveLength(1);
-    expect(result!.details.fields[0].label).toBe("Present Field");
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.details.fields).toHaveLength(1);
+    expect(result.details.fields[0].label).toBe("Present Field");
   });
 });

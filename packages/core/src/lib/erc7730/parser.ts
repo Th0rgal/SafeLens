@@ -5,7 +5,7 @@
  */
 
 import { z } from "zod";
-import type { ERC7730Descriptor } from "./types.js";
+import type { ERC7730Descriptor } from "./types";
 
 // ── Zod schemas ─────────────────────────────────────────────────────
 
