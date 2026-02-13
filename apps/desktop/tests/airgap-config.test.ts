@@ -82,7 +82,8 @@ describe("desktop airgap guarantees", () => {
     const config = readJson(tauriConfigPath);
     const fsAllowlist = config.tauri.allowlist.fs;
 
-    expect(fsAllowlist.createDir).toBe(false);
+    // createDir is allowed within scoped paths ($APPDATA) for settings storage
+    expect(fsAllowlist.createDir).toBe(true);
     expect(fsAllowlist.removeFile).toBe(false);
   });
 });
