@@ -18,7 +18,9 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
   const [adding, setAdding] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const ref = useRef<HTMLSpanElement>(null);
+  const popupRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
 
   const resolved = config
     ? resolveAddress(address, config) ?? resolveContract(address, config)?.name ?? null
@@ -26,6 +28,36 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
 
   const displayText = resolved ?? address;
   const isResolved = resolved !== null;
+
+  // Position the popup so it stays within the viewport
+  useEffect(() => {
+    if (!open || !popupRef.current || !ref.current) return;
+    const popup = popupRef.current;
+    const trigger = ref.current;
+    const triggerRect = trigger.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const pad = 8;
+
+    let top: number;
+    // Prefer above the trigger
+    if (triggerRect.top - popupRect.height - pad >= 0) {
+      top = -(popupRect.height + 8);
+    } else {
+      // Flip below
+      top = triggerRect.height + 8;
+    }
+
+    let left = 0;
+    const popupRight = triggerRect.left + popupRect.width;
+    if (popupRight > window.innerWidth - pad) {
+      left = -(popupRight - window.innerWidth + pad);
+    }
+    if (triggerRect.left + left < pad) {
+      left = -(triggerRect.left - pad);
+    }
+
+    setPopupStyle({ top, left });
+  }, [open, adding]);
 
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
@@ -108,7 +140,11 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
       </button>
 
       {open && (
-        <span className="absolute bottom-full left-0 z-50 mb-2 flex flex-col gap-2 whitespace-nowrap rounded-md border border-border/15 glass-panel px-3 py-2 text-xs">
+        <span
+          ref={popupRef}
+          style={popupStyle}
+          className="absolute z-50 flex flex-col gap-2 whitespace-nowrap rounded-md border border-border/15 glass-panel px-3 py-2 text-xs shadow-lg"
+        >
           {!isResolved && (
             <span className="text-[10px] font-medium text-amber-400">Not in your address book</span>
           )}
