@@ -1,5 +1,5 @@
-import type { SettingsConfig } from "@/lib/settings/types";
-import { resolveAddress, resolveContract } from "@/lib/settings/resolve";
+import type { SettingsConfig } from "../settings/types";
+import { resolveAddress, resolveContract } from "../settings/resolve";
 
 export type WarningLevel = "info" | "warning" | "danger";
 

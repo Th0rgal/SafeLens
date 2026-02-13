@@ -1,0 +1,97 @@
+:root {
+  --radius: 0.5rem;
+
+  --background: 12 8 6;
+  --background-elevated: 22 15 11;
+  --background-tertiary: 35 24 18;
+  --background-inset: 16 11 8;
+
+  --foreground: 244 236 228;
+  --foreground-secondary: 201 186 171;
+  --foreground-tertiary: 157 139 123;
+
+  --border: 89 69 53;
+
+  --accent: 205 132 76;
+  --accent-hover: 224 156 100;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(1200px 800px at 20% -10%, rgba(205, 132, 76, 0.18), transparent 60%),
+    radial-gradient(900px 700px at 110% 10%, rgba(120, 82, 50, 0.22), transparent 55%),
+    rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: "Space Grotesk", "Avenir Next", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.28);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.collapsible-content {
+  transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.glass {
+  background: rgb(var(--background-elevated) / 0.86);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+.glass-subtle {
+  background: rgb(var(--background-elevated) / 0.80);
+  backdrop-filter: blur(12px) saturate(135%);
+  -webkit-backdrop-filter: blur(12px) saturate(135%);
+}
+
+.glass-panel {
+  background: rgb(var(--background-tertiary) / 0.94);
+  border: 1px solid rgb(var(--border) / 0.14);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgb(var(--border) / 0.12);
+}
+
+.glass-field {
+  background: rgb(var(--background-inset) / 0.94);
+  backdrop-filter: blur(10px) saturate(135%);
+  -webkit-backdrop-filter: blur(10px) saturate(135%);
+  box-shadow: inset 0 1px 0 rgb(var(--border) / 0.10);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass,
+  .glass-subtle,
+  .glass-panel,
+  .glass-field {
+    background: rgb(var(--background-tertiary) / 0.94);
+  }
+}
+
+.text-muted {
+  color: rgb(var(--foreground-secondary));
+}
