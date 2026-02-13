@@ -7,7 +7,7 @@
 
 import uniswapV3Router from "./uniswap-v3-router.json";
 import lidoSteth from "./lido-steth.json";
-import cowswapSettlementGnosis from "./cowswap-settlement-gnosis.json";
+import wxdaiGnosis from "./wxdai-gnosis.json";
 
 /**
  * Built-in ERC-7730 descriptors bundled with SafeLens.
@@ -15,5 +15,5 @@ import cowswapSettlementGnosis from "./cowswap-settlement-gnosis.json";
 export const bundledDescriptors = [
   uniswapV3Router,
   lidoSteth,
-  cowswapSettlementGnosis,
+  wxdaiGnosis,
 ];

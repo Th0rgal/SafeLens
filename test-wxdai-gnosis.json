@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "chainId": 100,
+  "safeAddress": "0x849D52316331967b6fF1198e5E32A0eB168D039d",
+  "safeTxHash": "0xd5c256c2064c39fa9e3f0a14032c79265dc7b53451e7ffccba877a9593f55cac",
+  "transaction": {
+    "to": "0x1643E812aE58766192Cf7D2Cf9567dF2C37e9B7F",
+    "value": "1000000000000000000",
+    "data": "0xd0e30db0",
+    "operation": 0,
+    "safeTxGas": "0",
+    "baseGas": "0",
+    "gasPrice": "0",
+    "gasToken": "0x0000000000000000000000000000000000000000",
+    "refundReceiver": "0x0000000000000000000000000000000000000000",
+    "nonce": 43
+  },
+  "dataDecoded": {
+    "method": "deposit",
+    "parameters": []
+  },
+  "confirmations": [
+    {
+      "owner": "0x849D52316331967b6fF1198e5E32A0eB168D039d",
+      "submissionDate": "2024-01-15T10:30:00.000Z",
+      "signature": "0x000000000000000000000000849d52316331967b6ff1198e5e32a0eb168d039d000000000000000000000000000000000000000000000000000000000000000001"
+    }
+  ],
+  "confirmationsRequired": 1,
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "packagedAt": "2024-01-15T10:30:00.000Z",
+  "sources": {
+    "safeAddress": "user-input",
+    "chainId": "user-input",
+    "transaction": "safe-api",
+    "confirmations": "safe-api",
+    "confirmationsRequired": "safe-api",
+    "safeApiUrl": "https://safe-transaction-gnosis-chain.safe.global",
+    "transactionUrl": "https://safe-transaction-gnosis-chain.safe.global/api/v1/safes/0x849D52316331967b6fF1198e5E32A0eB168D039d/multisig-transactions/0xd5c256c2064c39fa9e3f0a14032c79265dc7b53451e7ffccba877a9593f55cac/"
+  }
+}
