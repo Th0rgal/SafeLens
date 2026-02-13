@@ -67,8 +67,8 @@ export function badge(text: string, variant: "info" | "warning" | "critical" | "
 
 export function trustBadge(level: "self-verified" | "api-sourced"): string {
   return level === "self-verified"
-    ? colors.bgGreen(" ✓ self-verified ")
-    : colors.bgYellow(" ⚠ api-sourced ");
+    ? colors.green("✓")
+    : colors.yellow("⚠");
 }
 
 export function severityBadge(severity: "info" | "warning" | "critical"): string {
@@ -252,27 +252,37 @@ export function divider(char: string = "─"): string {
 }
 
 /**
- * Format an Ethereum address for display - truncate in middle for narrow terminals
+ * Print a legend explaining trust indicators
+ */
+export function legend(): string {
+  return colors.dim(
+    `Legend: ${colors.green("✓")} = self-verified  ${colors.yellow("⚠")} = api-sourced`
+  );
+}
+
+/**
+ * Format an Ethereum address for display - always shows full address
  */
 export function formatAddress(address: string): string {
-  const terminalWidth = getTerminalWidth();
+  return code(address);
+}
 
-  // If we have plenty of space, show full address
-  if (terminalWidth >= 100) {
+/**
+ * Format an Ethereum address with potential line break for tables
+ * Returns the address with a line break marker if it's too long for the available width
+ */
+export function formatAddressForTable(address: string, availableWidth: number): string {
+  // Always show full address, but allow wrapping if needed
+  if (address.length <= availableWidth) {
     return code(address);
   }
 
-  // For medium terminals, show truncated address
-  if (terminalWidth >= 80) {
-    if (address.length > 42) {
-      return code(address);
-    }
-    return code(truncateMiddle(address, 42));
-  }
-
-  // For narrow terminals, show short form (0x1234...5678)
-  if (address.length > 20) {
-    return code(address.slice(0, 6) + "..." + address.slice(-4));
+  // For addresses longer than available width, split at a sensible point
+  // Ethereum addresses are 42 chars (0x + 40 hex), split in middle
+  if (address.startsWith("0x") && address.length === 42) {
+    const firstPart = address.slice(0, 22); // 0x + first 20 hex chars
+    const secondPart = address.slice(22);   // remaining 20 hex chars
+    return code(firstPart) + "\n                 " + code(secondPart);
   }
 
   return code(address);

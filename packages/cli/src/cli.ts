@@ -33,6 +33,7 @@ import {
   divider,
   formatAddress,
   formatUrl,
+  legend,
 } from "./formatter";
 import { renderInterpretation } from "./interpretation-renderer";
 
@@ -138,6 +139,7 @@ function printVerificationText(
   const { summary } = signatures;
 
   console.log("\n" + heading(title));
+  console.log(legend());
 
   // ── Transaction Interpretation ──────────────────────────────────────
   if (evidence.dataDecoded) {
