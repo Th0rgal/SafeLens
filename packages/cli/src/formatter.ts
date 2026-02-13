@@ -214,13 +214,70 @@ export function table(rows: Array<[string, string]>, keyWidth: number = 20): str
       return `${label(key)}${padding} ${value}`;
     }
 
-    // Value is too long - wrap to second line
-    // First line: just the key
+    // Value is too long - need to wrap it
     const firstLine = `${label(key)}${padding}`;
-    // Second line: indent and show full value
     const indent = " ".repeat(keyWidth + 1);
-    return `${firstLine}\n${indent}${value}`;
+    const availableWidth = contentWidth - keyWidth - 3; // Width available for wrapped value
+
+    // Check if value has ANSI codes (colors)
+    const hasAnsi = value.includes("\x1b[");
+
+    // Split value into chunks that fit within availableWidth
+    const lines: string[] = [];
+    let remaining = valueStripped;
+    let currentPos = 0;
+
+    while (remaining.length > 0) {
+      if (remaining.length <= availableWidth) {
+        // Last chunk - extract the corresponding part from original value with ANSI codes
+        const chunk = hasAnsi
+          ? extractAnsiChunk(value, currentPos, remaining.length)
+          : remaining;
+        lines.push(indent + chunk);
+        break;
+      }
+
+      // Take a chunk
+      const chunkText = remaining.slice(0, availableWidth);
+      const chunk = hasAnsi
+        ? extractAnsiChunk(value, currentPos, availableWidth)
+        : chunkText;
+      lines.push(indent + chunk);
+
+      remaining = remaining.slice(availableWidth);
+      currentPos += availableWidth;
+    }
+
+    return `${firstLine}\n${lines.join("\n")}`;
   }).join("\n");
+}
+
+/**
+ * Extract a chunk of text with ANSI codes preserved
+ */
+function extractAnsiChunk(text: string, start: number, length: number): string {
+  // For simplicity, we'll strip ANSI codes, extract the chunk, then re-apply color
+  const stripped = stripAnsi(text);
+  const chunk = stripped.slice(start, start + length);
+
+  // Try to detect what color the original text had
+  const cyanMatch = text.match(/\x1b\[36m/);
+  const greenMatch = text.match(/\x1b\[32m/);
+  const yellowMatch = text.match(/\x1b\[33m/);
+  const orangeMatch = text.match(/\x1b\[38;5;214m/);
+
+  // Re-apply the detected color
+  if (orangeMatch) {
+    return `\x1b[38;5;214m${chunk}\x1b[0m`;
+  } else if (cyanMatch) {
+    return colors.cyan(chunk);
+  } else if (greenMatch) {
+    return colors.green(chunk);
+  } else if (yellowMatch) {
+    return colors.yellow(chunk);
+  }
+
+  return chunk;
 }
 
 export function divider(char: string = "─"): string {
