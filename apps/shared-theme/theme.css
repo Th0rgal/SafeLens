@@ -115,15 +115,19 @@ a {
 
   /*
    * Sidebar — translucent overlay on top of native macOS vibrancy.
-   * The actual blur is provided by NSVisualEffectMaterial::Sidebar
-   * applied in main.rs, which is rendered by the macOS WindowServer
-   * and is immune to WebKit compositor dropouts.
+   *
+   * DO NOT replace this with CSS backdrop-filter: blur(). It causes
+   * persistent compositor glitches (flicker, white flashes, dropout
+   * frames) in WebKit on macOS, especially during resize and focus
+   * changes. The native blur is rendered by the macOS WindowServer
+   * via NSVisualEffectMaterial::Sidebar (applied in main.rs) and is
+   * the only reliable approach.
    *
    * The semi-transparent background tints the native blur to match
    * the app's dark color scheme while letting it show through.
    */
   .glass-sidebar {
-    background: rgb(var(--background) / 0.35);
+    background: rgb(8 6 3 / 0.23);
     position: relative;
   }
 

@@ -37,18 +37,11 @@ export function analyzeTarget(
   const warnings: TransactionWarning[] = [];
   const resolved = resolveAddress(to, config) ?? resolveContract(to, config)?.name ?? null;
 
-  if (resolved === null) {
-    if (operation === 1) {
-      warnings.push({
-        level: "danger",
-        message: "DelegateCall to unknown contract — this executes foreign code in the Safe's context",
-      });
-    } else {
-      warnings.push({
-        level: "warning",
-        message: "Target address is not in your address book or contract registry",
-      });
-    }
+  if (resolved === null && operation === 1) {
+    warnings.push({
+      level: "danger",
+      message: "DelegateCall to unknown contract — this executes foreign code in the Safe's context",
+    });
   } else if (operation === 1) {
     warnings.push({
       level: "info",

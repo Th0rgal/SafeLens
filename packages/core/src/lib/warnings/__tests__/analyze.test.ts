@@ -67,15 +67,13 @@ describe("analyzeTarget", () => {
     expect(warnings[0].message).toContain("DelegateCall to MultiSend 1.4.1");
   });
 
-  it("returns warning for unknown target with Call", () => {
+  it("returns no warnings for unknown target with Call", () => {
     const warnings = analyzeTarget(
       "0x0000000000000000000000000000000000000Bad",
       0,
       mockConfig
     );
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0].level).toBe("warning");
-    expect(warnings[0].message).toContain("not in your address book");
+    expect(warnings).toHaveLength(0);
   });
 
   it("returns danger for unknown target with DelegateCall", () => {
