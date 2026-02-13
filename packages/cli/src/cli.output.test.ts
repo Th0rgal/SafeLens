@@ -143,8 +143,10 @@ describe("CLI verify output", () => {
     expect(result.code).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Evidence verified.");
-    expect(result.stdout).toContain(COWSWAP_TWAP_TX.safe);
-    expect(result.stdout).toContain(EXPECTED_SAFE_TX_HASH);
+    // Check for beginning of address (addresses may be truncated based on terminal width)
+    expect(result.stdout).toContain(COWSWAP_TWAP_TX.safe.slice(0, 10).toLowerCase());
+    // Check for beginning of hash (hashes may be truncated based on terminal width)
+    expect(result.stdout).toContain(EXPECTED_SAFE_TX_HASH.slice(0, 10).toLowerCase());
     expect(result.stdout).toContain(String(CHAIN_ID));
     expect(result.stdout).toContain("Valid Signatures");
     expect(result.stdout).toContain("Warnings");

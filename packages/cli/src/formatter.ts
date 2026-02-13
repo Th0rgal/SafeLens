@@ -84,21 +84,108 @@ export function severityBadge(severity: "info" | "warning" | "critical"): string
 
 // ── Box Drawing ─────────────────────────────────────────────────────
 
+/**
+ * Get the terminal width, with fallback to reasonable default
+ */
+export function getTerminalWidth(): number {
+  return process.stdout.columns || 80;
+}
+
+/**
+ * Truncate a string in the middle with ellipsis if it exceeds maxLength
+ */
+export function truncateMiddle(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  if (maxLength < 10) return text.slice(0, maxLength);
+
+  const ellipsis = "...";
+  const charsToShow = maxLength - ellipsis.length;
+  const frontChars = Math.ceil(charsToShow / 2);
+  const backChars = Math.floor(charsToShow / 2);
+
+  return text.slice(0, frontChars) + ellipsis + text.slice(-backChars);
+}
+
+/**
+ * Wrap text to fit within a maximum width, preserving words where possible
+ */
+export function wrapText(text: string, maxWidth: number): string[] {
+  if (text.length <= maxWidth) return [text];
+
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+
+  for (const word of words) {
+    if (word.length > maxWidth) {
+      // Word is too long, must break it
+      if (currentLine) {
+        lines.push(currentLine.trim());
+        currentLine = "";
+      }
+      // Split long word into chunks
+      for (let i = 0; i < word.length; i += maxWidth) {
+        lines.push(word.slice(i, i + maxWidth));
+      }
+    } else if ((currentLine + " " + word).trim().length <= maxWidth) {
+      currentLine = (currentLine + " " + word).trim();
+    } else {
+      if (currentLine) lines.push(currentLine.trim());
+      currentLine = word;
+    }
+  }
+
+  if (currentLine) lines.push(currentLine.trim());
+  return lines;
+}
+
 export function box(content: string, title?: string): string {
+  const terminalWidth = getTerminalWidth();
+  const maxBoxWidth = Math.max(40, Math.min(terminalWidth - 4, 100));
+
   const lines = content.split("\n");
-  const maxWidth = Math.max(...lines.map(l => stripAnsi(l).length), title ? stripAnsi(title).length : 0);
-  const width = Math.min(maxWidth + 4, 80);
+  const processedLines: string[] = [];
+
+  // Process each line to handle wrapping and truncation
+  for (const line of lines) {
+    const stripped = stripAnsi(line);
+    const maxLineWidth = maxBoxWidth - 4; // Account for box borders and padding
+
+    if (stripped.length <= maxLineWidth) {
+      processedLines.push(line);
+    } else {
+      // For lines with ANSI codes, we need to preserve them while wrapping
+      // For now, truncate long lines with ANSI codes
+      const truncated = truncateMiddle(stripped, maxLineWidth);
+      processedLines.push(truncated);
+    }
+  }
+
+  const contentWidth = Math.min(
+    Math.max(...processedLines.map(l => stripAnsi(l).length)),
+    maxBoxWidth - 4
+  );
+
+  const width = contentWidth + 4;
 
   let output = colors.gray("┌" + "─".repeat(width - 2) + "┐") + "\n";
 
   if (title) {
-    const padding = width - stripAnsi(title).length - 4;
-    output += colors.gray("│ ") + colors.bold(title) + " ".repeat(padding) + colors.gray(" │") + "\n";
+    const titleStripped = stripAnsi(title);
+    if (titleStripped.length > width - 4) {
+      const truncated = truncateMiddle(titleStripped, width - 4);
+      const padding = width - truncated.length - 4;
+      output += colors.gray("│ ") + colors.bold(truncated) + " ".repeat(Math.max(0, padding)) + colors.gray(" │") + "\n";
+    } else {
+      const padding = width - titleStripped.length - 4;
+      output += colors.gray("│ ") + colors.bold(title) + " ".repeat(padding) + colors.gray(" │") + "\n";
+    }
     output += colors.gray("├" + "─".repeat(width - 2) + "┤") + "\n";
   }
 
-  for (const line of lines) {
-    const padding = width - stripAnsi(line).length - 4;
+  for (const line of processedLines) {
+    const stripped = stripAnsi(line);
+    const padding = width - stripped.length - 4;
     output += colors.gray("│ ") + line + " ".repeat(Math.max(0, padding)) + colors.gray(" │") + "\n";
   }
 
@@ -124,12 +211,86 @@ function stripAnsi(text: string): string {
 }
 
 export function table(rows: Array<[string, string]>, keyWidth: number = 20): string {
+  const terminalWidth = getTerminalWidth();
+  const maxValueWidth = terminalWidth - keyWidth - 10; // Leave room for padding and labels
+
   return rows.map(([key, value]) => {
     const padding = " ".repeat(Math.max(0, keyWidth - stripAnsi(key).length));
-    return `${label(key)}${padding} ${value}`;
+    const valueStripped = stripAnsi(value);
+
+    // Truncate value if it's too long
+    let displayValue = value;
+    if (valueStripped.length > maxValueWidth && maxValueWidth > 20) {
+      const truncated = truncateMiddle(valueStripped, maxValueWidth);
+      // Try to preserve color codes from original value
+      if (value.includes("\x1b[")) {
+        // If value has colors, apply cyan to truncated text
+        displayValue = code(truncated);
+      } else {
+        displayValue = truncated;
+      }
+    }
+
+    return `${label(key)}${padding} ${displayValue}`;
   }).join("\n");
 }
 
 export function divider(char: string = "─"): string {
   return colors.gray(char.repeat(60));
+}
+
+/**
+ * Format an Ethereum address for display - truncate in middle for narrow terminals
+ */
+export function formatAddress(address: string): string {
+  const terminalWidth = getTerminalWidth();
+
+  // If we have plenty of space, show full address
+  if (terminalWidth >= 100) {
+    return code(address);
+  }
+
+  // For medium terminals, show truncated address
+  if (terminalWidth >= 80) {
+    if (address.length > 42) {
+      return code(address);
+    }
+    return code(truncateMiddle(address, 42));
+  }
+
+  // For narrow terminals, show short form (0x1234...5678)
+  if (address.length > 20) {
+    return code(address.slice(0, 6) + "..." + address.slice(-4));
+  }
+
+  return code(address);
+}
+
+/**
+ * Format a URL for display - truncate intelligently
+ */
+export function formatUrl(url: string): string {
+  const terminalWidth = getTerminalWidth();
+  const maxLength = Math.max(40, terminalWidth - 30);
+
+  if (url.length <= maxLength) {
+    return code(url);
+  }
+
+  try {
+    // Try to keep the domain and end of URL visible
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname;
+    const path = urlObj.pathname + urlObj.search;
+
+    if (domain.length + 20 < maxLength) {
+      const remaining = maxLength - domain.length - 10;
+      const pathTruncated = "..." + path.slice(-remaining);
+      return code(urlObj.protocol + "//" + domain + pathTruncated);
+    }
+  } catch {
+    // URL parsing failed, fall through to simple truncation
+  }
+
+  return code(truncateMiddle(url, maxLength));
 }

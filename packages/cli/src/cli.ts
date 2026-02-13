@@ -31,6 +31,8 @@ import {
   box,
   table,
   divider,
+  formatAddress,
+  formatUrl,
 } from "./formatter";
 import { renderInterpretation } from "./interpretation-renderer";
 
@@ -157,8 +159,8 @@ function printVerificationText(
   console.log(box(
     table([
       ["Chain", `${code(getChainName(evidence.chainId))} (${evidence.chainId}) ${trustBadge("self-verified")}`],
-      ["Safe Address", `${code(evidence.safeAddress)} ${trustBadge("self-verified")}`],
-      ["Safe URL", evidence.sources?.transactionUrl ? code(evidence.sources.transactionUrl) : label("N/A")],
+      ["Safe Address", `${formatAddress(evidence.safeAddress)} ${trustBadge("self-verified")}`],
+      ["Safe URL", evidence.sources?.transactionUrl ? formatUrl(evidence.sources.transactionUrl) : label("N/A")],
     ], 15),
     "Transaction Overview"
   ));
@@ -168,7 +170,7 @@ function printVerificationText(
   console.log(section("🔐 Hash Verification"));
   console.log("");
   console.log(table([
-    ["Safe TX Hash", `${code(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
+    ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
   ], 15));
 
   if (hashDetails) {
@@ -176,8 +178,8 @@ function printVerificationText(
     console.log(label("  Intermediate hashes for hardware wallet verification:"));
     console.log("");
     console.log(table([
-      ["  Domain Separator", code(hashDetails.domainSeparator)],
-      ["  Message Hash", code(hashDetails.messageHash)],
+      ["  Domain Separator", formatAddress(hashDetails.domainSeparator)],
+      ["  Message Hash", formatAddress(hashDetails.messageHash)],
     ], 20));
     console.log(label("  " + colors.dim("Final hash = keccak256(0x1901 || domainSeparator || messageHash)")));
   }
@@ -185,7 +187,7 @@ function printVerificationText(
   if (evidence.ethereumTxHash) {
     console.log("");
     console.log(table([
-      ["Ethereum TX Hash", `${code(evidence.ethereumTxHash)} ${trustBadge("api-sourced")}`],
+      ["Ethereum TX Hash", `${formatAddress(evidence.ethereumTxHash)} ${trustBadge("api-sourced")}`],
     ], 18));
   }
   console.log("");
@@ -193,7 +195,7 @@ function printVerificationText(
   // ── Transaction Details ─────────────────────────────────────────────
   console.log(box(
     table([
-      ["Target Contract", `${code(evidence.transaction.to)} ${trustBadge("self-verified")}`],
+      ["Target Contract", `${formatAddress(evidence.transaction.to)} ${trustBadge("self-verified")}`],
       ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
       ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
       ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
@@ -224,7 +226,7 @@ function printVerificationText(
 
   if (proposer) {
     console.log("");
-    console.log(table([["Proposed by", code(proposer)]], 15));
+    console.log(table([["Proposed by", formatAddress(proposer)]], 15));
   }
   console.log("");
 
