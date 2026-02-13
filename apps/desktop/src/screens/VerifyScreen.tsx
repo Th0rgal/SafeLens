@@ -58,6 +58,10 @@ export default function VerifyScreen() {
       return;
     }
 
+    setSigResults({});
+    setProposer(null);
+    setTargetWarnings([]);
+
     let cancelled = false;
 
     async function verifyAll() {

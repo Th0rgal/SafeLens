@@ -17,33 +17,29 @@ export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
-  const [draft, setDraft] = useState<SettingsConfig | null>(null);
   const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>([]);
 
   useEffect(() => {
-    if (savedConfig && !draft) {
-      setDraft(savedConfig);
-      setChainEntries(Object.entries(savedConfig.chains));
-    }
-  }, [savedConfig, draft]);
+    if (!savedConfig) return;
+    setChainEntries((prev) =>
+      prev.length === 0 ? Object.entries(savedConfig.chains) : prev
+    );
+  }, [savedConfig]);
 
   const [newChainId, setNewChainId] = useState("");
   const [newChainName, setNewChainName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
-    () => draft ? { ...draft, chains: Object.fromEntries(chainEntries) } : null,
-    [draft, chainEntries],
+    () => savedConfig ? { ...savedConfig, chains: Object.fromEntries(chainEntries) } : null,
+    [savedConfig, chainEntries],
   );
   const isModified = useMemo(
     () => fullDraft !== null && savedConfig !== null && JSON.stringify(fullDraft) !== JSON.stringify(savedConfig),
     [fullDraft, savedConfig],
   );
 
-  if (!draft || !savedConfig || !fullDraft) return null;
-
-  const updateDraft = (fn: (d: SettingsConfig) => SettingsConfig) =>
-    setDraft((prev) => (prev ? fn(prev) : prev));
+  if (!savedConfig || !fullDraft) return null;
 
   const updateChain = (index: number, updates: Partial<ChainConfig>) =>
     setChainEntries((prev) =>
@@ -68,13 +64,11 @@ export default function SettingsScreen() {
   };
 
   const handleDiscard = () => {
-    setDraft(savedConfig);
     setChainEntries(Object.entries(savedConfig.chains));
   };
 
   const handleReset = async () => {
     await resetConfig();
-    setDraft(null);
     setChainEntries([]);
   };
 
@@ -103,7 +97,6 @@ export default function SettingsScreen() {
       const text = await file.text();
       const imported = settingsConfigSchema.parse(JSON.parse(text));
       await saveConfig(imported);
-      setDraft(imported);
       setChainEntries(Object.entries(imported.chains));
       toastSuccess("Settings imported", "Your local settings were updated.");
     } catch {

@@ -16,9 +16,9 @@
         "all": false,
         "readFile": true,
         "writeFile": true,
-        "createDir": true,
         "exists": true,
-        "removeFile": true,
+        "createDir": false,
+        "removeFile": false,
         "scope": [
           "$APPDATA/**",
           "$DESKTOP/**",

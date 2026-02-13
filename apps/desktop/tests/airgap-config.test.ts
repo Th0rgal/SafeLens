@@ -77,4 +77,12 @@ describe("desktop airgap guarantees", () => {
 
     expect(violations).toEqual([]);
   });
+
+  it("does not allow destructive filesystem operations outside app data", () => {
+    const config = readJson(tauriConfigPath);
+    const fsAllowlist = config.tauri.allowlist.fs;
+
+    expect(fsAllowlist.createDir).toBe(false);
+    expect(fsAllowlist.removeFile).toBe(false);
+  });
 });
