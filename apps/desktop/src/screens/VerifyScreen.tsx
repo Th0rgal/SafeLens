@@ -9,7 +9,6 @@ import {
   parseEvidencePackage,
   getChainName,
   verifyEvidencePackage,
-  type VerificationSource,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
@@ -17,7 +16,7 @@ import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning } from "@safelens/core";
+import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -46,7 +45,6 @@ export default function VerifyScreen() {
   const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
   const [proposer, setProposer] = useState<string | null>(null);
   const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
-  const [sources, setSources] = useState<VerificationSource[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -58,7 +56,6 @@ export default function VerifyScreen() {
       setSigResults({});
       setProposer(null);
       setTargetWarnings([]);
-      setSources([]);
       return;
     }
 
@@ -74,7 +71,6 @@ export default function VerifyScreen() {
       setSigResults(report.signatures.byOwner);
       setProposer(report.proposer);
       setTargetWarnings(report.targetWarnings);
-      setSources(report.sources);
     }
 
     verifyAll();
@@ -120,6 +116,12 @@ export default function VerifyScreen() {
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
   }, []);
+
+  const signaturesTrustLevel: TrustLevel = Object.values(sigResults).some(
+    (result) => result.status === "unsupported"
+  )
+    ? "api-sourced"
+    : "self-verified";
 
   return (
     <div className="space-y-6">
@@ -265,7 +267,7 @@ export default function VerifyScreen() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <CardTitle>Signatures</CardTitle>
-                <TrustBadge level="self-verified" />
+                <TrustBadge level={signaturesTrustLevel} />
               </div>
               <CardDescription>
                 {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
@@ -316,37 +318,6 @@ export default function VerifyScreen() {
                   );
                 })}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Sources of truth</CardTitle>
-              <CardDescription>
-                Evidence checks, cryptographic checks, and local metadata inputs.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {sources.map((source) => (
-                <div
-                  key={source.id}
-                  className="rounded-md border border-border/15 glass-subtle p-3"
-                >
-                  <div className="mb-1 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <TrustBadge level={source.trust} />
-                      <span className="text-sm font-medium">{source.title}</span>
-                    </div>
-                    <span
-                      className={`text-xs ${source.status === "disabled" ? "text-amber-300" : "text-emerald-300"}`}
-                    >
-                      {source.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted">{source.summary}</p>
-                  <p className="mt-1 text-xs text-muted/90">{source.detail}</p>
-                </div>
-              ))}
             </CardContent>
           </Card>
 

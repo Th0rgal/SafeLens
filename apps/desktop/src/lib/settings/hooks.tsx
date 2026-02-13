@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { SettingsConfig } from "@safelens/core";
 import { loadSettingsConfig, saveSettingsConfig, resetSettingsConfig } from "@safelens/core";
 import { createTauriSettingsStore } from "./store";
@@ -37,8 +37,13 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
     setConfig(defaults);
   }, []);
 
+  const value = useMemo(
+    () => ({ config, saveConfig, resetConfig }),
+    [config, saveConfig, resetConfig],
+  );
+
   return (
-    <SettingsContext.Provider value={{ config, saveConfig, resetConfig }}>
+    <SettingsContext.Provider value={value}>
       {children}
     </SettingsContext.Provider>
   );

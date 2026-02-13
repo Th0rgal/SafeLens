@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
-import { ShieldCheck, Settings, Fingerprint } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ShieldCheck, BookUser, Settings, Fingerprint } from "lucide-react";
 import { useSettingsConfig } from "@/lib/settings/hooks";
+import { attachBlurDiagnostics } from "@/lib/debug/blur-diagnostics";
 
 const NAV_ITEMS = [
   { id: "verify", label: "Verify", icon: ShieldCheck },
+  { id: "address-book", label: "Address Book", icon: BookUser },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -31,9 +33,15 @@ export function Sidebar({
   const { config } = useSettingsConfig();
   const fp = useMemo(() => settingsFingerprint(config), [config]);
   const [fpOpen, setFpOpen] = useState(false);
+  const asideRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!asideRef.current) return;
+    return attachBlurDiagnostics(asideRef.current);
+  }, []);
 
   return (
-    <aside className="glass-sidebar flex h-full w-[220px] shrink-0 flex-col border-r border-white/[0.06]">
+    <aside ref={asideRef} className="glass-sidebar flex h-full w-[220px] shrink-0 flex-col border-r border-white/[0.06]">
       {/* Draggable titlebar spacer for macOS traffic lights */}
       <div className="h-[52px] shrink-0" data-tauri-drag-region="" />
 
@@ -68,17 +76,17 @@ export function Sidebar({
         <button
           type="button"
           onClick={() => setFpOpen((v) => !v)}
-          className="flex w-full items-center gap-2.5 rounded-lg border border-white/[0.06] px-3 py-2 text-left transition-colors hover:bg-white/[0.04]"
+          className="flex w-full items-center gap-2.5 rounded-lg border border-white/[0.10] px-3 py-2 text-left transition-colors hover:bg-white/[0.04]"
         >
           <Fingerprint
             className="h-4 w-4 shrink-0"
             style={{ color: `hsl(${fp.hue}, 60%, 55%)` }}
           />
           <div className="flex flex-col">
-            <span className="text-[11px] text-muted/60">
+            <span className="text-[11px] text-muted/80">
               config: <span className="font-mono">{fp.hex}</span>
             </span>
-            <span className="text-[10px] text-muted/30">version: 0.2.0</span>
+            <span className="text-[10px] text-muted/50">version: 0.2.0</span>
           </div>
         </button>
         {fpOpen && (

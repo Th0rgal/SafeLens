@@ -24,7 +24,3 @@ export function getPositionals(args: string[]): string[] {
   }
   return positionals;
 }
-
-export function isFlagWithValue(flag: string): boolean {
-  return FLAGS_WITH_VALUES.has(flag);
-}

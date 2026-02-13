@@ -113,14 +113,17 @@ a {
     background: rgb(var(--background-inset));
   }
 
-  /* Sidebar — translucent, frosted glass */
+  /*
+   * Sidebar — translucent overlay on top of native macOS vibrancy.
+   * The actual blur is provided by NSVisualEffectMaterial::Sidebar
+   * applied in main.rs, which is rendered by the macOS WindowServer
+   * and is immune to WebKit compositor dropouts.
+   *
+   * The semi-transparent background tints the native blur to match
+   * the app's dark color scheme while letting it show through.
+   */
   .glass-sidebar {
-    background: rgb(var(--background-elevated) / 0.55);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-    transform: translateZ(0);
-    will-change: backdrop-filter;
-    isolation: isolate;
+    background: rgb(var(--background) / 0.35);
     position: relative;
   }
 

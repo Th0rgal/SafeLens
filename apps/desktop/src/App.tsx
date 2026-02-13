@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { SettingsConfigProvider } from "./lib/settings/hooks";
 import { ToastProvider } from "./components/ui/toast";
 import { Sidebar, type NavId } from "./components/sidebar";
 import VerifyScreen from "./screens/VerifyScreen";
-import SettingsScreen from "./screens/SettingsScreen";
+
+const AddressBookScreen = lazy(() => import("./screens/AddressBookScreen"));
+const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 
 export default function App() {
   const [active, setActive] = useState<NavId>("verify");
@@ -15,7 +17,11 @@ export default function App() {
           <Sidebar active={active} onNavigate={setActive} />
           <main className="flex-1 min-w-0 overflow-y-auto bg-bg">
             <div className="px-8 pt-14 pb-8">
-              {active === "verify" ? <VerifyScreen /> : <SettingsScreen />}
+              {active === "verify" && <VerifyScreen />}
+              <Suspense>
+                {active === "address-book" && <AddressBookScreen />}
+                {active === "settings" && <SettingsScreen />}
+              </Suspense>
             </div>
           </main>
         </div>
