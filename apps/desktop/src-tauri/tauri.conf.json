@@ -1,7 +1,7 @@
 {
   "build": {
-    "beforeDevCommand": "bun --cwd .. dev",
-    "beforeBuildCommand": "bun --cwd .. build",
+    "beforeDevCommand": "bun run --filter @safelens/desktop dev",
+    "beforeBuildCommand": "bun run --filter @safelens/desktop build",
     "devPath": "http://localhost:5173",
     "distDir": "../dist"
   },
