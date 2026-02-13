@@ -1,6 +1,7 @@
 import { analyzeTarget, identifyProposer, type TransactionWarning } from "../warnings/analyze";
 import type { EvidencePackage } from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
+import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources } from "../trust";
@@ -28,6 +29,7 @@ export type EvidenceVerificationReport = {
   targetWarnings: TransactionWarning[];
   signatures: SignatureCheckBundle;
   sources: ReturnType<typeof buildVerificationSources>;
+  hashDetails?: SafeTxHashDetails;
 };
 
 export interface VerifyEvidenceOptions {
@@ -78,6 +80,22 @@ export async function verifyEvidencePackage(
     else summary.unsupported += 1;
   }
 
+  // Compute detailed hash information for hardware wallet verification
+  const hashDetails = computeSafeTxHashDetailed({
+    safeAddress: evidence.safeAddress as Address,
+    chainId: evidence.chainId,
+    to: evidence.transaction.to as Address,
+    value: BigInt(evidence.transaction.value),
+    data: evidence.transaction.data as Hex,
+    operation: evidence.transaction.operation,
+    safeTxGas: BigInt(evidence.transaction.safeTxGas),
+    baseGas: BigInt(evidence.transaction.baseGas),
+    gasPrice: BigInt(evidence.transaction.gasPrice),
+    gasToken: evidence.transaction.gasToken as Address,
+    refundReceiver: evidence.transaction.refundReceiver as Address,
+    nonce: evidence.transaction.nonce,
+  });
+
   return {
     proposer,
     targetWarnings,
@@ -91,5 +109,6 @@ export async function verifyEvidencePackage(
       byOwner,
       summary,
     },
+    hashDetails,
   };
 }

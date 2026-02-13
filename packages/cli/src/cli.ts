@@ -13,10 +13,26 @@ import {
   buildGenerationSources,
   buildVerificationSources,
   getChainName,
+  interpretTransaction,
+  computeSafeTxHashDetailed,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
 import { getFlag, getPositionals, hasFlag } from "./args";
+import {
+  colors,
+  heading,
+  section,
+  label,
+  code,
+  badge,
+  trustBadge,
+  bullet,
+  box,
+  table,
+  divider,
+} from "./formatter";
+import { renderInterpretation } from "./interpretation-renderer";
 
 type OutputFormat = "text" | "json";
 
@@ -78,42 +94,145 @@ function createVerifyPayload(
 
 function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
   for (const source of sources) {
-    const status = source.status === "enabled" ? "enabled" : "disabled";
-    console.log(`- [${source.trust}] ${source.title} (${status})`);
-    console.log(`  ${source.summary}`);
-    console.log(`  ${source.detail}`);
+    const trustLevel = source.trust === "self-verified"
+      ? colors.green("✓ self-verified")
+      : colors.yellow("⚠ api-sourced");
+
+    const status = source.status === "enabled"
+      ? colors.green("enabled")
+      : colors.gray("disabled");
+
+    console.log(bullet(`${trustLevel} ${colors.bold(source.title)} (${status})`));
+    console.log(colors.dim("  " + source.summary));
+    console.log(colors.dim("  " + source.detail));
+    console.log("");
   }
 }
 
 function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
-  if (warnings.length === 0) return;
-  console.log("Warnings:");
-  warnings.forEach((warning) => {
-    console.log(`- [${warning.level}] ${warning.message}`);
-  });
+  if (warnings.length === 0) return "";
+
+  const lines: string[] = [];
+  lines.push(section("⚠  Warnings"));
+
+  for (const warning of warnings) {
+    const levelBadge = warning.level === "critical"
+      ? colors.bgRed(" CRITICAL ")
+      : warning.level === "medium"
+        ? colors.bgYellow(" MEDIUM ")
+        : colors.bgBlue(" LOW ");
+
+    lines.push(bullet(`${levelBadge} ${warning.message}`));
+  }
+
+  return lines.join("\n");
 }
 
 function printVerificationText(
   evidence: EvidencePackage,
   report: EvidenceVerificationReport,
-  heading: string
+  title: string
 ) {
-  const { proposer, targetWarnings, signatures, sources } = report;
+  const { proposer, targetWarnings, signatures, sources, hashDetails } = report;
   const { summary } = signatures;
 
-  console.log(heading);
-  console.log(`Safe: ${evidence.safeAddress}`);
-  console.log(`Chain: ${evidence.chainId}`);
-  console.log(`Chain name: ${getChainName(evidence.chainId)}`);
-  console.log(`SafeTxHash: ${evidence.safeTxHash}`);
-  if (evidence.ethereumTxHash) console.log(`Ethereum Tx Hash: ${evidence.ethereumTxHash}`);
-  if (evidence.sources?.transactionUrl) console.log(`Safe URL: ${evidence.sources.transactionUrl}`);
-  if (proposer) console.log(`Proposed by: ${proposer}`);
-  console.log(`Signatures: ${summary.valid}/${summary.total} valid (${summary.invalid} invalid, ${summary.unsupported} unsupported)`);
-  console.log(`Required signatures: ${evidence.confirmations.length}/${evidence.confirmationsRequired}`);
-  printWarningsSection(targetWarnings);
-  console.log("Sources of truth:");
+  console.log("\n" + heading(title));
+  console.log("");
+
+  // ── Transaction Interpretation ──────────────────────────────────────
+  if (evidence.dataDecoded) {
+    const interpretation = interpretTransaction(
+      evidence.dataDecoded,
+      evidence.transaction.to,
+      evidence.transaction.operation
+    );
+
+    if (interpretation) {
+      console.log(renderInterpretation(interpretation));
+      console.log("");
+    }
+  }
+
+  // ── Transaction Overview ────────────────────────────────────────────
+  console.log(box(
+    table([
+      ["Chain", `${code(getChainName(evidence.chainId))} (${evidence.chainId}) ${trustBadge("self-verified")}`],
+      ["Safe Address", `${code(evidence.safeAddress)} ${trustBadge("self-verified")}`],
+      ["Safe URL", evidence.sources?.transactionUrl ? code(evidence.sources.transactionUrl) : label("N/A")],
+    ], 15),
+    "Transaction Overview"
+  ));
+  console.log("");
+
+  // ── Hash Verification ───────────────────────────────────────────────
+  console.log(section("🔐 Hash Verification"));
+  console.log("");
+  console.log(table([
+    ["Safe TX Hash", `${code(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
+  ], 15));
+
+  if (hashDetails) {
+    console.log("");
+    console.log(label("  Intermediate hashes for hardware wallet verification:"));
+    console.log("");
+    console.log(table([
+      ["  Domain Separator", code(hashDetails.domainSeparator)],
+      ["  Message Hash", code(hashDetails.messageHash)],
+    ], 20));
+    console.log(label("  " + colors.dim("Final hash = keccak256(0x1901 || domainSeparator || messageHash)")));
+  }
+
+  if (evidence.ethereumTxHash) {
+    console.log("");
+    console.log(table([
+      ["Ethereum TX Hash", `${code(evidence.ethereumTxHash)} ${trustBadge("api-sourced")}`],
+    ], 18));
+  }
+  console.log("");
+
+  // ── Transaction Details ─────────────────────────────────────────────
+  console.log(box(
+    table([
+      ["Target Contract", `${code(evidence.transaction.to)} ${trustBadge("self-verified")}`],
+      ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
+      ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
+      ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
+    ], 18),
+    "Transaction Details"
+  ));
+  console.log("");
+
+  // ── Warnings ────────────────────────────────────────────────────────
+  const warningsOutput = printWarningsSection(targetWarnings);
+  if (warningsOutput) {
+    console.log(warningsOutput);
+    console.log("");
+  }
+
+  // ── Signatures ──────────────────────────────────────────────────────
+  const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
+
+  console.log(section("✍️  Signatures") + " " + trustBadge(signaturesTrustLevel));
+  console.log("");
+  console.log(table([
+    ["Valid Signatures", colors.green(String(summary.valid))],
+    ["Invalid Signatures", summary.invalid > 0 ? colors.red(String(summary.invalid)) : colors.gray(String(summary.invalid))],
+    ["Unsupported", summary.unsupported > 0 ? colors.yellow(String(summary.unsupported)) : colors.gray(String(summary.unsupported))],
+    ["Total", colors.bold(String(summary.total))],
+    ["Required", colors.bold(`${evidence.confirmations.length}/${evidence.confirmationsRequired}`)],
+  ], 20));
+
+  if (proposer) {
+    console.log("");
+    console.log(table([["Proposed by", code(proposer)]], 15));
+  }
+  console.log("");
+
+  // ── Sources of Truth ────────────────────────────────────────────────
+  console.log(section("📋 Sources of Truth"));
+  console.log("");
   printSourceFactsFromList(sources);
+  console.log("");
 }
 
 async function runAnalyze(args: string[]) {
