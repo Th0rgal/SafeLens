@@ -59,8 +59,12 @@ export default function SettingsScreen() {
     setChainEntries((prev) => prev.filter((_, i) => i !== index));
 
   const handleSave = async () => {
-    await saveConfig(fullDraft);
-    toastSuccess("Settings saved", "Your settings have been updated.");
+    try {
+      await saveConfig(fullDraft);
+      toastSuccess("Settings saved", "Your settings have been updated.");
+    } catch {
+      toastWarning("Save failed", "Could not persist settings to disk.");
+    }
   };
 
   const handleDiscard = () => {

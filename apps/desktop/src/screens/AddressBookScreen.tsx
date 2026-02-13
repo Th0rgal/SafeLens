@@ -9,7 +9,7 @@ import { useSettingsConfig } from "@/lib/settings/hooks";
 
 export default function AddressBookScreen() {
   const { config: savedConfig, saveConfig } = useSettingsConfig();
-  const { success: toastSuccess } = useToast();
+  const { success: toastSuccess, warning: toastWarning } = useToast();
 
   const [entries, setEntries] = useState<AddressBookEntry[]>([]);
   const [contracts, setContracts] = useState<ContractRegistryEntry[]>([]);
@@ -59,8 +59,12 @@ export default function AddressBookScreen() {
 
   const handleSave = async () => {
     const updated: SettingsConfig = { ...savedConfig, addressBook: entries, contractRegistry: contracts };
-    await saveConfig(updated);
-    toastSuccess("Address book saved", "Your address book has been updated.");
+    try {
+      await saveConfig(updated);
+      toastSuccess("Address book saved", "Your address book has been updated.");
+    } catch {
+      toastWarning("Save failed", "Could not persist settings to disk.");
+    }
   };
 
   const handleDiscard = () => {

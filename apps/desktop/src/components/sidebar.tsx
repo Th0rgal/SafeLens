@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, Library, Settings, Fingerprint } from "lucide-react";
+import { computeConfigFingerprint, colorFromHash } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { attachBlurDiagnostics } from "@/lib/debug/blur-diagnostics";
 
@@ -11,18 +12,6 @@ const NAV_ITEMS = [
 
 export type NavId = (typeof NAV_ITEMS)[number]["id"];
 
-/** Derive a deterministic hash from a settings object. Returns [hue 0-360, hex string]. */
-function settingsFingerprint(config: unknown): { hue: number; hex: string } {
-  const str = JSON.stringify(config);
-  let h = 0;
-  for (let i = 0; i < str.length; i++) {
-    h = (h * 31 + str.charCodeAt(i)) | 0;
-  }
-  const hue = ((h % 360) + 360) % 360;
-  const hex = ((h >>> 0).toString(16)).padStart(8, "0");
-  return { hue, hex };
-}
-
 export function Sidebar({
   active,
   onNavigate,
@@ -31,8 +20,17 @@ export function Sidebar({
   onNavigate: (id: NavId) => void;
 }) {
   const { config } = useSettingsConfig();
-  const fp = useMemo(() => settingsFingerprint(config), [config]);
+  const [fp, setFp] = useState<{ color: string; hex: string }>({ color: "hsl(0, 0%, 50%)", hex: "00000000" });
   const [fpOpen, setFpOpen] = useState(false);
+
+  useEffect(() => {
+    if (!config) return;
+    let cancelled = false;
+    computeConfigFingerprint(config).then((hash) => {
+      if (!cancelled) setFp({ color: colorFromHash(hash), hex: hash.slice(0, 8) });
+    });
+    return () => { cancelled = true; };
+  }, [config]);
   const asideRef = useRef<HTMLElement>(null);
   const blurDebugEnabled = import.meta.env.VITE_DEBUG_BLUR === "1";
 
@@ -82,7 +80,7 @@ export function Sidebar({
         >
           <Fingerprint
             className="h-4 w-4 shrink-0"
-            style={{ color: `hsl(${fp.hue}, 60%, 55%)` }}
+            style={{ color: fp.color }}
           />
           <div className="flex flex-col">
             <span className="text-[11px] text-muted/80">
