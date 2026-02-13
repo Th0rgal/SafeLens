@@ -31,7 +31,7 @@ body {
     );
   position: relative;
   color: rgb(var(--foreground));
-  font-family: "Inter", "Avenir Next", "Helvetica Neue", sans-serif;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
