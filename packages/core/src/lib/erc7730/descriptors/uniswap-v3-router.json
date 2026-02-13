@@ -1,0 +1,67 @@
+{
+  "$schema": "https://github.com/LedgerHQ/clear-signing-erc7730-registry/blob/main/specs/erc7730-v1.schema.json",
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0xE592427A0AEce92De3Edee1F18E0157C05861564"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Uniswap",
+    "info": {
+      "url": "https://uniswap.org",
+      "legalName": "Uniswap Labs"
+    }
+  },
+  "display": {
+    "formats": {
+      "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))": {
+        "intent": "Swap tokens on Uniswap V3",
+        "fields": [
+          {
+            "label": "Token In",
+            "path": "#.params.tokenIn",
+            "format": "addressName"
+          },
+          {
+            "label": "Token Out",
+            "path": "#.params.tokenOut",
+            "format": "addressName"
+          },
+          {
+            "label": "Fee Tier",
+            "path": "#.params.fee",
+            "format": "unit",
+            "unit": "bps"
+          },
+          {
+            "label": "Amount In",
+            "path": "#.params.amountIn",
+            "format": "tokenAmount",
+            "tokenPath": "#.params.tokenIn"
+          },
+          {
+            "label": "Min Amount Out",
+            "path": "#.params.amountOutMinimum",
+            "format": "tokenAmount",
+            "tokenPath": "#.params.tokenOut"
+          },
+          {
+            "label": "Recipient",
+            "path": "#.params.recipient",
+            "format": "addressName"
+          },
+          {
+            "label": "Deadline",
+            "path": "#.params.deadline",
+            "format": "date"
+          }
+        ]
+      }
+    }
+  }
+}

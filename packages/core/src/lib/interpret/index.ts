@@ -8,6 +8,7 @@
  * │  ────────────────┼───────────┼───────────────┼─────────────     │
  * │  cowswap-twap    │ CoW Swap  │ TWAP Order    │ info             │
  * │  safe-policy     │ Safe      │ Policy Change │ critical         │
+ * │  erc7730         │ (dynamic) │ (dynamic)     │ info             │
  * │                                                                 │
  * │  To add a new protocol, follow the checklist in ./types.ts.    │
  * └─────────────────────────────────────────────────────────────────┘
@@ -16,13 +17,20 @@
 import type { Interpretation, Interpreter } from "./types";
 import { interpretCowSwapTwap } from "./cowswap-twap";
 import { interpretSafePolicy } from "./safe-policy";
+import { createERC7730Interpreter } from "../erc7730/interpreter.js";
+import { getGlobalIndex } from "../erc7730/global-index.js";
 
 // ── Interpreter registry ────────────────────────────────────────────
 // Each interpreter is tried in order; the first non-null result wins.
+// Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
+
+// Create the ERC-7730 interpreter (chainId defaults to 1 for Ethereum mainnet)
+const erc7730Interpreter = createERC7730Interpreter(getGlobalIndex(), 1);
 
 const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,
   interpretSafePolicy,
+  erc7730Interpreter,
 ];
 
 /**
@@ -47,5 +55,6 @@ export type {
   Severity,
   CowSwapTwapDetails,
   SafePolicyChangeDetails,
+  ERC7730Details,
   TokenInfo,
 } from "./types";

@@ -15,6 +15,7 @@ import type { ComponentType } from "react";
 import type { Interpretation, Severity } from "@safelens/core";
 import { CowSwapTwapCard } from "./cowswap-twap-card";
 import { SafePolicyCard } from "./safe-policy-card";
+import { ERC7730Card } from "./erc7730-card";
 
 // ── Evidence context ────────────────────────────────────────────────
 // Optional ambient data from the evidence package. Renderers can use
@@ -34,6 +35,7 @@ export interface EvidenceContext {
 const RENDERERS: Record<Interpretation["id"], ComponentType<{ details: any; context?: EvidenceContext }>> = {
   "cowswap-twap": CowSwapTwapCard,
   "safe-policy": SafePolicyCard,
+  "erc7730": ERC7730Card,
 };
 
 export function getRenderer(id: Interpretation["id"]): ComponentType<{ details: Interpretation["details"]; context?: EvidenceContext }> {

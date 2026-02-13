@@ -97,6 +97,15 @@ export interface SafePolicyChangeDetails {
   removedOwner?: string;
 }
 
+/** ERC-7730 generic interpretation details. */
+export interface ERC7730Details {
+  fields: Array<{
+    label: string;
+    value: string;
+    format: string;
+  }>;
+}
+
 // ── Interpretation (discriminated union) ────────────────────────────
 //
 // Each variant has a unique `id` string that TypeScript uses to narrow
@@ -123,6 +132,14 @@ export type Interpretation =
       severity: "critical";
       summary: string;
       details: SafePolicyChangeDetails;
+    }
+  | {
+      id: "erc7730";
+      protocol: string;
+      action: string;
+      severity: "info";
+      summary: string;
+      details: ERC7730Details;
     };
 
 // ── Interpreter function signature ──────────────────────────────────
