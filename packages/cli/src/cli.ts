@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import {
+  type EvidencePackage,
+  type EvidenceVerificationReport,
   parseSafeUrl,
   fetchSafeTransaction,
   createEvidencePackage,
@@ -8,23 +10,34 @@ import {
   verifyEvidencePackage,
   loadSettingsConfig,
   DEFAULT_SETTINGS_CONFIG,
+  buildGenerationSources,
+  buildVerificationSources,
+  getChainName,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
 import { getFlag, getPositionals, hasFlag } from "./args";
 
+type OutputFormat = "text" | "json";
+
+const VALID_FORMATS = new Set<OutputFormat>(["text", "json"]);
+
 function printHelp() {
   console.log(`SafeLens CLI
 
 Usage:
-  safelens analyze <safe-url> [--out evidence.json] [--pretty]
-  safelens verify [--file evidence.json] [--json <string>] [--settings <path>] [--no-settings] [--format json]
+  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings]
+  safelens verify [--file evidence.json] [--json <string>] [--settings <path>] [--no-settings] [--format text|json]
+  safelens sources
   safelens settings init [--path <file>]
   safelens settings show [--path <file>]
 
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
+  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --format json
+  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --no-settings
   safelens verify --file evidence.json
+  safelens sources
   safelens settings init
 `);
 }
@@ -37,6 +50,72 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
+function getOutputFormat(args: string[], defaultFormat: OutputFormat): OutputFormat {
+  const value = getFlag(args, "--format")?.toLowerCase();
+  if (!value) return defaultFormat;
+  if (!VALID_FORMATS.has(value as OutputFormat)) {
+    console.error(`Unknown --format value "${value}". Supported values: text, json.`);
+    process.exit(1);
+  }
+  return value as OutputFormat;
+}
+
+function createVerifyPayload(
+  evidence: EvidencePackage,
+  report: EvidenceVerificationReport
+) {
+  return {
+    ok: true,
+    safeTxHash: evidence.safeTxHash,
+    chainId: evidence.chainId,
+    safeAddress: evidence.safeAddress,
+    proposer: report.proposer,
+    warnings: report.targetWarnings,
+    signatures: report.signatures,
+    sources: report.sources,
+  };
+}
+
+function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
+  for (const source of sources) {
+    const status = source.status === "enabled" ? "enabled" : "disabled";
+    console.log(`- [${source.trust}] ${source.title} (${status})`);
+    console.log(`  ${source.summary}`);
+    console.log(`  ${source.detail}`);
+  }
+}
+
+function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
+  if (warnings.length === 0) return;
+  console.log("Warnings:");
+  warnings.forEach((warning) => {
+    console.log(`- [${warning.level}] ${warning.message}`);
+  });
+}
+
+function printVerificationText(
+  evidence: EvidencePackage,
+  report: EvidenceVerificationReport,
+  heading: string
+) {
+  const { proposer, targetWarnings, signatures, sources } = report;
+  const { summary } = signatures;
+
+  console.log(heading);
+  console.log(`Safe: ${evidence.safeAddress}`);
+  console.log(`Chain: ${evidence.chainId}`);
+  console.log(`Chain name: ${getChainName(evidence.chainId)}`);
+  console.log(`SafeTxHash: ${evidence.safeTxHash}`);
+  if (evidence.ethereumTxHash) console.log(`Ethereum Tx Hash: ${evidence.ethereumTxHash}`);
+  if (evidence.sources?.transactionUrl) console.log(`Safe URL: ${evidence.sources.transactionUrl}`);
+  if (proposer) console.log(`Proposed by: ${proposer}`);
+  console.log(`Signatures: ${summary.valid}/${summary.total} valid (${summary.invalid} invalid, ${summary.unsupported} unsupported)`);
+  console.log(`Required signatures: ${evidence.confirmations.length}/${evidence.confirmationsRequired}`);
+  printWarningsSection(targetWarnings);
+  console.log("Sources of truth:");
+  printSourceFactsFromList(sources);
+}
+
 async function runAnalyze(args: string[]) {
   const [url] = getPositionals(args);
   if (!url) {
@@ -46,19 +125,35 @@ async function runAnalyze(args: string[]) {
 
   const outPath = getFlag(args, "--out");
   const pretty = hasFlag(args, "--pretty") || !hasFlag(args, "--compact");
+  const format = getOutputFormat(args, "text");
 
   const parsed = parseSafeUrl(url);
   const tx = await fetchSafeTransaction(parsed.chainId, parsed.safeTxHash);
   const evidence = createEvidencePackage(tx, parsed.chainId, url);
+  const settings = await loadSettingsForVerify(args);
+  const report = await verifyEvidencePackage(evidence, { settings });
   const json = pretty ? exportEvidencePackage(evidence) : JSON.stringify(evidence);
 
   if (outPath) {
     await fs.writeFile(outPath, json, "utf-8");
     console.log(`Saved evidence to ${outPath}`);
+  }
+
+  if (format === "json") {
+    console.log(
+          JSON.stringify(
+          {
+            evidence,
+          ...createVerifyPayload(evidence, report),
+          },
+        null,
+        pretty ? 2 : 0
+      )
+    );
     return;
   }
 
-  console.log(json);
+  printVerificationText(evidence, report, "Analysis complete.");
 }
 
 async function loadSettingsForVerify(args: string[]) {
@@ -71,6 +166,7 @@ async function loadSettingsForVerify(args: string[]) {
 async function runVerify(args: string[]) {
   let jsonInput = getFlag(args, "--json");
   const filePath = getFlag(args, "--file");
+  const format = getOutputFormat(args, "text");
 
   if (!jsonInput && filePath) {
     jsonInput = await fs.readFile(filePath, "utf-8");
@@ -95,22 +191,11 @@ async function runVerify(args: string[]) {
   const evidence = result.evidence;
   const settings = await loadSettingsForVerify(args);
   const report = await verifyEvidencePackage(evidence, { settings });
-  const { signatures, proposer, targetWarnings } = report;
-  const { summary } = signatures;
-  const format = getFlag(args, "--format") || "text";
 
   if (format === "json") {
     console.log(
       JSON.stringify(
-        {
-          ok: true,
-          safeTxHash: evidence.safeTxHash,
-          chainId: evidence.chainId,
-          safeAddress: evidence.safeAddress,
-          proposer,
-          warnings: targetWarnings,
-          signatures,
-        },
+        createVerifyPayload(evidence, report),
         null,
         2
       )
@@ -118,18 +203,30 @@ async function runVerify(args: string[]) {
     return;
   }
 
-  console.log("Evidence verified.");
-  console.log(`Safe: ${evidence.safeAddress}`);
-  console.log(`SafeTxHash: ${evidence.safeTxHash}`);
-  console.log(`Chain: ${evidence.chainId}`);
-  if (proposer) console.log(`Proposer: ${proposer}`);
-  console.log(`Signatures: ${summary.valid}/${summary.total} valid (${summary.invalid} invalid, ${summary.unsupported} unsupported)`);
-  if (targetWarnings.length > 0) {
-    console.log("Warnings:");
-    targetWarnings.forEach((warning) =>
-      console.log(`- [${warning.level}] ${warning.message}`)
-    );
-  }
+  printVerificationText(evidence, report, "Evidence verified.");
+}
+
+async function runSources() {
+  console.log("Generation sources reference:");
+  printSourceFactsFromList(buildGenerationSources());
+  console.log("");
+  console.log("Verification sources reference:");
+  printSourceFactsFromList(
+    buildVerificationSources({
+      hasSettings: true,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: true,
+    })
+  );
+  console.log("");
+  console.log("Verification sources without local settings:");
+  printSourceFactsFromList(
+    buildVerificationSources({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: true,
+    })
+  );
 }
 
 async function runSettings(args: string[]) {
@@ -173,6 +270,10 @@ async function main() {
     }
     if (command === "verify") {
       await runVerify(args);
+      return;
+    }
+    if (command === "sources") {
+      await runSources();
       return;
     }
     if (command === "settings") {

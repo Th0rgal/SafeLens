@@ -1,9 +1,0 @@
-{
-  "active": true,
-  "iteration": 3,
-  "maxIterations": 0,
-  "completionPromise": "COMPLETE",
-  "prompt": "You are an agent working on the project safelens. The goal of this project is to allow to verify a transaction being signed on a (gnosis) safe multisig with minimal trust involved.\n\nThe way it works is:\n- a page allows to generate an evidence.json (using various API)\n- a native tauri app that allows to verify this evidence is correct by recomputing hashes, using local settings, etc\n\nYour job is to work on:\n- simplify, document, test the code as much as possible. Creating the correct abstractions\n- store the settings/library as a json on disk, allow the tauri app to work completely offline\n- ensure CLI first support, with the tauri frontend on top\n- ensure every single source of truth is documented in the app and in the CLI, in a clear manner. Write extensive test files indicating why we can trust that this information is correct, according to what.\n- Focus on making the code human readable and maintainable\n\nPlease pull the review comments, fix the reported bugs if there is any, check the status, and keep going on this goal. Focus on making specs very human friendly and implementation very clean. Trying to simplify them, create the relevant abstractions. Chose one thing left to do in this pr or that can be improved and make it perfect: test it deeply, no mock, ensure everything passes locally. Always commit and push your progress before stopping.\n",
-  "startedAt": "2026-02-13T11:15:39.779Z",
-  "model": "openai/gpt-5.3-codex-spark"
-}

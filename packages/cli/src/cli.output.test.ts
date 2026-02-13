@@ -81,6 +81,19 @@ describe("CLI verify output", () => {
       level: "danger",
       message: expect.stringContaining("DelegateCall to unknown contract"),
     });
+    expect(parsed.sources).toHaveLength(7);
+    expect(parsed.sources.map((item: { id: string }) => item.id)).toEqual([
+      "evidence-package",
+      "hash-recompute",
+      "signatures",
+      "signature-scheme-coverage",
+      "safe-owners-threshold",
+      "decoded-calldata",
+      "settings",
+    ]);
+    expect(
+      parsed.sources.find((item: { id: string }) => item.id === "settings")?.status
+    ).toBe("enabled");
   });
 
   it("returns full signature detail list and owner-indexed signature map in JSON output", async () => {
@@ -136,6 +149,8 @@ describe("CLI verify output", () => {
     expect(result.stdout).toContain("Signatures: 1/1 valid (0 invalid, 0 unsupported)");
     expect(result.stdout).toContain("Warnings:");
     expect(result.stdout).toContain("DelegateCall to MultiSend 1.4.1");
+    expect(result.stdout).toContain("Sources of truth:");
+    expect(result.stdout).toContain("[self-verified] Evidence package integrity (enabled)");
   });
 
   it("suppresses warnings in text output with --no-settings", async () => {
@@ -150,6 +165,25 @@ describe("CLI verify output", () => {
     expect(result.stdout).toContain("Evidence verified.");
     expect(result.stdout).toContain("Signatures: 1/1 valid (0 invalid, 0 unsupported)");
     expect(result.stdout).not.toContain("Warnings:");
+  });
+
+  it("prints disabled settings source when verification is run without settings", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidencePath = path.join(tmpDir, "evidence.json");
+
+    await writeFile(evidencePath, JSON.stringify(evidence, null, 2), "utf-8");
+    const result = runCli(["verify", "--file", evidencePath, "--no-settings", "--format", "json"]);
+
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    const settingsSource = parsed.sources.find(
+      (item: { id: string }) => item.id === "settings"
+    );
+    expect(settingsSource).toMatchObject({
+      id: "settings",
+      status: "disabled",
+    });
+    expect(settingsSource?.trust).toBe("api-sourced");
   });
 
   it("reads evidence from stdin and emits JSON when requested", async () => {
@@ -184,6 +218,21 @@ describe("CLI verify output", () => {
     expect(result.stdout).toMatch(
       /Signatures:\s+1\/1 valid \(0 invalid, 0 unsupported\)/
     );
+    expect(result.stdout).toContain("Sources of truth:");
+    expect(result.stdout).toContain("[self-verified] Signature checks (enabled)");
+  });
+
+  it("prints sources documentation command", async () => {
+    const result = runCli(["sources"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Generation sources reference:");
+    expect(result.stdout).toContain("[api-sourced] Safe Transaction Service response");
+    expect(result.stdout).toContain("Verification sources reference:");
+    expect(result.stdout).toContain("[self-verified] Evidence package integrity");
+    expect(result.stdout).toContain("[api-sourced] Safe owners and threshold");
+    expect(result.stdout).toContain("[user-provided] Address and contract labels");
+    expect(result.stdout).toContain("Verification sources without local settings:");
+    expect(result.stdout).toContain("[api-sourced] Address and contract labels");
   });
 
   it("fails cleanly when input evidence JSON is malformed", async () => {

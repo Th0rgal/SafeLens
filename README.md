@@ -6,6 +6,12 @@ SafeLens is a minimal toolkit for working with Gnosis Safe multisig evidence:
 - Verify signatures and hashes locally with minimal trust.
 - Keep settings and checks reproducible across tools.
 
+## Trust and Airgap
+
+- Full trust model: `TRUST_ASSUMPTIONS.md`
+- CLI assumptions view: `bun --cwd packages/cli dev sources`
+- Desktop verifier ships with production CSP `connect-src 'none'` and no shell-open capability.
+
 ## Project structure
 
 - `apps/generator`: Next.js webapp that creates and exports `evidence.json`.
@@ -110,7 +116,7 @@ Builds full desktop distributable.
 
 ## Notes
 
-- Desktop verification is designed to stay offline during `verify`.
+- Desktop verification is designed to stay offline during `verify` and is guarded by automated airgap tests.
 - The CLI is the primary interface for scripting and reproducible checks.
 - `evidence.json` is the main interoperability boundary between all components.
 

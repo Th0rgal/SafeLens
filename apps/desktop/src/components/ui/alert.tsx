@@ -7,7 +7,7 @@ const alertVariants = cva(
   {
     variants: {
       variant: {
-        default: "glass-subtle border-border/[0.08] text-fg",
+        default: "glass-subtle border-border/15 text-fg",
         destructive:
           "bg-red-500/10 border-red-500/30 text-red-400 [&>svg]:text-red-400",
         success:

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import {
   exportSettingsConfig,
-  importSettingsConfig,
+  settingsConfigSchema,
   type SettingsConfig,
   type ChainConfig,
   type AddressBookEntry,
@@ -101,14 +101,21 @@ export default function SettingsScreen() {
   };
 
   const handleExport = async () => {
-    const json = await exportSettingsConfig(store);
-    const path = await save({
-      defaultPath: "safelens-settings.json",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-    });
-    if (!path) return;
-    await writeTextFile(path, json);
-    toastSuccess("Settings exported", path);
+    try {
+      const json = await exportSettingsConfig(store);
+      const path = await save({
+        defaultPath: "safelens-settings.json",
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, json);
+      toastSuccess("Settings exported", path);
+    } catch {
+      toastWarning(
+        "Export failed",
+        "Could not write file to the selected location."
+      );
+    }
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +123,8 @@ export default function SettingsScreen() {
     if (!file) return;
     try {
       const text = await file.text();
-      const imported = await importSettingsConfig(store, text);
+      const imported = settingsConfigSchema.parse(JSON.parse(text));
+      await saveConfig(imported);
       setDraft(imported);
       setChainEntries(Object.entries(imported.chains));
       toastSuccess("Settings imported", "Your local settings were updated.");
@@ -194,7 +202,7 @@ export default function SettingsScreen() {
           <CardContent className="space-y-2">
             {chainEntries.map(([chainId, chain], index) => (
               <div key={index} className="flex items-start gap-2">
-                <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-4">
+                <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
                   <Input
                     value={chainId}
                     onChange={(e) => renameChain(index, e.target.value)}
@@ -224,8 +232,8 @@ export default function SettingsScreen() {
                 </Button>
               </div>
             ))}
-            <div className="flex items-start gap-2 border-t border-border/[0.06] pt-2">
-              <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-4">
+            <div className="flex items-start gap-2 border-t border-border/15 pt-2">
+              <div className="grid flex-1 grid-cols-2 gap-2 lg:grid-cols-4">
                 <Input value={newChainId} onChange={(e) => setNewChainId(e.target.value)} placeholder="Chain ID" className="text-xs" />
                 <Input value={newChainName} onChange={(e) => setNewChainName(e.target.value)} placeholder="Name" className="text-xs" />
                 <Input value={newChainRpc} onChange={(e) => setNewChainRpc(e.target.value)} placeholder="RPC URL" className="text-xs" />
@@ -260,7 +268,7 @@ export default function SettingsScreen() {
                 </Button>
               </div>
             ))}
-            <div className="flex items-center gap-2 border-t border-border/[0.06] pt-2">
+            <div className="flex items-center gap-2 border-t border-border/15 pt-2">
               <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
               <Input value={newAddressName} onChange={(e) => setNewAddressName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
               <Button variant="ghost" size="icon" onClick={handleAddAddress} disabled={!newAddress || !newAddressName} className="h-9 w-9 shrink-0">
@@ -292,7 +300,7 @@ export default function SettingsScreen() {
                 </Button>
               </div>
             ))}
-            <div className="flex items-center gap-2 border-t border-border/[0.06] pt-2">
+            <div className="flex items-center gap-2 border-t border-border/15 pt-2">
               <Input value={newContract} onChange={(e) => setNewContract(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
               <Input value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
               <Button variant="ghost" size="icon" onClick={handleAddContract} disabled={!newContract || !newContractName} className="h-9 w-9 shrink-0">

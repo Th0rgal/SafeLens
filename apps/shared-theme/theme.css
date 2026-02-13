@@ -2,15 +2,15 @@
   --radius: 0.375rem;
 
   --background: 13 14 16;
-  --background-elevated: 24 25 28;
-  --background-tertiary: 38 39 44;
-  --background-inset: 21 22 25;
+  --background-elevated: 22 23 26;
+  --background-tertiary: 30 31 35;
+  --background-inset: 17 18 20;
 
   --foreground: 232 228 214;
-  --foreground-secondary: 191 186 172;
-  --foreground-tertiary: 148 143 129;
+  --foreground-secondary: 170 166 154;
+  --foreground-tertiary: 120 116 106;
 
-  --border: 70 73 80;
+  --border: 60 63 70;
 
   --accent: 176 126 82;
   --accent-hover: 196 150 101;
@@ -36,32 +36,38 @@ html {
   color-scheme: dark;
 }
 
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
-  background:
-    rgb(var(--background)),
-    linear-gradient(
-      170deg,
-      rgb(var(--background)),
-      rgb(var(--background-elevated)) 48%,
-      rgb(var(--background-tertiary))
-    );
-  position: relative;
+  background: transparent;
   color: rgb(var(--foreground));
-  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 18px 18px, 18px 18px;
-  opacity: 0.35;
+#root {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+code, pre, kbd, samp,
+input, textarea, select {
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+}
+
+/* Strip native bevel / 3D shadow from form controls */
+input, textarea, select, button {
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+  outline: none;
 }
 
 a {
@@ -85,46 +91,40 @@ a {
   }
 }
 
-.collapsible-content {
-  transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
-}
-
-.glass {
-  background: rgb(var(--background-elevated) / 0.84);
-  backdrop-filter: blur(8px) saturate(115%);
-  -webkit-backdrop-filter: blur(8px) saturate(115%);
-}
-
-.glass-subtle {
-  background: rgb(var(--background-elevated) / 0.78);
-  backdrop-filter: blur(8px) saturate(110%);
-  -webkit-backdrop-filter: blur(8px) saturate(110%);
-}
-
-.glass-panel {
-  background: rgb(var(--background-tertiary) / 0.94);
-  border: 1px solid rgb(var(--border) / 0.18);
-  backdrop-filter: blur(7px) saturate(112%);
-  -webkit-backdrop-filter: blur(7px) saturate(112%);
-  box-shadow: inset 0 1px 0 rgb(var(--border) / 0.12);
-}
-
-.glass-field {
-  background: rgb(var(--background-inset) / 0.92);
-  backdrop-filter: blur(6px) saturate(110%);
-  -webkit-backdrop-filter: blur(6px) saturate(110%);
-  box-shadow: inset 0 1px 0 rgb(var(--border) / 0.10);
-}
-
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass,
-  .glass-subtle,
-  .glass-panel,
-  .glass-field {
-    background: rgb(var(--background-tertiary) / 0.94);
+@layer utilities {
+  .collapsible-content {
+    transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
   }
-}
 
-.text-muted {
-  color: rgb(var(--foreground-secondary));
+  .glass {
+    background: rgb(var(--background-elevated));
+  }
+
+  .glass-subtle {
+    background: rgb(var(--background-elevated));
+  }
+
+  .glass-panel {
+    background: rgb(var(--background-tertiary));
+    border: 1px solid rgb(var(--border) / 0.12);
+  }
+
+  .glass-field {
+    background: rgb(var(--background-inset));
+  }
+
+  /* Sidebar — translucent, frosted glass */
+  .glass-sidebar {
+    background: rgb(var(--background-elevated) / 0.55);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    transform: translateZ(0);
+    will-change: backdrop-filter;
+    isolation: isolate;
+    position: relative;
+  }
+
+  .text-muted {
+    color: rgb(var(--foreground-secondary));
+  }
 }

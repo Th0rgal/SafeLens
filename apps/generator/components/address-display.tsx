@@ -13,7 +13,7 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
 
   return (
     <span className={className}>
-      <span className="inline-flex items-center gap-2 rounded-full border border-border/[0.12] bg-surface-2/40 px-2 py-0.5 font-mono text-xs">
+      <span className="inline-flex items-center gap-2 rounded border border-border/15 bg-surface-2/40 px-2 py-0.5 font-mono text-xs">
         {address}
         <button
           type="button"

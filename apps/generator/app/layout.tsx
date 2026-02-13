@@ -15,7 +15,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen antialiased">
         <div className="relative flex min-h-screen flex-col">
-          <header className="sticky top-0 z-50 border-b border-border/[0.10] glass-subtle">
+          <header className="sticky top-0 z-50 border-b border-border/15 glass-subtle">
             <div className="container mx-auto flex h-16 items-center justify-between px-4">
               <div>
                 <h1 className="text-xl font-semibold tracking-tight">SafeLens</h1>

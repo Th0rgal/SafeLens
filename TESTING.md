@@ -67,8 +67,23 @@ Expected:
 ## Automated tests
 
 ```bash
-bun --cwd packages/core test
+bun run test
 ```
+
+This now runs:
+
+- `packages/core` unit tests
+- `packages/cli` command/output tests
+- `apps/generator` utility tests
+- `apps/desktop` airgap configuration tests
+
+## Type checks
+
+```bash
+bun run type-check
+```
+
+This includes `packages/core`, `packages/cli`, `apps/generator`, and `apps/desktop`.
 
 ## URL parsing tests
 

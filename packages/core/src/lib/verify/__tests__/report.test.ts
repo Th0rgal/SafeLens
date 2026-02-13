@@ -20,6 +20,10 @@ describe("verifyEvidencePackage", () => {
     expect(result.signatures.summary.total).toBe(evidence.confirmations.length);
     expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
     expect(result.signatures.byOwner[evidence.confirmations[0].owner].status).toBe("valid");
+    expect(result.sources).toHaveLength(7);
+    expect(result.sources.find((s) => s.id === "settings")?.status).toBe("disabled");
+    expect(result.sources.find((s) => s.id === "safe-owners-threshold")?.trust).toBe("api-sourced");
+    expect(result.sources.find((s) => s.id === "decoded-calldata")?.status).toBe("enabled");
   });
 
   it("returns target warnings when settings are unavailable", async () => {
@@ -31,6 +35,7 @@ describe("verifyEvidencePackage", () => {
       level: "danger",
       message: expect.stringContaining("unknown contract"),
     });
+    expect(result.sources.find((s) => s.id === "settings")?.status).toBe("enabled");
   });
 
   it("returns no target warnings without settings", async () => {

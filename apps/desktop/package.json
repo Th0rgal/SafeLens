@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "bun test",
+    "type-check": "tsc --noEmit",
     "preview": "vite preview",
     "tauri": "tauri"
   },

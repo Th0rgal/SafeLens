@@ -5,10 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { parseSafeUrl, getChainName, fetchSafeTransaction, createEvidencePackage } from "@safelens/core";
+import {
+  parseSafeUrl,
+  getChainName,
+  fetchSafeTransaction,
+  createEvidencePackage,
+  buildGenerationSources,
+  TRUST_CONFIG,
+} from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage } from "@safelens/core";
+
+const generationSources = buildGenerationSources();
 
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
@@ -77,6 +86,33 @@ export default function AnalyzePage() {
               {loading ? "Analyzing..." : "Analyze"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Trust Assumptions</CardTitle>
+          <CardDescription>
+            Every input used to build evidence, with explicit trust level.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {generationSources.map((source) => {
+            const trust = TRUST_CONFIG[source.trust];
+            return (
+              <div
+                key={source.id}
+                className="rounded-md border border-border/15 bg-surface-2/40 p-3"
+              >
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium">{source.title}</span>
+                  <span className={`text-xs ${trust.color}`}>{trust.label}</span>
+                </div>
+                <p className="text-xs text-muted">{source.summary}</p>
+                <p className="mt-1 text-xs text-muted">{source.detail}</p>
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
 

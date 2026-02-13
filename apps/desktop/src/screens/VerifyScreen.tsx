@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,13 +9,14 @@ import {
   parseEvidencePackage,
   getChainName,
   verifyEvidencePackage,
+  type VerificationSource,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { ShieldCheck, AlertTriangle, HelpCircle, UserRound } from "lucide-react";
+import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
@@ -45,21 +46,27 @@ export default function VerifyScreen() {
   const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
   const [proposer, setProposer] = useState<string | null>(null);
   const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
+  const [sources, setSources] = useState<VerificationSource[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
 
   useEffect(() => {
-    if (!evidence) {
+    const currentEvidence = evidence;
+
+    if (!currentEvidence) {
       setSigResults({});
       setProposer(null);
       setTargetWarnings([]);
+      setSources([]);
       return;
     }
 
     let cancelled = false;
 
     async function verifyAll() {
-      const report = await verifyEvidencePackage(evidence, {
+      if (!currentEvidence) return;
+      const report = await verifyEvidencePackage(currentEvidence, {
         settings: config ?? null,
       });
 
@@ -67,6 +74,7 @@ export default function VerifyScreen() {
       setSigResults(report.signatures.byOwner);
       setProposer(report.proposer);
       setTargetWarnings(report.targetWarnings);
+      setSources(report.sources);
     }
 
     verifyAll();
@@ -133,11 +141,20 @@ export default function VerifyScreen() {
           <div>
             <label className="mb-2 block text-sm font-medium">Upload File</label>
             <input
+              ref={fileInputRef}
               type="file"
               accept=".json,application/json"
               onChange={handleFileUpload}
-              className="block w-full text-sm text-muted file:mr-4 file:rounded-md file:border file:border-border/[0.10] file:bg-surface-2/40 file:px-3 file:py-2 file:text-sm file:font-medium file:text-fg hover:file:border-border/[0.14] hover:file:bg-surface-2/55"
+              className="hidden"
             />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full justify-center gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              Choose File
+            </Button>
           </div>
 
           <div>
@@ -248,15 +265,7 @@ export default function VerifyScreen() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <CardTitle>Signatures</CardTitle>
-                {Object.keys(sigResults).length > 0 ? (
-                  Object.values(sigResults).every((r) => r.status === "valid") ? (
-                    <TrustBadge level="self-verified" />
-                  ) : (
-                    <TrustBadge level="api-sourced" />
-                  )
-                ) : (
-                  <TrustBadge level="api-sourced" />
-                )}
+                <TrustBadge level="self-verified" />
               </div>
               <CardDescription>
                 {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
@@ -267,7 +276,7 @@ export default function VerifyScreen() {
                 {evidence.confirmations.map((conf, i) => {
                   const sigResult = sigResults[conf.owner];
                   return (
-                    <div key={i} className="rounded-md border border-border/[0.08] glass-subtle p-3 shadow-glass-sm">
+                    <div key={i} className="rounded-md border border-border/15 glass-subtle p-3">
                       <div className="mb-1 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-medium text-muted">Owner {i + 1}</span>
@@ -307,6 +316,37 @@ export default function VerifyScreen() {
                   );
                 })}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Sources of truth</CardTitle>
+              <CardDescription>
+                Evidence checks, cryptographic checks, and local metadata inputs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sources.map((source) => (
+                <div
+                  key={source.id}
+                  className="rounded-md border border-border/15 glass-subtle p-3"
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrustBadge level={source.trust} />
+                      <span className="text-sm font-medium">{source.title}</span>
+                    </div>
+                    <span
+                      className={`text-xs ${source.status === "disabled" ? "text-amber-300" : "text-emerald-300"}`}
+                    >
+                      {source.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted">{source.summary}</p>
+                  <p className="mt-1 text-xs text-muted/90">{source.detail}</p>
+                </div>
+              ))}
             </CardContent>
           </Card>
 
@@ -357,7 +397,7 @@ export default function VerifyScreen() {
                     <div className="mb-1 flex items-center gap-2 font-medium text-muted">
                       Calldata <TrustBadge level="self-verified" />
                     </div>
-                    <code className="block break-all rounded-md border border-border/[0.08] glass-subtle p-2 text-xs">
+                    <code className="block break-all rounded-md border border-border/15 glass-subtle p-2 text-xs">
                       {evidence.transaction.data}
                     </code>
                   </div>

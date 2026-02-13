@@ -46,29 +46,29 @@ const severityConfig: Record<
   success: {
     icon: CheckCircle2,
     bar: "bg-emerald-500",
-    border: "border-emerald-500/25",
-    bg: "bg-emerald-500/5",
+    border: "border-emerald-500/30",
+    bg: "bg-emerald-500/15",
     iconColor: "text-emerald-400",
   },
   info: {
     icon: Info,
     bar: "bg-accent",
-    border: "border-accent/25",
-    bg: "bg-accent/5",
+    border: "border-accent/30",
+    bg: "bg-accent/15",
     iconColor: "text-accent",
   },
   warning: {
     icon: AlertTriangle,
     bar: "bg-amber-500",
-    border: "border-amber-500/25",
-    bg: "bg-amber-500/5",
+    border: "border-amber-500/30",
+    bg: "bg-amber-500/15",
     iconColor: "text-amber-400",
   },
   severe: {
     icon: AlertOctagon,
     bar: "bg-red-500",
-    border: "border-red-500/25",
-    bg: "bg-red-500/5",
+    border: "border-red-500/30",
+    bg: "bg-red-500/15",
     iconColor: "text-red-400",
   },
 };
@@ -127,7 +127,7 @@ function ToastItem({
     <div
       role="status"
       className={cn(
-        "pointer-events-auto relative flex w-80 cursor-pointer items-start gap-3 overflow-hidden rounded-md border px-4 py-3 shadow-glass-sm glass transition-all duration-200",
+        "pointer-events-auto relative flex w-80 cursor-pointer items-start gap-3 overflow-hidden rounded-md border px-4 py-3 bg-surface/95 backdrop-blur-md shadow-lg transition-all duration-200",
         cfg.border,
         cfg.bg,
         exiting ? "translate-x-full opacity-0" : "translate-x-0 opacity-100"
@@ -193,7 +193,7 @@ function ToastModal({
     >
       <div
         className={cn(
-          "relative mx-4 w-full max-w-md overflow-hidden rounded-md border glass-panel shadow-glass",
+          "relative mx-4 w-full max-w-md overflow-hidden rounded-md border glass-panel",
           cfg.border
         )}
         onClick={(e) => e.stopPropagation()}

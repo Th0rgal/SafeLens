@@ -4,6 +4,10 @@ export const sharedTailwindThemeConfig: Omit<Config, "content"> = {
   darkMode: ["class"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["-apple-system", "BlinkMacSystemFont", "Segoe UI", "Noto Sans", "Helvetica", "Arial", "sans-serif"],
+        mono: ["JetBrains Mono", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -29,10 +33,7 @@ export const sharedTailwindThemeConfig: Omit<Config, "content"> = {
           to: { opacity: "1", transform: "translateY(0)" },
         },
       },
-      boxShadow: {
-        "glass-sm": "0 8px 24px -18px rgba(0, 0, 0, 0.72)",
-        glass: "0 18px 48px -30px rgba(0, 0, 0, 0.82)",
-      },
+      boxShadow: {},
     },
   },
   plugins: [],

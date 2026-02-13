@@ -95,7 +95,7 @@ function ExpandableArray({
         <span className="text-muted">{type}</span>
       </button>
       {open && (
-        <div className="ml-4 mt-1 space-y-1 border-l border-border/[0.08] pl-3">
+        <div className="ml-4 mt-1 space-y-1 border-l border-border/15 pl-3">
           {value.map((el, i) => (
             <div key={i} className="flex items-baseline gap-2">
               <span className="shrink-0 font-mono text-[10px] text-muted">[{i}]</span>
@@ -143,10 +143,10 @@ function CallStepCard({
   verification: CalldataVerification;
 }) {
   return (
-    <div className="rounded-md border border-border/[0.08] glass-subtle px-3 py-2 text-xs">
+    <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs">
       <div className="flex items-center gap-2">
         {showIndex && (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border/[0.12] bg-surface-2/40 text-[10px] font-semibold text-muted">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border/15 bg-surface-2/40 text-[10px] font-semibold text-muted">
             {step.index + 1}
           </span>
         )}
@@ -160,7 +160,7 @@ function CallStepCard({
         <VerificationIcon result={verification} />
       </div>
       {step.params.length > 0 && (
-        <div className="mt-2 space-y-1.5 border-t border-border/[0.06] pt-2">
+        <div className="mt-2 space-y-1.5 border-t border-border/15 pt-2">
           {step.params.map((param, i) => (
             <ParamRow key={i} param={param} />
           ))}
@@ -196,7 +196,7 @@ export function CallArray({
     <div>
       <div className="mb-2 flex items-center gap-2 font-medium text-muted">
         <span>Decoded Calls</span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-2/60 px-1.5 text-[10px] font-semibold text-muted">
+        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-surface-2/60 px-1.5 text-[10px] font-semibold text-muted">
           {steps.length}
         </span>
         <TrustBadge level={allVerified ? "self-verified" : "api-sourced"} />

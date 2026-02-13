@@ -3,6 +3,7 @@ import type { EvidencePackage } from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
+import { buildVerificationSources } from "../trust";
 
 export type SignatureCheckSummary = {
   total: number;
@@ -26,6 +27,7 @@ export type EvidenceVerificationReport = {
   proposer: string | null;
   targetWarnings: TransactionWarning[];
   signatures: SignatureCheckBundle;
+  sources: ReturnType<typeof buildVerificationSources>;
 };
 
 export interface VerifyEvidenceOptions {
@@ -79,6 +81,11 @@ export async function verifyEvidencePackage(
   return {
     proposer,
     targetWarnings,
+    sources: buildVerificationSources({
+      hasSettings: Boolean(settings),
+      hasUnsupportedSignatures: summary.unsupported > 0,
+      hasDecodedData: Boolean(evidence.dataDecoded),
+    }),
     signatures: {
       list: signatureList,
       byOwner,

@@ -10,6 +10,7 @@
     "version": "0.2.0"
   },
   "tauri": {
+    "macOSPrivateApi": true,
     "allowlist": {
       "fs": {
         "all": false,
@@ -18,25 +19,35 @@
         "createDir": true,
         "exists": true,
         "removeFile": true,
-        "scope": ["$APPDATA/**"]
+        "scope": [
+          "$APPDATA/**",
+          "$DESKTOP/**",
+          "$DOWNLOAD/**",
+          "$DOCUMENT/**"
+        ]
       },
       "dialog": { "all": true },
-      "path": { "all": true },
-      "shell": { "open": true }
+      "path": { "all": true }
     },
     "windows": [
       {
         "title": "SafeLens",
-        "width": 1200,
-        "height": 900,
-        "resizable": true
+        "width": 960,
+        "height": 640,
+        "minWidth": 640,
+        "minHeight": 480,
+        "resizable": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": true
       }
     ],
     "bundle": {
       "identifier": "com.safelens.app"
     },
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:5173 ws://localhost:5173"
+      "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://localhost:5173 ws://localhost:5173; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
     }
   }
 }

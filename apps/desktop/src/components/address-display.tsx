@@ -94,7 +94,7 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "inline-flex items-center rounded-full px-2 py-0.5 font-mono text-xs leading-tight transition-colors",
+          "inline-flex items-center rounded px-2 py-0.5 font-mono text-xs leading-tight transition-colors",
           isResolved
             ? "border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/15"
             : "border border-amber-500/20 bg-amber-500/10 text-amber-400 hover:bg-amber-500/15"
@@ -104,7 +104,7 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
       </button>
 
       {open && (
-        <span className="absolute bottom-full left-0 z-50 mb-2 flex flex-col gap-2 whitespace-nowrap rounded-md border border-border/[0.12] glass-panel px-3 py-2 text-xs shadow-glass-sm">
+        <span className="absolute bottom-full left-0 z-50 mb-2 flex flex-col gap-2 whitespace-nowrap rounded-md border border-border/15 glass-panel px-3 py-2 text-xs">
           {!isResolved && (
             <span className="text-[10px] font-medium text-amber-400">Not in your address book</span>
           )}
@@ -144,7 +144,7 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
                   if (e.key === "Escape") handleCancelAdd();
                 }}
                 placeholder="Name"
-                className="w-28 rounded border border-border/[0.12] bg-surface-2/40 px-1.5 py-0.5 text-[11px] text-fg outline-none focus:border-accent/40"
+                className="w-28 rounded border border-border/15 bg-surface-2/40 px-1.5 py-0.5 text-[11px] text-fg outline-none focus:border-accent/40"
               />
               <button
                 type="button"
