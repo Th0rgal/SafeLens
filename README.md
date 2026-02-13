@@ -1,68 +1,65 @@
 # SafeLens
 
-A minimal, trustless application for verifying Gnosis Safe multisig transactions with full transparency.
+SafeLens is a minimal, trustless toolkit for generating and verifying Gnosis Safe multisig evidence with as little trust as possible.
 
-## Features
+## What lives where
 
-- **Analyze**: Parse Safe transaction URLs and generate evidence packages
-- **Verify**: Validate evidence packages and recompute Safe transaction hashes
-- **Trustless**: Always recomputes critical data (hashes, signatures) client-side
-- **Transparent**: Shows all sources of truth explicitly
+- `apps/generator` — Next.js app to generate `evidence.json` from Safe URLs
+- `apps/desktop` — Tauri + Vite desktop app to verify evidence completely offline
+- `packages/core` — shared logic (hashing, schema validation, warnings, parsing)
+- `packages/cli` — CLI-first interface built on top of `@safelens/core`
 
-## Getting Started
+## Quick start
 
 ```bash
-# Install dependencies
 bun install
-
-# Run development server
-bun dev
-
-# Build for production
-bun run build
-
-# Start production server
-bun start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+### Generator (Next.js)
 
-## Pages
-
-### /analyze
-
-Enter a Safe transaction URL (from app.safe.global) to:
-- Fetch transaction data from Safe API
-- Generate an evidence.json package
-- Download or copy the evidence
-
-Example URL:
-```
-https://app.safe.global/transactions/tx?safe=eth:0x9fC3dc011b461664c835F2527fffb1169b3C213e&id=multisig_0x9fC3dc011b461664c835F2527fffb1169b3C213e_0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17
+```bash
+bun --cwd apps/generator dev
 ```
 
-### /verify
+Open `http://localhost:3000` to generate evidence packages.
 
-Upload or paste an evidence.json package to:
-- Validate the package schema
-- Recompute the Safe transaction hash
-- Verify hash integrity
-- Display transaction details and signatures
+### Desktop verifier (Tauri)
 
-## Tech Stack
+```bash
+bun --cwd apps/desktop dev
+```
 
-- **Next.js 14** (App Router)
-- **TypeScript** (strict mode)
-- **viem** (Ethereum utilities, ABI encoding, hash computation)
-- **Zod** (Schema validation)
-- **Tailwind CSS + shadcn/ui** (UI components)
+Then in another terminal:
 
-## Security
+```bash
+bun --cwd apps/desktop tauri dev
+```
 
-- All critical data (Safe tx hashes) are recomputed client-side
-- Schema validation with Zod
-- No backend database (stateless, privacy-preserving)
-- EIP-712 compliant hash computation
+### CLI
+
+```bash
+bun --cwd packages/cli dev --help
+```
+
+Examples:
+
+```bash
+bun --cwd packages/cli dev -- analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
+bun --cwd packages/cli dev -- verify --file evidence.json
+bun --cwd packages/cli dev -- settings init
+```
+
+## Offline-first verification
+
+- The desktop verifier never calls the network for verification.
+- Settings are stored on disk as JSON and can be exported/imported.
+- The CLI uses `~/.safelens/settings.json` by default.
+
+## Security notes
+
+- All critical data (Safe tx hashes) are recomputed locally.
+- Evidence packages are validated with Zod.
+- EIP-712 compliant hash computation.
 
 ## License
 

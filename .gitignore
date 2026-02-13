@@ -1,5 +1,6 @@
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.js
 package-lock.json
@@ -10,6 +11,13 @@ package-lock.json
 # next.js
 /.next/
 /out/
+
+# vite
+/apps/desktop/dist
+
+# tauri
+/apps/desktop/src-tauri/target
+/apps/desktop/src-tauri/.tauri
 
 # production
 /build

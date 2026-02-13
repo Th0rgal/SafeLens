@@ -1,0 +1,34 @@
+{
+  "build": {
+    "beforeDevCommand": "bun --cwd .. run dev",
+    "beforeBuildCommand": "bun --cwd .. run build",
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist"
+  },
+  "package": {
+    "productName": "SafeLens",
+    "version": "0.2.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "fs": { "all": true },
+      "dialog": { "all": true },
+      "path": { "all": true },
+      "shell": { "open": true }
+    },
+    "windows": [
+      {
+        "title": "SafeLens",
+        "width": 1200,
+        "height": 900,
+        "resizable": true
+      }
+    ],
+    "bundle": {
+      "identifier": "com.safelens.app"
+    },
+    "security": {
+      "csp": null
+    }
+  }
+}
