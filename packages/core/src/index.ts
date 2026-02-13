@@ -12,5 +12,6 @@ export * from "./lib/decode";
 export * from "./lib/interpret";
 export * from "./lib/trust";
 export * from "./lib/warnings/analyze";
+export * from "./lib/verify";
 
 export * from "./lib/settings";

@@ -1,5 +1,11 @@
 export type TrustLevel = "self-verified" | "api-sourced" | "user-provided";
 
+export type TrustConfig = {
+  label: string;
+  color: string;
+  icon: "ShieldCheck" | "Globe" | "User";
+};
+
 export const TRUST_CONFIG: Record<
   TrustLevel,
   { label: string; color: string; icon: "ShieldCheck" | "Globe" | "User" }

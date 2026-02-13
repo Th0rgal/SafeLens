@@ -1,0 +1,29 @@
+{
+  "iterations": [
+    {
+      "iteration": 1,
+      "startedAt": "2026-02-13T11:15:40.442Z",
+      "endedAt": "2026-02-13T11:15:42.452Z",
+      "durationMs": 1358,
+      "toolsUsed": {},
+      "filesModified": [
+        ".opencode/",
+        "apps/generator/.next/",
+        "packages/core/src/lib/verify/"
+      ],
+      "exitCode": 0,
+      "completionDetected": false,
+      "errors": [
+        "ProviderModelNotFoundError: ProviderModelNotFoundError"
+      ]
+    }
+  ],
+  "totalDurationMs": 1358,
+  "struggleIndicators": {
+    "repeatedErrors": {
+      "ProviderModelNotFoundError: ProviderModelNotFoundError": 1
+    },
+    "noProgressIterations": 0,
+    "shortIterations": 1
+  }
+}

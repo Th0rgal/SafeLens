@@ -5,12 +5,9 @@ import {
   createEvidencePackage,
   exportEvidencePackage,
   parseEvidencePackage,
-  verifySignature,
-  identifyProposer,
-  analyzeTarget,
+  verifyEvidencePackage,
   loadSettingsConfig,
   DEFAULT_SETTINGS_CONFIG,
-  type EvidencePackage,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -71,28 +68,6 @@ async function loadSettingsForVerify(args: string[]) {
   return await loadSettingsConfig(store, DEFAULT_SETTINGS_CONFIG);
 }
 
-async function summarizeSignatures(evidence: EvidencePackage) {
-  const results = await Promise.all(
-    evidence.confirmations.map(async (conf) => ({
-      owner: conf.owner,
-      result: await verifySignature(
-        evidence.safeTxHash as `0x${string}`,
-        conf.signature as `0x${string}`,
-        conf.owner as `0x${string}`
-      ),
-    }))
-  );
-
-  const summary = {
-    total: results.length,
-    valid: results.filter((r) => r.result.status === "valid").length,
-    invalid: results.filter((r) => r.result.status === "invalid").length,
-    unsupported: results.filter((r) => r.result.status === "unsupported").length,
-  };
-
-  return { results, summary };
-}
-
 async function runVerify(args: string[]) {
   let jsonInput = getFlag(args, "--json");
   const filePath = getFlag(args, "--file");
@@ -119,12 +94,9 @@ async function runVerify(args: string[]) {
 
   const evidence = result.evidence;
   const settings = await loadSettingsForVerify(args);
-  const proposer = identifyProposer(evidence.confirmations);
-  const warnings = settings
-    ? analyzeTarget(evidence.transaction.to, evidence.transaction.operation, settings)
-    : [];
-
-  const { results, summary } = await summarizeSignatures(evidence);
+  const report = await verifyEvidencePackage(evidence, { settings });
+  const { signatures, proposer, targetWarnings } = report;
+  const { summary } = signatures;
   const format = getFlag(args, "--format") || "text";
 
   if (format === "json") {
@@ -136,8 +108,8 @@ async function runVerify(args: string[]) {
           chainId: evidence.chainId,
           safeAddress: evidence.safeAddress,
           proposer,
-          warnings,
-          signatures: { summary, results },
+          warnings: targetWarnings,
+          signatures,
         },
         null,
         2
@@ -152,9 +124,11 @@ async function runVerify(args: string[]) {
   console.log(`Chain: ${evidence.chainId}`);
   if (proposer) console.log(`Proposer: ${proposer}`);
   console.log(`Signatures: ${summary.valid}/${summary.total} valid (${summary.invalid} invalid, ${summary.unsupported} unsupported)`);
-  if (warnings.length > 0) {
+  if (targetWarnings.length > 0) {
     console.log("Warnings:");
-    warnings.forEach((warning) => console.log(`- [${warning.level}] ${warning.message}`));
+    targetWarnings.forEach((warning) =>
+      console.log(`- [${warning.level}] ${warning.message}`)
+    );
   }
 }
 

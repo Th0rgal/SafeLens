@@ -5,7 +5,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { CollapsibleCard } from "@/components/ui/collapsible-card";
 import { useToast } from "@/components/ui/toast";
-import { parseEvidencePackage, getChainName, verifySignature, identifyProposer, analyzeTarget } from "@safelens/core";
+import {
+  parseEvidencePackage,
+  getChainName,
+  verifyEvidencePackage,
+} from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
@@ -13,7 +17,6 @@ import { AddressDisplay } from "@/components/address-display";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning } from "@safelens/core";
-import type { Hash, Hex, Address } from "viem";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -40,41 +43,37 @@ export default function VerifyScreen() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(true);
   const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
+  const [proposer, setProposer] = useState<string | null>(null);
+  const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
-
-  const proposer = evidence ? identifyProposer(evidence.confirmations) : null;
-  const targetWarnings = evidence && config
-    ? analyzeTarget(evidence.transaction.to, evidence.transaction.operation, config)
-    : [];
 
   useEffect(() => {
     if (!evidence) {
       setSigResults({});
+      setProposer(null);
+      setTargetWarnings([]);
       return;
     }
 
     let cancelled = false;
 
     async function verifyAll() {
-      const results: Record<string, SignatureCheckResult> = {};
-      for (const conf of evidence!.confirmations) {
-        const result = await verifySignature(
-          evidence!.safeTxHash as Hash,
-          conf.signature as Hex,
-          conf.owner as Address
-        );
-        if (cancelled) return;
-        results[conf.owner] = result;
-      }
-      if (!cancelled) setSigResults(results);
+      const report = await verifyEvidencePackage(evidence, {
+        settings: config ?? null,
+      });
+
+      if (cancelled) return;
+      setSigResults(report.signatures.byOwner);
+      setProposer(report.proposer);
+      setTargetWarnings(report.targetWarnings);
     }
 
     verifyAll();
     return () => {
       cancelled = true;
     };
-  }, [evidence]);
+  }, [evidence, config]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
