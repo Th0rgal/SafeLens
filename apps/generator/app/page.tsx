@@ -14,6 +14,7 @@ import {
   createEvidencePackage,
   buildGenerationSources,
   TRUST_CONFIG,
+  SUPPORTED_CHAIN_IDS,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
@@ -21,37 +22,74 @@ import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
 
+type PendingTx = SafeTransaction & { _chainId: number };
+
+const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+function extractAddress(input: string): string | null {
+  const trimmed = input.trim();
+  if (ADDRESS_RE.test(trimmed)) return trimmed;
+  // Also match if user pasted with surrounding quotes or whitespace
+  const match = trimmed.match(/0x[a-fA-F0-9]{40}/);
+  return match && !trimmed.startsWith("http") ? match[0] : null;
+}
+
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
   const [copied, setCopied] = useState(false);
-  const [pendingTxs, setPendingTxs] = useState<SafeTransaction[] | null>(null);
-  const [queueContext, setQueueContext] = useState<{ chainId: number; safeAddress: string } | null>(null);
+  const [pendingTxs, setPendingTxs] = useState<PendingTx[] | null>(null);
+  const [safeAddress, setSafeAddress] = useState<string | null>(null);
 
   const handleAnalyze = async () => {
     setError(null);
     setEvidence(null);
     setPendingTxs(null);
-    setQueueContext(null);
+    setSafeAddress(null);
     setLoading(true);
 
     try {
-      const result = parseSafeUrlFlexible(url);
+      const input = url.trim();
+      const rawAddress = extractAddress(input);
 
-      if (result.type === "transaction") {
-        const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
-        const pkg = createEvidencePackage(tx, result.data.chainId, url);
-        setEvidence(pkg);
-      } else {
-        const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
-        if (txs.length === 0) {
-          setError("No pending transactions found for this Safe.");
+      if (rawAddress) {
+        // Raw address — query all supported chains in parallel
+        const results = await Promise.allSettled(
+          SUPPORTED_CHAIN_IDS.map(async (chainId) => {
+            const txs = await fetchPendingTransactions(chainId, rawAddress);
+            return txs.map((tx): PendingTx => ({ ...tx, _chainId: chainId }));
+          })
+        );
+
+        const allTxs = results.flatMap((r) =>
+          r.status === "fulfilled" ? r.value : []
+        );
+
+        if (allTxs.length === 0) {
+          setError("No pending transactions found for this address on any supported chain.");
           return;
         }
-        setPendingTxs(txs);
-        setQueueContext(result.data);
+
+        setPendingTxs(allTxs);
+        setSafeAddress(rawAddress);
+      } else {
+        const result = parseSafeUrlFlexible(input);
+
+        if (result.type === "transaction") {
+          const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
+          const pkg = createEvidencePackage(tx, result.data.chainId, input);
+          setEvidence(pkg);
+        } else {
+          const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
+          if (txs.length === 0) {
+            setError("No pending transactions found for this Safe.");
+            return;
+          }
+          setPendingTxs(txs.map((tx): PendingTx => ({ ...tx, _chainId: result.data.chainId })));
+          setSafeAddress(result.data.safeAddress);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to analyze transaction");
@@ -60,16 +98,16 @@ export default function AnalyzePage() {
     }
   };
 
-  const handleSelectTransaction = async (tx: SafeTransaction) => {
-    if (!queueContext) return;
+  const handleSelectTransaction = async (tx: PendingTx) => {
     setLoading(true);
     setPendingTxs(null);
     setError(null);
 
     try {
-      const prefix = getChainPrefix(queueContext.chainId);
-      const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${queueContext.safeAddress}&id=multisig_${queueContext.safeAddress}_${tx.safeTxHash}`;
-      const pkg = createEvidencePackage(tx, queueContext.chainId, syntheticUrl);
+      const prefix = getChainPrefix(tx._chainId);
+      const addr = safeAddress ?? tx.safe;
+      const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
+      const pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
       setEvidence(pkg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create evidence package");
@@ -92,64 +130,80 @@ export default function AnalyzePage() {
     }
   }, [evidence]);
 
+  // Group pending txs by chain for display
+  const txsByChain = pendingTxs
+    ? Array.from(
+        pendingTxs.reduce((map, tx) => {
+          const arr = map.get(tx._chainId) ?? [];
+          arr.push(tx);
+          map.set(tx._chainId, arr);
+          return map;
+        }, new Map<number, PendingTx[]>())
+      )
+    : null;
+
+  const multipleChains = txsByChain ? txsByChain.length > 1 : false;
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <div className="mb-8">
         <h1 className="mb-2 text-3xl font-bold">Generate Evidence</h1>
         <p className="text-muted">
-          Paste a Safe transaction URL to build a portable evidence package.
+          Paste a Safe transaction URL or address to build a portable evidence package.
         </p>
       </div>
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Transaction URL</CardTitle>
+          <CardTitle>Transaction URL or Safe Address</CardTitle>
           <CardDescription>
-            Paste a transaction URL or a queue URL from app.safe.global
+            Paste a transaction URL, a queue URL, or a Safe address (0x...)
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <Input
               type="text"
-              placeholder="https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_... or .../queue?safe=eth:0x..."
+              placeholder="0x... or https://app.safe.global/transactions/..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="flex-1"
             />
             <Button onClick={handleAnalyze} disabled={loading || !url}>
-              {loading ? "Analyzing..." : "Analyze"}
+              {loading ? "Searching..." : "Analyze"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Trust Assumptions</CardTitle>
-          <CardDescription>
-            Every input used to build evidence, with explicit trust level.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {generationSources.map((source) => {
-            const trust = TRUST_CONFIG[source.trust];
-            return (
-              <div
-                key={source.id}
-                className="rounded-md border border-border/15 bg-surface-2/40 p-3"
-              >
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{source.title}</span>
-                  <span className={`text-xs ${trust.color}`}>{trust.label}</span>
+      {!evidence && !pendingTxs && !loading && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Trust Assumptions</CardTitle>
+            <CardDescription>
+              Every input used to build evidence, with explicit trust level.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {generationSources.map((source) => {
+              const trust = TRUST_CONFIG[source.trust];
+              return (
+                <div
+                  key={source.id}
+                  className="rounded-md border border-border/15 bg-surface-2/40 p-3"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">{source.title}</span>
+                    <span className={`text-xs ${trust.color}`}>{trust.label}</span>
+                  </div>
+                  <p className="text-xs text-muted">{source.summary}</p>
+                  <p className="mt-1 text-xs text-muted">{source.detail}</p>
                 </div>
-                <p className="text-xs text-muted">{source.summary}</p>
-                <p className="mt-1 text-xs text-muted">{source.detail}</p>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -158,41 +212,57 @@ export default function AnalyzePage() {
         </Alert>
       )}
 
-      {pendingTxs && queueContext && (
+      {txsByChain && (
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Select a Transaction</CardTitle>
             <CardDescription>
-              {pendingTxs.length} pending transaction{pendingTxs.length !== 1 ? "s" : ""} found on {getChainName(queueContext.chainId)}. Pick one to generate evidence.
+              {pendingTxs!.length} pending transaction{pendingTxs!.length !== 1 ? "s" : ""} found{multipleChains ? " across multiple chains" : ` on ${getChainName(txsByChain[0][0])}`}. Pick one to generate evidence.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
-            {pendingTxs.map((tx) => (
-              <button
-                key={tx.safeTxHash}
-                onClick={() => handleSelectTransaction(tx)}
-                className="w-full rounded-md border border-border/15 bg-surface-2/40 p-3 text-left transition-colors hover:bg-surface-2/70"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium">#{tx.nonce}</span>
-                    <span className="font-mono text-xs text-muted">
-                      {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
-                    </span>
-                    {tx.dataDecoded?.method && (
-                      <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium">
-                        {tx.dataDecoded.method}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted">
-                    <span>
-                      {tx.confirmations.length}/{tx.confirmationsRequired} sigs
-                    </span>
-                    <span>{new Date(tx.submissionDate).toLocaleDateString()}</span>
-                  </div>
+          <CardContent className="space-y-4">
+            {txsByChain.map(([chainId, txs]) => (
+              <div key={chainId}>
+                {multipleChains && (
+                  <div className="mb-2 text-xs font-medium text-muted">{getChainName(chainId)}</div>
+                )}
+                <div className="space-y-2">
+                  {txs.map((tx) => (
+                    <button
+                      key={tx.safeTxHash}
+                      onClick={() => handleSelectTransaction(tx)}
+                      className="w-full rounded-md border border-border/15 bg-surface-2/40 p-3 text-left transition-colors hover:bg-surface-2/70"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-medium">#{tx.nonce}</span>
+                          <span className="font-mono text-xs text-muted">
+                            {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
+                          </span>
+                          {tx.dataDecoded?.method && (
+                            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium">
+                              {tx.dataDecoded.method}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-muted">
+                          {tx.confirmations.length >= tx.confirmationsRequired ? (
+                            <span className="flex items-center gap-1 text-green-400">
+                              <svg className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>
+                              {tx.confirmations.length}/{tx.confirmationsRequired}
+                            </span>
+                          ) : (
+                            <span>
+                              {tx.confirmations.length}/{tx.confirmationsRequired} sigs
+                            </span>
+                          )}
+                          <span>{new Date(tx.submissionDate).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
+              </div>
             ))}
           </CardContent>
         </Card>

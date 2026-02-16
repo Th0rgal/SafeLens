@@ -132,6 +132,9 @@ export function getChainPrefix(chainId: number): string {
   return entry[0];
 }
 
+/** Chain IDs with Safe Transaction Service support (excludes deprecated testnets) */
+export const SUPPORTED_CHAIN_IDS = [1, 11155111, 137, 42161, 10, 100, 8453] as const;
+
 /**
  * Get Safe Transaction Service API URL for a chain
  */
