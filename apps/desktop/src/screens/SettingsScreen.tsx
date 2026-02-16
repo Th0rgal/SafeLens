@@ -183,7 +183,7 @@ export default function SettingsScreen() {
             <Button onClick={handleExport} variant="outline" size="sm">Export</Button>
             <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm">Import</Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
-            <Button onClick={handleReset} variant="ghost" size="sm">Reset</Button>
+            <Button onClick={handleReset} variant="outline" size="sm" className="text-red-400/70 hover:text-red-400 border-red-500/15 hover:border-red-500/25">Reset</Button>
           </div>
         </div>
       </div>
