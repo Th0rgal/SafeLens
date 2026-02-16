@@ -38,11 +38,13 @@ export function Sidebar({
     if (!blurDebugEnabled) return;
     if (!asideRef.current) return;
     const el = asideRef.current;
+    let cancelled = false;
     let cleanup: (() => void) | undefined;
     import("@/lib/debug/blur-diagnostics").then(({ attachBlurDiagnostics }) => {
+      if (cancelled) return;
       cleanup = attachBlurDiagnostics(el);
     });
-    return () => cleanup?.();
+    return () => { cancelled = true; cleanup?.(); };
   }, [blurDebugEnabled]);
 
   return (
