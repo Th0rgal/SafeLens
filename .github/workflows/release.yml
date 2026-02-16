@@ -1,0 +1,138 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            name: macos-arm64
+            bundles: dmg
+          - platform: windows-latest
+            name: windows-x64
+            bundles: msi,nsis
+          - platform: ubuntu-22.04
+            name: linux-x64
+            bundles: deb,appimage
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './apps/desktop/src-tauri -> target'
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.0-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - run: bun install --frozen-lockfile
+
+      - name: Install Tauri CLI
+        shell: bash
+        run: cargo install tauri-cli --version "^1.5"
+
+      - name: Build Tauri app
+        shell: bash
+        working-directory: apps/desktop
+        run: cargo tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Collect artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          BUNDLE="apps/desktop/src-tauri/target/release/bundle"
+          echo "Bundle dir contents:"
+          ls -R "$BUNDLE" 2>/dev/null | head -50 || echo "Bundle dir not found"
+          case "${{ matrix.platform }}" in
+            macos-*)
+              cp "$BUNDLE"/dmg/*.dmg artifacts/SafeLens-${{ matrix.name }}.dmg
+              ;;
+            windows-*)
+              cp "$BUNDLE"/msi/*.msi artifacts/SafeLens-${{ matrix.name }}.msi
+              cp "$BUNDLE"/nsis/*-setup.exe artifacts/SafeLens-${{ matrix.name }}-setup.exe 2>/dev/null || true
+              ;;
+            ubuntu-*)
+              cp "$BUNDLE"/appimage/*.AppImage artifacts/SafeLens-${{ matrix.name }}.AppImage
+              cp "$BUNDLE"/deb/*.deb artifacts/SafeLens-${{ matrix.name }}.deb
+              ;;
+          esac
+          echo "Collected:"
+          ls -lh artifacts/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SafeLens-${{ matrix.name }}
+          path: artifacts/*
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release-files
+          find artifacts -type f -exec cp {} release-files/ \;
+          ls -la release-files/
+
+      - name: Generate checksums
+        working-directory: release-files
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: SafeLens ${{ github.ref_name }}
+          body: |
+            ## Downloads
+
+            | Platform | Download |
+            |----------|----------|
+            | macOS (Apple Silicon) | `SafeLens-macos-arm64.dmg` |
+            | Windows (installer) | `SafeLens-windows-x64.msi` |
+            | Linux (AppImage) | `SafeLens-linux-x64.AppImage` |
+            | Linux (Debian) | `SafeLens-linux-x64.deb` |
+
+            ## Checksums
+
+            See `SHA256SUMS.txt` for file integrity verification.
+          files: release-files/*
