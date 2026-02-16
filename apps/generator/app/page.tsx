@@ -138,16 +138,16 @@ export default function AnalyzePage() {
                 <div className="font-mono">{getChainName(evidence.chainId)}</div>
               </div>
               <div>
+                <div className="font-medium text-muted">Nonce</div>
+                <div className="font-mono">{evidence.transaction.nonce}</div>
+              </div>
+              <div>
                 <div className="font-medium text-muted">Safe Address</div>
                 <AddressDisplay address={evidence.safeAddress} />
               </div>
               <div>
-                <div className="font-medium text-muted">Safe TX Hash</div>
-                <div className="font-mono text-xs">{evidence.safeTxHash}</div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Nonce</div>
-                <div className="font-mono">{evidence.transaction.nonce}</div>
+                <div className="font-medium text-muted">Target</div>
+                <AddressDisplay address={evidence.transaction.to} />
               </div>
               <div>
                 <div className="font-medium text-muted">Signatures</div>
@@ -155,9 +155,9 @@ export default function AnalyzePage() {
                   {evidence.confirmations.length} / {evidence.confirmationsRequired}
                 </div>
               </div>
-              <div>
-                <div className="font-medium text-muted">Target</div>
-                <AddressDisplay address={evidence.transaction.to} />
+              <div className="col-span-2">
+                <div className="font-medium text-muted">Safe TX Hash</div>
+                <AddressDisplay address={evidence.safeTxHash} />
               </div>
             </div>
 
