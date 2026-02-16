@@ -10,6 +10,7 @@
       "version": "0.2.0",
       "dependencies": {
         "@safelens/core": "workspace:*",
+        "@safelens/shared-theme": "workspace:*",
         "@tauri-apps/api": "^1.5.0",
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.1.0",
@@ -36,6 +37,7 @@
       "version": "0.2.0",
       "dependencies": {
         "@safelens/core": "workspace:*",
+        "@safelens/shared-theme": "workspace:*",
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.1.0",
         "lucide-react": "^0.454.0",
@@ -55,6 +57,10 @@
         "tailwindcss": "^3.4.0",
         "typescript": "^5.6.0",
       },
+    },
+    "apps/shared-theme": {
+      "name": "@safelens/shared-theme",
+      "version": "0.2.0",
     },
     "packages/cli": {
       "name": "@safelens/cli",
@@ -314,6 +320,8 @@
     "@safelens/desktop": ["@safelens/desktop@workspace:apps/desktop"],
 
     "@safelens/generator": ["@safelens/generator@workspace:apps/generator"],
+
+    "@safelens/shared-theme": ["@safelens/shared-theme@workspace:apps/shared-theme"],
 
     "@scure/base": ["@scure/base@1.2.6", "", {}, "sha512-g/nm5FgUa//MCj1gV09zTJTaM6KBAHqLN907YVQqf7zC49+DcO4B1so4ZX07Ef10Twr6nuqYEH9GEggFXA4Fmg=="],
 

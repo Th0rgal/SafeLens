@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@safelens/core"],
+  transpilePackages: ["@safelens/core", "@safelens/shared-theme"],
 };
 
 module.exports = nextConfig;
