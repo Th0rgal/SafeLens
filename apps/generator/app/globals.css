@@ -1,0 +1,14 @@
+@import "../../shared-theme/theme.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  overflow: auto;
+}
+
+body {
+  background: rgb(var(--background));
+}

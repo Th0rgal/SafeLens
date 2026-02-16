@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "safeAddress": "0x1234567890123456789012345678901234567890",
+  "safeTxHash": "0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+  "chainId": 1,
+  "transaction": {
+    "to": "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+    "value": "1000000000000000000",
+    "data": "0xa1903eab0000000000000000000000000000000000000000000000000000000000000000",
+    "operation": 0,
+    "nonce": 0,
+    "safeTxGas": "0",
+    "baseGas": "0",
+    "gasPrice": "0",
+    "gasToken": "0x0000000000000000000000000000000000000000",
+    "refundReceiver": "0x0000000000000000000000000000000000000000"
+  },
+  "confirmations": [
+    {
+      "owner": "0x1111111111111111111111111111111111111111",
+      "signature": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001b",
+      "submissionDate": "2024-02-13T12:00:00Z"
+    }
+  ],
+  "confirmationsRequired": 1,
+  "dataDecoded": {
+    "method": "submit",
+    "parameters": [
+      {
+        "name": "_referral",
+        "type": "address",
+        "value": "0x0000000000000000000000000000000000000000"
+      }
+    ]
+  },
+  "sources": {
+    "safeApiUrl": "https://safe-transaction-mainnet.safe.global",
+    "transactionUrl": "https://app.safe.global/transactions/tx?id=multisig_0x1234567890123456789012345678901234567890_0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789&safe=eth:0x1234567890123456789012345678901234567890"
+  },
+  "packagedAt": "2024-02-13T12:00:00Z"
+}

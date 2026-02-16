@@ -1,37 +1,20 @@
 {
   "name": "safelens",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "next": "^14.2.0",
-    "react": "^18.3.0",
-    "react-dom": "^18.3.0",
-    "viem": "^2.21.0",
-    "zod": "^3.23.0",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.1.0",
-    "tailwind-merge": "^2.5.0",
-    "lucide-react": "^0.454.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/react": "^18.3.0",
-    "@types/react-dom": "^18.3.0",
-    "autoprefixer": "^10.4.0",
-    "eslint": "^8.57.0",
-    "eslint-config-next": "^14.2.0",
-    "postcss": "^8.4.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.6.0",
-    "vitest": "^4.0.18"
+    "dev": "bun run --cwd apps/generator dev",
+    "dev:generator": "bun run --cwd apps/generator dev",
+    "dev:desktop": "bun run --cwd apps/desktop dev",
+    "dev:tauri": "bun run --cwd apps/desktop tauri dev",
+    "build": "bun run --cwd apps/generator build && bun run --cwd apps/desktop build",
+    "build:tauri": "bun run --cwd apps/desktop tauri build",
+    "test": "bun run --cwd packages/core test && bun run --cwd packages/cli test && bun run --cwd apps/generator test && bun run --cwd apps/desktop test",
+    "type-check": "bun run --cwd packages/core type-check && bun run --cwd packages/cli type-check && bun run --cwd apps/generator type-check && bun run --cwd apps/desktop type-check",
+    "lint": "bun run --cwd apps/generator lint"
   }
 }

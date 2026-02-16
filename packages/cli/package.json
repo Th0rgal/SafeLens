@@ -1,0 +1,21 @@
+{
+  "name": "@safelens/cli",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "safelens": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "bun ./src/cli.ts",
+    "test": "bun test",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@safelens/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
+  }
+}

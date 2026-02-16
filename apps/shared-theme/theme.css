@@ -1,0 +1,143 @@
+:root {
+  --radius: 0.375rem;
+
+  --background: 13 14 16;
+  --background-elevated: 22 23 26;
+  --background-tertiary: 30 31 35;
+  --background-inset: 17 18 20;
+
+  --foreground: 232 228 214;
+  --foreground-secondary: 170 166 154;
+  --foreground-tertiary: 120 116 106;
+
+  --border: 60 63 70;
+
+  --accent: 176 126 82;
+  --accent-hover: 196 150 101;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+html {
+  color-scheme: dark;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: transparent;
+  color: rgb(var(--foreground));
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+code, pre, kbd, samp,
+input, textarea, select {
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+}
+
+/* Strip native bevel / 3D shadow from form controls */
+input, textarea, select, button {
+  -webkit-appearance: none;
+  appearance: none;
+  box-shadow: none;
+  outline: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgb(var(--accent) / 0.28);
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.collapsible-content {
+  transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+@layer utilities {
+  .glass {
+    background: rgb(var(--background-elevated));
+  }
+
+  .glass-subtle {
+    background: rgb(var(--background-elevated));
+  }
+
+  .glass-panel {
+    background: rgb(var(--background-tertiary));
+    border: 1px solid rgb(var(--border) / 0.12);
+  }
+
+  .glass-field {
+    background: rgb(var(--background-inset));
+  }
+
+  /*
+   * Sidebar — translucent overlay on top of native macOS vibrancy.
+   *
+   * DO NOT replace this with CSS backdrop-filter: blur(). It causes
+   * persistent compositor glitches (flicker, white flashes, dropout
+   * frames) in WebKit on macOS, especially during resize and focus
+   * changes. The native blur is rendered by the macOS WindowServer
+   * via NSVisualEffectMaterial::Sidebar (applied in main.rs) and is
+   * the only reliable approach.
+   *
+   * The semi-transparent background tints the native blur to match
+   * the app's dark color scheme while letting it show through.
+   */
+  .glass-sidebar {
+    background: rgb(8 6 3 / 0.23);
+    position: relative;
+  }
+
+  .text-muted {
+    color: rgb(var(--foreground-secondary));
+  }
+}
+
+/* Debug drag regions — toggle with Cmd+Shift+D */
+.debug-drag .drag-region {
+  background: rgba(255, 0, 0, 0.25) !important;
+  outline: 2px dashed red;
+}
