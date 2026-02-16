@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ShieldCheck, Library, Settings, Fingerprint } from "lucide-react";
 import { computeConfigFingerprint, colorFromHash } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { attachBlurDiagnostics } from "@/lib/debug/blur-diagnostics";
 
 const NAV_ITEMS = [
   { id: "verify", label: "Verify", icon: ShieldCheck },
@@ -37,7 +36,12 @@ export function Sidebar({
   useEffect(() => {
     if (!blurDebugEnabled) return;
     if (!asideRef.current) return;
-    return attachBlurDiagnostics(asideRef.current);
+    const el = asideRef.current;
+    let cleanup: (() => void) | undefined;
+    import("@/lib/debug/blur-diagnostics").then(({ attachBlurDiagnostics }) => {
+      cleanup = attachBlurDiagnostics(el);
+    });
+    return () => cleanup?.();
   }, [blurDebugEnabled]);
 
   return (
