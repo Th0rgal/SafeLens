@@ -25,7 +25,7 @@ export {
 export type { DescriptorIndex, IndexEntry } from "./index";
 
 export { createERC7730Interpreter } from "./interpreter";
-export type { ERC7730Details } from "./interpreter";
+export { setGlobalDescriptors } from "./global-index";
 
 export { bundledDescriptors } from "./descriptors/index";
 

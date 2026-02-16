@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import type { SettingsConfig } from "@safelens/core";
-import { loadSettingsConfig, saveSettingsConfig, resetSettingsConfig } from "@safelens/core";
+import { loadSettingsConfig, saveSettingsConfig, resetSettingsConfig, setGlobalDescriptors } from "@safelens/core";
 import { createTauriSettingsStore } from "./store";
 
 interface SettingsContextValue {
@@ -19,7 +19,10 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
     let active = true;
     (async () => {
       const loaded = await loadSettingsConfig(settingsStore);
-      if (active) setConfig(loaded);
+      if (active) {
+        setConfig(loaded);
+        setGlobalDescriptors(loaded.erc7730Descriptors ?? []);
+      }
     })();
 
     return () => {
@@ -29,12 +32,14 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
 
   const saveConfig = useCallback(async (newConfig: SettingsConfig) => {
     setConfig(newConfig);
+    setGlobalDescriptors(newConfig.erc7730Descriptors ?? []);
     await saveSettingsConfig(settingsStore, newConfig);
   }, []);
 
   const resetConfig = useCallback(async () => {
     const defaults = await resetSettingsConfig(settingsStore);
     setConfig(defaults);
+    setGlobalDescriptors(defaults.erc7730Descriptors ?? []);
   }, []);
 
   const value = useMemo(

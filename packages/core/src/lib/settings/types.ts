@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ERC7730DescriptorSchema } from "../erc7730/parser";
 
 export const chainConfigSchema = z.object({
   name: z.string().min(1),
@@ -22,6 +23,7 @@ export const settingsConfigSchema = z.object({
   chains: z.record(z.string(), chainConfigSchema),
   addressBook: z.array(addressBookEntrySchema),
   contractRegistry: z.array(contractRegistryEntrySchema),
+  erc7730Descriptors: z.array(ERC7730DescriptorSchema).optional().default([]),
 });
 
 export type ChainConfig = z.infer<typeof chainConfigSchema>;

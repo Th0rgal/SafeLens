@@ -4,10 +4,10 @@ import { computeConfigFingerprint, colorFromHash } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 
 const NAV_ITEMS = [
-  { id: "verify", label: "Verify", icon: ShieldCheck },
-  { id: "address-book", label: "Registries", icon: Library },
-  { id: "erc7730", label: "ERC-7730", icon: ScrollText },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "verify", label: "Verify", icon: ShieldCheck, badge: undefined },
+  { id: "address-book", label: "Registries", icon: Library, badge: undefined },
+  { id: "erc7730", label: "Clear Signing", icon: ScrollText, badge: undefined },
+  { id: "settings", label: "Settings", icon: Settings, badge: undefined },
 ] as const;
 
 export type NavId = (typeof NAV_ITEMS)[number]["id"];
@@ -71,7 +71,12 @@ export function Sidebar({
               }`}
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge != null && (
+                <span className="rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[10px] leading-none text-muted">
+                  {item.badge}
+                </span>
+              )}
             </button>
           );
         })}

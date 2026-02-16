@@ -37,6 +37,25 @@ export function getGlobalIndex(): DescriptorIndex {
 }
 
 /**
+ * Set the global descriptors from raw (unparsed) JSON objects.
+ * Parses each descriptor and rebuilds the global index.
+ */
+export function setGlobalDescriptors(rawDescriptors: unknown[]): void {
+  const descriptors = rawDescriptors
+    .map((json) => {
+      const result = parseDescriptor(json);
+      if (!result.success) {
+        console.warn("Failed to parse descriptor:", result.error);
+        return null;
+      }
+      return result.descriptor;
+    })
+    .filter((d) => d !== null);
+
+  globalIndex = buildIndex(descriptors);
+}
+
+/**
  * Reset the global index (useful for testing or after importing new descriptors).
  */
 export function resetGlobalIndex(): void {

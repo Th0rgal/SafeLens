@@ -1,4 +1,5 @@
 import type { SettingsConfig } from "./types";
+import { bundledDescriptors } from "../erc7730/descriptors/index";
 
 /**
  * Default settings including the built-in contract registry.
@@ -16,6 +17,7 @@ import type { SettingsConfig } from "./types";
  */
 export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
   version: "1.0",
+  erc7730Descriptors: bundledDescriptors as SettingsConfig["erc7730Descriptors"],
   chains: {
     "1": { name: "Ethereum" },
     "10": { name: "Optimism" },
