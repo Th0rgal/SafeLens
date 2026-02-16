@@ -322,30 +322,9 @@ export function formatAddressForTable(address: string, availableWidth: number): 
 }
 
 /**
- * Format a URL for display - truncate intelligently
+ * Format a URL for display — always shows the full URL.
+ * The table renderer handles wrapping onto multiple lines.
  */
 export function formatUrl(url: string): string {
-  const terminalWidth = getTerminalWidth();
-  const maxLength = Math.max(40, terminalWidth - 30);
-
-  if (url.length <= maxLength) {
-    return code(url);
-  }
-
-  try {
-    // Try to keep the domain and end of URL visible
-    const urlObj = new URL(url);
-    const domain = urlObj.hostname;
-    const path = urlObj.pathname + urlObj.search;
-
-    if (domain.length + 20 < maxLength) {
-      const remaining = maxLength - domain.length - 10;
-      const pathTruncated = "..." + path.slice(-remaining);
-      return code(urlObj.protocol + "//" + domain + pathTruncated);
-    }
-  } catch {
-    // URL parsing failed, fall through to simple truncation
-  }
-
-  return code(truncateMiddle(url, maxLength));
+  return code(url);
 }
