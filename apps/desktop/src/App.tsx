@@ -7,6 +7,7 @@ import VerifyScreen from "./screens/VerifyScreen";
 
 const AddressBookScreen = lazy(() => import("./screens/AddressBookScreen"));
 const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
+const ERC7730Screen = lazy(() => import("./screens/ERC7730Screen"));
 
 /*
  * Window dragging — DO NOT remove or replace with data-tauri-drag-region.
@@ -92,6 +93,7 @@ export default function App() {
               {active === "verify" && <VerifyScreen />}
               <Suspense>
                 {active === "address-book" && <AddressBookScreen />}
+                {active === "erc7730" && <ERC7730Screen />}
                 {active === "settings" && <SettingsScreen />}
               </Suspense>
             </div>

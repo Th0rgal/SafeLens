@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ShieldCheck, Library, Settings, Fingerprint } from "lucide-react";
+import { ShieldCheck, Library, ScrollText, Settings, Fingerprint } from "lucide-react";
 import { computeConfigFingerprint, colorFromHash } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 
 const NAV_ITEMS = [
   { id: "verify", label: "Verify", icon: ShieldCheck },
   { id: "address-book", label: "Registries", icon: Library },
+  { id: "erc7730", label: "ERC-7730", icon: ScrollText },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
