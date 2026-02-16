@@ -1,4 +1,8 @@
-# SafeLens
+<p align="center">
+  <img src="apps/desktop/src-tauri/icons/icon.png" width="128" alt="SafeLens" />
+</p>
+
+<h1 align="center">SafeLens</h1>
 
 SafeLens is a minimal toolkit for working with Gnosis Safe multisig evidence:
 

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { ShieldCheck, Library, Settings, Fingerprint } from "lucide-react";
+import { ShieldCheck, Library, ScrollText, Settings, Fingerprint } from "lucide-react";
 import { computeConfigFingerprint, colorFromHash } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { attachBlurDiagnostics } from "@/lib/debug/blur-diagnostics";
 
 const NAV_ITEMS = [
-  { id: "verify", label: "Verify", icon: ShieldCheck },
-  { id: "address-book", label: "Registries", icon: Library },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "verify", label: "Verify", icon: ShieldCheck, badge: undefined },
+  { id: "address-book", label: "Registries", icon: Library, badge: undefined },
+  { id: "erc7730", label: "Clear Signing", icon: ScrollText, badge: undefined },
+  { id: "settings", label: "Settings", icon: Settings, badge: undefined },
 ] as const;
 
 export type NavId = (typeof NAV_ITEMS)[number]["id"];
@@ -37,7 +37,14 @@ export function Sidebar({
   useEffect(() => {
     if (!blurDebugEnabled) return;
     if (!asideRef.current) return;
-    return attachBlurDiagnostics(asideRef.current);
+    const el = asideRef.current;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    import("@/lib/debug/blur-diagnostics").then(({ attachBlurDiagnostics }) => {
+      if (cancelled) return;
+      cleanup = attachBlurDiagnostics(el);
+    });
+    return () => { cancelled = true; cleanup?.(); };
   }, [blurDebugEnabled]);
 
   return (
@@ -66,7 +73,12 @@ export function Sidebar({
               }`}
             >
               <Icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badge != null && (
+                <span className="rounded-full bg-white/[0.08] px-1.5 py-0.5 text-[10px] leading-none text-muted">
+                  {item.badge}
+                </span>
+              )}
             </button>
           );
         })}

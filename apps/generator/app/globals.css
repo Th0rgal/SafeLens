@@ -1,4 +1,4 @@
-@import "../../shared-theme/theme.css";
+@import "@safelens/shared-theme/theme.css";
 
 @tailwind base;
 @tailwind components;

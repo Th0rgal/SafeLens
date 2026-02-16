@@ -17,6 +17,7 @@ import {
   interpretTransaction,
   computeSafeTxHashDetailed,
   resolveAddress,
+  setGlobalDescriptors,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -165,7 +166,8 @@ function printVerificationText(
     const interpretation = interpretTransaction(
       evidence.dataDecoded,
       evidence.transaction.to,
-      evidence.transaction.operation
+      evidence.transaction.operation,
+      settings?.disabledInterpreters ?? []
     );
 
     if (interpretation) {
@@ -298,7 +300,9 @@ async function loadSettingsForVerify(args: string[]) {
   if (hasFlag(args, "--no-settings")) return null;
   const customPath = getFlag(args, "--settings") || getFlag(args, "--path");
   const store = createNodeSettingsStore(customPath);
-  return await loadSettingsConfig(store, DEFAULT_SETTINGS_CONFIG);
+  const config = await loadSettingsConfig(store, DEFAULT_SETTINGS_CONFIG);
+  setGlobalDescriptors(config.erc7730Descriptors ?? []);
+  return config;
 }
 
 async function runVerify(args: string[]) {

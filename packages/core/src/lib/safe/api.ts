@@ -1,4 +1,4 @@
-import { SafeTransaction, safeTransactionSchema } from "../types";
+import { SafeTransaction, SafeTransactionList, safeTransactionSchema, safeTransactionListSchema } from "../types";
 import { getSafeApiUrl } from "./url-parser";
 
 /**
@@ -32,5 +32,60 @@ export async function fetchSafeTransaction(
       throw new Error(`Failed to fetch Safe transaction: ${error.message}`);
     }
     throw new Error("Failed to fetch Safe transaction");
+  }
+}
+
+/**
+ * Fetch the current on-chain nonce for a Safe
+ */
+export async function fetchSafeNonce(
+  chainId: number,
+  safeAddress: string
+): Promise<number> {
+  const apiUrl = getSafeApiUrl(chainId);
+  const url = `${apiUrl}/api/v1/safes/${safeAddress}/`;
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Safe info: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.nonce;
+}
+
+/**
+ * Fetch pending (unexecuted) transactions for a Safe,
+ * filtering out superseded proposals (nonce < current on-chain nonce).
+ */
+export async function fetchPendingTransactions(
+  chainId: number,
+  safeAddress: string
+): Promise<SafeTransaction[]> {
+  const apiUrl = getSafeApiUrl(chainId);
+  const txUrl = `${apiUrl}/api/v1/safes/${safeAddress}/multisig-transactions/?executed=false&ordering=-nonce&limit=20`;
+
+  try {
+    const [txResponse, currentNonce] = await Promise.all([
+      fetch(txUrl),
+      fetchSafeNonce(chainId, safeAddress),
+    ]);
+
+    if (!txResponse.ok) {
+      if (txResponse.status === 404) {
+        throw new Error("Safe not found");
+      }
+      throw new Error(`API request failed: ${txResponse.status} ${txResponse.statusText}`);
+    }
+
+    const data = await txResponse.json();
+    const validated = safeTransactionListSchema.parse(data);
+
+    return validated.results.filter((tx) => tx.nonce >= currentNonce);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch pending transactions: ${error.message}`);
+    }
+    throw new Error("Failed to fetch pending transactions");
   }
 }

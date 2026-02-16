@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { sharedTailwindThemeConfig } from "../shared-theme/tailwind";
+import { sharedTailwindThemeConfig } from "@safelens/shared-theme/tailwind";
 
 const config: Config = {
   ...sharedTailwindThemeConfig,

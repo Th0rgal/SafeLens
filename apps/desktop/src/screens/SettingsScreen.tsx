@@ -178,12 +178,12 @@ export default function SettingsScreen() {
         </Card>
 
         <div className="space-y-2">
-          <p className="text-xs text-muted">Export and import includes chains, address book, and contract registry.</p>
+          <p className="text-xs text-muted">Export and import includes chains, address book, contract registry, ERC-7730 descriptors, and interpreter preferences. Manage clear signing interpreters and descriptors in the Clear Signing tab.</p>
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleExport} variant="outline" size="sm">Export</Button>
             <Button onClick={() => fileInputRef.current?.click()} variant="outline" size="sm">Import</Button>
             <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
-            <Button onClick={handleReset} variant="ghost" size="sm">Reset</Button>
+            <Button onClick={handleReset} variant="outline" size="sm" className="text-red-400/70 hover:text-red-400 border-red-500/15 hover:border-red-500/25">Reset</Button>
           </div>
         </div>
       </div>

@@ -82,7 +82,7 @@ const ContextSchema = z.object({
   eip712: EIP712ContextSchema.optional(),
 });
 
-const ERC7730DescriptorSchema = z.object({
+export const ERC7730DescriptorSchema = z.object({
   $schema: z.string().optional(),
   context: ContextSchema,
   metadata: MetadataSchema,

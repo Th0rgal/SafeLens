@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@safelens/core": "workspace:*",
+    "@safelens/shared-theme": "workspace:*",
     "@tauri-apps/api": "^1.5.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",

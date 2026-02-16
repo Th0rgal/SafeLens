@@ -12,6 +12,8 @@ interface InterpretationCardProps {
   txOperation: number;
   /** Optional evidence-level context for richer display. */
   context?: EvidenceContext;
+  /** Interpreter IDs to skip. */
+  disabledInterpreters?: string[];
 }
 
 export function InterpretationCard({
@@ -19,10 +21,11 @@ export function InterpretationCard({
   txTo,
   txOperation,
   context,
+  disabledInterpreters,
 }: InterpretationCardProps) {
   const interpretation = useMemo(
-    () => interpretTransaction(dataDecoded, txTo, txOperation),
-    [dataDecoded, txTo, txOperation],
+    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters),
+    [dataDecoded, txTo, txOperation, disabledInterpreters],
   );
 
   if (!interpretation) return null;

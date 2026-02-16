@@ -95,45 +95,43 @@ a {
   transition: max-height 0.2s ease-out, opacity 0.2s ease-out;
 }
 
-@layer utilities {
-  .glass {
-    background: rgb(var(--background-elevated));
-  }
+.glass {
+  background: rgb(var(--background-elevated));
+}
 
-  .glass-subtle {
-    background: rgb(var(--background-elevated));
-  }
+.glass-subtle {
+  background: rgb(var(--background-elevated));
+}
 
-  .glass-panel {
-    background: rgb(var(--background-tertiary));
-    border: 1px solid rgb(var(--border) / 0.12);
-  }
+.glass-panel {
+  background: rgb(var(--background-tertiary));
+  border: 1px solid rgb(var(--border) / 0.12);
+}
 
-  .glass-field {
-    background: rgb(var(--background-inset));
-  }
+.glass-field {
+  background: rgb(var(--background-inset));
+}
 
-  /*
-   * Sidebar — translucent overlay on top of native macOS vibrancy.
-   *
-   * DO NOT replace this with CSS backdrop-filter: blur(). It causes
-   * persistent compositor glitches (flicker, white flashes, dropout
-   * frames) in WebKit on macOS, especially during resize and focus
-   * changes. The native blur is rendered by the macOS WindowServer
-   * via NSVisualEffectMaterial::Sidebar (applied in main.rs) and is
-   * the only reliable approach.
-   *
-   * The semi-transparent background tints the native blur to match
-   * the app's dark color scheme while letting it show through.
-   */
-  .glass-sidebar {
-    background: rgb(8 6 3 / 0.23);
-    position: relative;
-  }
+/*
+ * Sidebar — translucent overlay on top of native macOS vibrancy.
+ *
+ * DO NOT replace this with CSS backdrop-filter: blur(). It causes
+ * persistent compositor glitches (flicker, white flashes, dropout
+ * frames) in WebKit on macOS, especially during resize and focus
+ * changes. The native blur is rendered by the macOS WindowServer
+ * via NSVisualEffectMaterial::Sidebar (applied in main.rs) and is
+ * the only reliable approach.
+ *
+ * The semi-transparent background tints the native blur to match
+ * the app's dark color scheme while letting it show through.
+ */
+.glass-sidebar {
+  background: rgb(8 6 3 / 0.23);
+  position: relative;
+}
 
-  .text-muted {
-    color: rgb(var(--foreground-secondary));
-  }
+.text-muted {
+  color: rgb(var(--foreground-secondary));
 }
 
 /* Debug drag regions — toggle with Cmd+Shift+D */
