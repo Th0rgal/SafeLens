@@ -6,16 +6,18 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  parseSafeUrl,
+  parseSafeUrlFlexible,
   getChainName,
+  getChainPrefix,
   fetchSafeTransaction,
+  fetchPendingTransactions,
   createEvidencePackage,
   buildGenerationSources,
   TRUST_CONFIG,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
-import type { EvidencePackage } from "@safelens/core";
+import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
 
@@ -25,19 +27,52 @@ export default function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
   const [copied, setCopied] = useState(false);
+  const [pendingTxs, setPendingTxs] = useState<SafeTransaction[] | null>(null);
+  const [queueContext, setQueueContext] = useState<{ chainId: number; safeAddress: string } | null>(null);
 
   const handleAnalyze = async () => {
     setError(null);
     setEvidence(null);
+    setPendingTxs(null);
+    setQueueContext(null);
     setLoading(true);
 
     try {
-      const urlData = parseSafeUrl(url);
-      const tx = await fetchSafeTransaction(urlData.chainId, urlData.safeTxHash);
-      const pkg = createEvidencePackage(tx, urlData.chainId, url);
-      setEvidence(pkg);
+      const result = parseSafeUrlFlexible(url);
+
+      if (result.type === "transaction") {
+        const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
+        const pkg = createEvidencePackage(tx, result.data.chainId, url);
+        setEvidence(pkg);
+      } else {
+        const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
+        if (txs.length === 0) {
+          setError("No pending transactions found for this Safe.");
+          return;
+        }
+        setPendingTxs(txs);
+        setQueueContext(result.data);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to analyze transaction");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectTransaction = async (tx: SafeTransaction) => {
+    if (!queueContext) return;
+    setLoading(true);
+    setPendingTxs(null);
+    setError(null);
+
+    try {
+      const prefix = getChainPrefix(queueContext.chainId);
+      const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${queueContext.safeAddress}&id=multisig_${queueContext.safeAddress}_${tx.safeTxHash}`;
+      const pkg = createEvidencePackage(tx, queueContext.chainId, syntheticUrl);
+      setEvidence(pkg);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create evidence package");
     } finally {
       setLoading(false);
     }
@@ -70,14 +105,14 @@ export default function AnalyzePage() {
         <CardHeader>
           <CardTitle>Transaction URL</CardTitle>
           <CardDescription>
-            Paste the URL from app.safe.global (e.g., https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_...)
+            Paste a transaction URL or a queue URL from app.safe.global
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <Input
               type="text"
-              placeholder="https://app.safe.global/transactions/tx?safe=..."
+              placeholder="https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_... or .../queue?safe=eth:0x..."
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               className="flex-1"
@@ -121,6 +156,46 @@ export default function AnalyzePage() {
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      )}
+
+      {pendingTxs && queueContext && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Select a Transaction</CardTitle>
+            <CardDescription>
+              {pendingTxs.length} pending transaction{pendingTxs.length !== 1 ? "s" : ""} found on {getChainName(queueContext.chainId)}. Pick one to generate evidence.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {pendingTxs.map((tx) => (
+              <button
+                key={tx.safeTxHash}
+                onClick={() => handleSelectTransaction(tx)}
+                className="w-full rounded-md border border-border/15 bg-surface-2/40 p-3 text-left transition-colors hover:bg-surface-2/70"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium">#{tx.nonce}</span>
+                    <span className="font-mono text-xs text-muted">
+                      {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
+                    </span>
+                    {tx.dataDecoded?.method && (
+                      <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium">
+                        {tx.dataDecoded.method}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-muted">
+                    <span>
+                      {tx.confirmations.length}/{tx.confirmationsRequired} sigs
+                    </span>
+                    <span>{new Date(tx.submissionDate).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
       )}
 
       {evidence && (

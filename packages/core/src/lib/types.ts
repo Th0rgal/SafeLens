@@ -103,3 +103,24 @@ export interface SafeUrlData {
   safeAddress: string;
   safeTxHash: string;
 }
+
+// Partial Safe URL data (queue URL without specific transaction)
+export interface SafeUrlPartialData {
+  chainId: number;
+  safeAddress: string;
+}
+
+// Discriminated union for flexible URL parsing
+export type SafeUrlParseResult =
+  | { type: "transaction"; data: SafeUrlData }
+  | { type: "queue"; data: SafeUrlPartialData };
+
+// Paginated response from Safe Transaction Service
+export const safeTransactionListSchema = z.object({
+  count: z.number(),
+  next: z.string().nullable(),
+  previous: z.string().nullable(),
+  results: z.array(safeTransactionSchema),
+});
+
+export type SafeTransactionList = z.infer<typeof safeTransactionListSchema>;

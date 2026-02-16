@@ -1,4 +1,4 @@
-import { SafeUrlData } from "../types";
+import { SafeUrlData, SafeUrlParseResult } from "../types";
 
 const CHAIN_PREFIX_MAP: Record<string, number> = {
   eth: 1, // Ethereum Mainnet
@@ -68,6 +68,68 @@ export function parseSafeUrl(urlString: string): SafeUrlData {
     }
     throw new Error("Failed to parse Safe URL");
   }
+}
+
+/**
+ * Parse a Safe URL flexibly — returns either a full transaction reference
+ * or just the queue (chain + address) when no `id` param is present.
+ */
+export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {
+  try {
+    const url = new URL(urlString);
+
+    const safeParam = url.searchParams.get("safe");
+    if (!safeParam) {
+      throw new Error("Missing 'safe' parameter in URL");
+    }
+
+    const [chainPrefix, safeAddress] = safeParam.split(":");
+    if (!chainPrefix || !safeAddress) {
+      throw new Error("Invalid 'safe' parameter format. Expected format: 'chain:address'");
+    }
+
+    const chainId = CHAIN_PREFIX_MAP[chainPrefix];
+    if (!chainId) {
+      throw new Error(`Unsupported chain prefix: ${chainPrefix}`);
+    }
+
+    if (!/^0x[a-fA-F0-9]{40}$/.test(safeAddress)) {
+      throw new Error("Invalid Safe address format");
+    }
+
+    const idParam = url.searchParams.get("id");
+    if (!idParam) {
+      return { type: "queue", data: { chainId, safeAddress } };
+    }
+
+    const parts = idParam.split("_");
+    if (parts.length !== 3 || parts[0] !== "multisig") {
+      throw new Error("Invalid 'id' parameter format. Expected format: 'multisig_{address}_{hash}'");
+    }
+
+    const safeTxHash = parts[2];
+    if (!/^0x[a-fA-F0-9]{64}$/.test(safeTxHash)) {
+      throw new Error("Invalid Safe transaction hash format");
+    }
+
+    return { type: "transaction", data: { chainId, safeAddress, safeTxHash } };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to parse Safe URL: ${error.message}`);
+    }
+    throw new Error("Failed to parse Safe URL");
+  }
+}
+
+/**
+ * Get the chain prefix string for a given chain ID (reverse of CHAIN_PREFIX_MAP)
+ */
+export function getChainPrefix(chainId: number): string {
+  const entry = Object.entries(CHAIN_PREFIX_MAP).find(([, id]) => id === chainId);
+  if (!entry) {
+    throw new Error(`Unsupported chain ID: ${chainId}`);
+  }
+  return entry[0];
 }
 
 /**
