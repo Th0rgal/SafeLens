@@ -44,10 +44,14 @@ export function interpretTransaction(
   dataDecoded: unknown,
   txTo: string,
   txOperation: number,
+  disabledIds?: string[],
 ): Interpretation | null {
   for (const interpret of INTERPRETERS) {
     const result = interpret(dataDecoded, txTo, txOperation);
-    if (result) return result;
+    if (result) {
+      if (disabledIds?.includes(result.id)) continue;
+      return result;
+    }
   }
   return null;
 }

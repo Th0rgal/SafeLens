@@ -216,6 +216,7 @@ export default function VerifyScreen() {
               context={{
                 currentThreshold: evidence.confirmationsRequired,
               }}
+              disabledInterpreters={config?.disabledInterpreters}
             />
           )}
 

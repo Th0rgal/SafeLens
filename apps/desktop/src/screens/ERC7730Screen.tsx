@@ -40,9 +40,9 @@ function CopyableAddress({ address, onCopy }: { address: string; onCopy: (addr: 
         navigator.clipboard.writeText(address);
         onCopy(address);
       }}
-      className="group inline-flex items-center gap-1.5 font-mono hover:text-fg transition-colors"
+      className="group inline-flex items-center gap-1.5 font-mono hover:text-fg transition-colors text-left"
     >
-      <span>{address}</span>
+      <span className="break-all">{address}</span>
       <Copy className="h-3 w-3 shrink-0 opacity-30 group-hover:opacity-70 transition-opacity" />
     </button>
   );
@@ -77,12 +77,37 @@ function ExpandableSignature({ sig }: { sig: string }) {
   );
 }
 
+const BUILT_IN_INTERPRETERS = [
+  {
+    id: "cowswap-twap",
+    protocol: "CoW Swap",
+    action: "TWAP Order",
+    description: "Decodes Time-Weighted Average Price orders created via CoW Protocol's Composable Order Framework.",
+  },
+  {
+    id: "safe-policy",
+    protocol: "Safe",
+    action: "Policy Change",
+    description: "Detects owner additions, removals, swaps, and threshold changes on the Safe itself.",
+  },
+] as const;
+
 export default function ERC7730Screen() {
   const { config, saveConfig } = useSettingsConfig();
   const { success, severe } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const descriptors = (config?.erc7730Descriptors ?? []) as unknown as ERC7730Descriptor[];
+  const disabledInterpreters = config?.disabledInterpreters ?? [];
+
+  const toggleInterpreter = async (id: string) => {
+    if (!config) return;
+    const disabled = config.disabledInterpreters ?? [];
+    const updated = disabled.includes(id)
+      ? disabled.filter((x) => x !== id)
+      : [...disabled, id];
+    await saveConfig({ ...config, disabledInterpreters: updated });
+  };
 
   const handleCopy = (addr: string) => {
     success("Copied", addr);
@@ -129,7 +154,58 @@ export default function ERC7730Screen() {
         Import ERC-7730 descriptor JSON files to enable clear signing for known contracts.
       </p>
 
+      <div className="flex flex-col gap-3 mb-6">
+        <p className="text-xs font-medium text-muted">Built-in interpreters</p>
+        {BUILT_IN_INTERPRETERS.map((interp) => {
+          const isDisabled = disabledInterpreters.includes(interp.id);
+          return (
+            <Card key={interp.id}>
+              <CardContent className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm font-medium">{interp.protocol}</span>
+                    <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-muted">
+                      {interp.action}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted/60">{interp.description}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleInterpreter(interp.id)}
+                  className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    isDisabled
+                      ? "bg-white/[0.06] text-muted hover:bg-white/[0.1]"
+                      : "bg-accent/20 text-accent hover:bg-accent/30"
+                  }`}
+                >
+                  {isDisabled ? "Disabled" : "Enabled"}
+                </button>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
       <div className="flex flex-col gap-4">
+        <p className="text-xs font-medium text-muted">ERC-7730 descriptors</p>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImport}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 py-3 text-sm text-muted hover:border-white/20 hover:text-fg transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+          Import ERC-7730 descriptor
+        </button>
+
         {descriptors.map((desc, i) => {
           const deployments = getDeployments(desc);
           const chainGroups = groupByChain(deployments);
@@ -217,21 +293,6 @@ export default function ERC7730Screen() {
         })}
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".json"
-        onChange={handleImport}
-        className="hidden"
-      />
-      <button
-        type="button"
-        onClick={() => fileInputRef.current?.click()}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 py-3 text-sm text-muted hover:border-white/20 hover:text-fg transition-colors"
-      >
-        <Plus className="h-4 w-4" />
-        Import ERC-7730 descriptor
-      </button>
     </>
   );
 }

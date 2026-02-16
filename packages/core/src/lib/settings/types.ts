@@ -24,6 +24,7 @@ export const settingsConfigSchema = z.object({
   addressBook: z.array(addressBookEntrySchema),
   contractRegistry: z.array(contractRegistryEntrySchema),
   erc7730Descriptors: z.array(ERC7730DescriptorSchema).optional().default([]),
+  disabledInterpreters: z.array(z.string()).optional().default([]),
 });
 
 export type ChainConfig = z.infer<typeof chainConfigSchema>;

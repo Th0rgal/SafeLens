@@ -18,6 +18,7 @@ import { bundledDescriptors } from "../erc7730/descriptors/index";
 export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
   version: "1.0",
   erc7730Descriptors: bundledDescriptors as SettingsConfig["erc7730Descriptors"],
+  disabledInterpreters: [],
   chains: {
     "1": { name: "Ethereum" },
     "10": { name: "Optimism" },
