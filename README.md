@@ -5,128 +5,42 @@
 <h1 align="center">SafeLens</h1>
 
 <p align="center">
+  Offline transaction verifier for Safe multisig wallets with ERC-7730 clear signing.
+</p>
+
+<p align="center">
+  <a href="https://safelens.lfg.rs/">Generator</a> · Desktop App · CLI
+</p>
+
+<p align="center">
   <img src="docs/screenshots/desktop-clear-signing-twap.webp" width="720" alt="SafeLens verifying a CoW TWAP order with clear signing" />
 </p>
 
-SafeLens is a minimal toolkit for working with Gnosis Safe multisig evidence:
+## What it does
 
-- Generate an `evidence.json` package from a Safe transaction URL.
-- Verify signatures and hashes locally with minimal trust.
-- Keep settings and checks reproducible across tools.
+SafeLens generates and verifies evidence packages for Gnosis Safe multisig transactions. Paste a Safe transaction URL into the [generator](https://safelens.lfg.rs/), download the `evidence.json`, then verify signatures and hashes offline using the desktop app or CLI.
 
-## Trust and Airgap
+- **Generate** an `evidence.json` package from any Safe transaction URL
+- **Verify** signatures, hashes, and decoded calldata locally with zero network access
+- **Clear signing** via built-in and ERC-7730 interpreters for human-readable transaction details
 
-- Full trust model: `TRUST_ASSUMPTIONS.md`
-- CLI assumptions view: `bun --cwd packages/cli dev sources`
-- Desktop verifier ships with production CSP `connect-src 'none'` and no shell-open capability.
+## Trust model
 
-## Project structure
+The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capability, it cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
 
-- `apps/generator`: Next.js webapp that creates and exports `evidence.json`.
-- `apps/desktop`: Tauri + Vite desktop app that verifies evidence offline.
-- `packages/core`: Shared validation, hashing, signature verification, and warning logic.
-- `packages/cli`: CLI wrapper over the same core logic.
+## Quick start
 
-## Requirements
-
-- [Bun](https://bun.sh)
-
-Install deps:
-
-```bash
-bun install
-```
-
-## Run locally
-
-From the repo root:
-
-```bash
-bun run dev
-```
-
-Starts the generator webapp at `http://localhost:3000`.
-
-Run desktop verifier dev mode:
-
-```bash
-bun run dev:tauri
-```
-
-That command builds the desktop frontend bundle and starts the Tauri shell.
-
-If you want just the desktop web frontend (without launching Tauri):
-
-```bash
-bun run dev:desktop
-```
-
-## Core flows
-
-### 1) Generate evidence
-
-#### Web app
-
-- Open generator at `http://localhost:3000`.
-- Paste/enter a Safe transaction URL and export `evidence.json`.
-
-#### CLI
+Generate an evidence package at [safelens.lfg.rs](https://safelens.lfg.rs/), or via CLI:
 
 ```bash
 bun --cwd packages/cli dev analyze "https://app.safe.global/transactions/tx?..." --out evidence.json
 ```
 
-### 2) Verify evidence
-
-#### Desktop app
-
-- Open the app.
-- Load the generated JSON file.
-- Verification runs locally using bundled crypto and local settings.
-
-#### CLI
+Verify offline:
 
 ```bash
 bun --cwd packages/cli dev verify --file evidence.json
-bun --cwd packages/cli dev verify --file evidence.json --format json
 ```
-
-### 3) Settings
-
-- Shared settings file is JSON (address book and contract registry).
-- CLI default: `~/.safelens/settings.json`.
-- Desktop default: app data folder (`safelens-settings.json`).
-- You can initialize a CLI settings file with:
-
-```bash
-bun --cwd packages/cli dev settings init
-```
-
-Show sources used in a verification:
-
-```bash
-bun --cwd packages/cli dev sources
-```
-
-## Build and release
-
-```bash
-bun run build
-```
-
-Builds generator and desktop frontend assets.
-
-```bash
-bun run build:tauri
-```
-
-Builds full desktop distributable.
-
-## Notes
-
-- Desktop verification is designed to stay offline during `verify` and is guarded by automated airgap tests.
-- The CLI is the primary interface for scripting and reproducible checks.
-- `evidence.json` is the main interoperability boundary between all components.
 
 ## Screenshots
 
@@ -153,17 +67,66 @@ Builds full desktop distributable.
 </details>
 
 <details>
-<summary>Generator (Web App)</summary>
+<summary>Generator</summary>
 
 #### Evidence Package
 <img src="docs/screenshots/generator-evidence-package.webp" width="720" alt="Generator web app with evidence package ready to download" />
 
 </details>
 
-## Local cleanup
+## Development
 
-Useful for keeping a clean working tree:
+<details>
+<summary>Project structure, setup, and build instructions</summary>
+
+### Structure
+
+| Path | Description |
+|------|-------------|
+| `apps/generator` | Next.js webapp, creates and exports `evidence.json` |
+| `apps/desktop` | Tauri + Vite desktop app, verifies evidence offline |
+| `packages/core` | Shared validation, hashing, signature verification, warnings |
+| `packages/cli` | CLI wrapper over core logic |
+
+### Setup
+
+Requires [Bun](https://bun.sh).
+
+```bash
+bun install
+```
+
+### Run
+
+```bash
+bun run dev          # generator at localhost:3000
+bun run dev:tauri    # desktop app (full Tauri shell)
+bun run dev:desktop  # desktop frontend only (no Tauri)
+```
+
+### Build
+
+```bash
+bun run build        # generator + desktop frontend assets
+bun run build:tauri  # full desktop distributable
+```
+
+### Settings
+
+Settings are JSON (address book and contract registry).
+
+- CLI: `~/.safelens/settings.json`
+- Desktop: app data folder
+
+```bash
+bun --cwd packages/cli dev settings init   # initialize settings
+bun --cwd packages/cli dev sources         # show verification sources
+```
+
+### Cleanup
 
 ```bash
 rm -rf apps/generator/.next apps/desktop/src-tauri/target apps/desktop/src-tauri/.tauri apps/desktop/src-tauri/Cargo.lock .opencode
 ```
+
+</details>
