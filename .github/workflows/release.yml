@@ -25,7 +25,7 @@ jobs:
           - platform: windows-latest
             name: windows-x64
             args: '--bundles msi,nsis'
-          - platform: ubuntu-22.04
+          - platform: ubuntu-24.04
             name: linux-x64
             args: '--bundles deb,appimage'
 
@@ -45,7 +45,7 @@ jobs:
           bun-version: latest
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-24.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
