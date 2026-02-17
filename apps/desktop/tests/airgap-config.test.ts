@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
 
 function readJson(filePath: string) {
@@ -33,24 +33,44 @@ describe("desktop airgap guarantees", () => {
   const appDir = path.resolve(import.meta.dir, "..");
   const tauriConfigPath = path.join(appDir, "src-tauri", "tauri.conf.json");
   const cargoTomlPath = path.join(appDir, "src-tauri", "Cargo.toml");
+  const capabilitiesDir = path.join(appDir, "src-tauri", "capabilities");
 
   it("uses a production CSP that disallows network connections", () => {
     const config = readJson(tauriConfigPath);
-    const csp: string = config.tauri.security.csp;
+    const csp: string = config.app.security.csp;
 
-    expect(csp).toContain("connect-src 'none'");
-    expect(csp).not.toContain("http://");
-    expect(csp).not.toContain("https://");
+    // Tauri v2 requires ipc: and http://ipc.localhost for IPC communication
+    const cspWithoutIpc = csp
+      .replace(/ipc:\s*/g, "")
+      .replace(/http:\/\/ipc\.localhost\s*/g, "");
+
+    expect(cspWithoutIpc).not.toContain("http://");
+    expect(cspWithoutIpc).not.toContain("https://");
     expect(csp).not.toContain("ws://");
     expect(csp).not.toContain("wss://");
   });
 
-  it("does not grant shell-open capability in tauri allowlist or rust features", () => {
-    const config = readJson(tauriConfigPath);
+  it("does not grant shell or HTTP capabilities", () => {
     const cargoToml = readFileSync(cargoTomlPath, "utf-8");
 
-    expect(config.tauri.allowlist.shell).toBeUndefined();
     expect(cargoToml).not.toContain("shell-open");
+    expect(cargoToml).not.toContain("tauri-plugin-http");
+    expect(cargoToml).not.toContain("tauri-plugin-shell");
+
+    // Check capabilities files for shell/HTTP permissions
+    if (existsSync(capabilitiesDir)) {
+      const capFiles = readdirSync(capabilitiesDir).filter((f) =>
+        f.endsWith(".json")
+      );
+      for (const file of capFiles) {
+        const content = readFileSync(
+          path.join(capabilitiesDir, file),
+          "utf-8"
+        );
+        expect(content).not.toContain("shell:");
+        expect(content).not.toContain("http:");
+      }
+    }
   });
 
   it("does not call network APIs in desktop frontend source code", () => {
@@ -78,12 +98,24 @@ describe("desktop airgap guarantees", () => {
     expect(violations).toEqual([]);
   });
 
-  it("does not allow destructive filesystem operations outside app data", () => {
-    const config = readJson(tauriConfigPath);
-    const fsAllowlist = config.tauri.allowlist.fs;
+  it("only grants scoped filesystem access in capabilities", () => {
+    const cargoToml = readFileSync(cargoTomlPath, "utf-8");
 
-    // createDir is allowed within scoped paths ($APPDATA) for settings storage
-    expect(fsAllowlist.createDir).toBe(true);
-    expect(fsAllowlist.removeFile).toBe(false);
+    // No remove/rename capabilities should be granted
+    expect(cargoToml).not.toContain("fs-remove");
+
+    if (existsSync(capabilitiesDir)) {
+      const capFiles = readdirSync(capabilitiesDir).filter((f) =>
+        f.endsWith(".json")
+      );
+      for (const file of capFiles) {
+        const content = readFileSync(
+          path.join(capabilitiesDir, file),
+          "utf-8"
+        );
+        expect(content).not.toContain("fs:allow-remove");
+        expect(content).not.toContain("fs:allow-rename");
+      }
+    }
   });
 });

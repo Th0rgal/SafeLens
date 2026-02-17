@@ -10,8 +10,8 @@ import {
   type ChainConfig,
 } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { save } from "@tauri-apps/api/dialog";
-import { writeTextFile } from "@tauri-apps/api/fs";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();

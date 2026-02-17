@@ -174,7 +174,7 @@ export function attachBlurDiagnostics(sidebarEl: HTMLElement): () => void {
 
   // ── 10. Tauri window events (if available) ──────────────────────────
   if (typeof window.__TAURI__ !== "undefined") {
-    import("@tauri-apps/api/event").then(({ listen }) => {
+    import("@tauri-apps/api/event").then(({ listen }: { listen: Function }) => {
       listen("tauri://resize", () => log("tauri-resize")).catch(() => {});
       listen("tauri://move", () => log("tauri-move")).catch(() => {});
       listen("tauri://focus", () => log("tauri-focus")).catch(() => {});

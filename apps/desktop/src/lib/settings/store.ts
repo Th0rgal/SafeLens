@@ -1,8 +1,8 @@
-import { BaseDirectory, exists, readTextFile, writeTextFile } from "@tauri-apps/api/fs";
+import { BaseDirectory, exists, readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { SettingsStore } from "@safelens/core";
 
 const SETTINGS_FILE = "safelens-settings.json";
-const SETTINGS_DIR = { dir: BaseDirectory.AppData };
+const SETTINGS_DIR = { baseDir: BaseDirectory.AppData } as const;
 
 export function createTauriSettingsStore(): SettingsStore {
   return {

@@ -49,8 +49,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            libwebkit2gtk-4.0-dev \
-            libappindicator3-dev \
+            libwebkit2gtk-4.1-dev \
             librsvg2-dev \
             patchelf \
             libssl-dev
@@ -59,7 +58,7 @@ jobs:
 
       - name: Install Tauri CLI
         shell: bash
-        run: cargo install tauri-cli --version "^1.5"
+        run: cargo install tauri-cli --version "^2"
 
       - name: Build Tauri app
         shell: bash

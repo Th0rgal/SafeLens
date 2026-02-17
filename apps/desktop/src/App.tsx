@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { appWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { SettingsConfigProvider } from "./lib/settings/hooks";
 import { ToastProvider } from "./components/ui/toast";
 import { Sidebar, type NavId } from "./components/sidebar";
@@ -52,12 +52,13 @@ export default function App() {
 
       e.preventDefault();
       try {
+        const win = getCurrentWindow();
         if (e.detail === 2) {
-          const maximized = await appWindow.isMaximized();
-          if (maximized) await appWindow.unmaximize();
-          else await appWindow.maximize();
+          const maximized = await win.isMaximized();
+          if (maximized) await win.unmaximize();
+          else await win.maximize();
         } else {
-          await appWindow.startDragging();
+          await win.startDragging();
         }
       } catch {
         // Window drag unavailable
