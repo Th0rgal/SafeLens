@@ -29,11 +29,23 @@ function listSourceFiles(dir: string): string[] {
   return files;
 }
 
+function readCapabilityFiles(dir: string): { content: string }[] {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => ({ content: readFileSync(path.join(dir, f), "utf-8") }));
+}
+
 describe("desktop airgap guarantees", () => {
   const appDir = path.resolve(import.meta.dir, "..");
   const tauriConfigPath = path.join(appDir, "src-tauri", "tauri.conf.json");
   const cargoTomlPath = path.join(appDir, "src-tauri", "Cargo.toml");
   const capabilitiesDir = path.join(appDir, "src-tauri", "capabilities");
+
+  it("has a capabilities directory with at least one policy file", () => {
+    expect(existsSync(capabilitiesDir)).toBe(true);
+    const caps = readCapabilityFiles(capabilitiesDir);
+    expect(caps.length).toBeGreaterThanOrEqual(1);
+  });
 
   it("uses a production CSP that disallows network connections", () => {
     const config = readJson(tauriConfigPath);
@@ -58,18 +70,9 @@ describe("desktop airgap guarantees", () => {
     expect(cargoToml).not.toContain("tauri-plugin-shell");
 
     // Check capabilities files for shell/HTTP permissions
-    if (existsSync(capabilitiesDir)) {
-      const capFiles = readdirSync(capabilitiesDir).filter((f) =>
-        f.endsWith(".json")
-      );
-      for (const file of capFiles) {
-        const content = readFileSync(
-          path.join(capabilitiesDir, file),
-          "utf-8"
-        );
-        expect(content).not.toContain("shell:");
-        expect(content).not.toContain("http:");
-      }
+    for (const { content } of readCapabilityFiles(capabilitiesDir)) {
+      expect(content).not.toContain("shell:");
+      expect(content).not.toContain("http:");
     }
   });
 
@@ -104,18 +107,9 @@ describe("desktop airgap guarantees", () => {
     // No remove/rename capabilities should be granted
     expect(cargoToml).not.toContain("fs-remove");
 
-    if (existsSync(capabilitiesDir)) {
-      const capFiles = readdirSync(capabilitiesDir).filter((f) =>
-        f.endsWith(".json")
-      );
-      for (const file of capFiles) {
-        const content = readFileSync(
-          path.join(capabilitiesDir, file),
-          "utf-8"
-        );
-        expect(content).not.toContain("fs:allow-remove");
-        expect(content).not.toContain("fs:allow-rename");
-      }
+    for (const { content } of readCapabilityFiles(capabilitiesDir)) {
+      expect(content).not.toContain("fs:allow-remove");
+      expect(content).not.toContain("fs:allow-rename");
     }
   });
 });
