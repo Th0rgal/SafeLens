@@ -21,13 +21,13 @@ jobs:
         include:
           - platform: macos-latest
             name: macos-arm64
-            bundles: dmg
+            args: '--bundles dmg'
           - platform: windows-latest
             name: windows-x64
-            bundles: msi,nsis
+            args: '--bundles msi,nsis'
           - platform: ubuntu-22.04
             name: linux-x64
-            bundles: deb,appimage
+            args: '--bundles deb,appimage'
 
     runs-on: ${{ matrix.platform }}
 
@@ -56,43 +56,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Install Tauri CLI
-        shell: bash
-        run: cargo install tauri-cli --version "^2"
-
       - name: Build Tauri app
-        shell: bash
-        working-directory: apps/desktop
-        run: cargo tauri build --bundles ${{ matrix.bundles }}
-
-      - name: Collect artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          BUNDLE="apps/desktop/src-tauri/target/release/bundle"
-          echo "Bundle dir contents:"
-          ls -R "$BUNDLE" 2>/dev/null | head -50 || echo "Bundle dir not found"
-          case "${{ matrix.platform }}" in
-            macos-*)
-              cp "$BUNDLE"/dmg/*.dmg artifacts/SafeLens-${{ matrix.name }}.dmg
-              ;;
-            windows-*)
-              cp "$BUNDLE"/msi/*.msi artifacts/SafeLens-${{ matrix.name }}.msi
-              cp "$BUNDLE"/nsis/*-setup.exe artifacts/SafeLens-${{ matrix.name }}-setup.exe 2>/dev/null || true
-              ;;
-            ubuntu-*)
-              cp "$BUNDLE"/appimage/*.AppImage artifacts/SafeLens-${{ matrix.name }}.AppImage
-              cp "$BUNDLE"/deb/*.deb artifacts/SafeLens-${{ matrix.name }}.deb
-              ;;
-          esac
-          echo "Collected:"
-          ls -lh artifacts/
-
-      - uses: actions/upload-artifact@v4
+        uses: tauri-apps/tauri-action@v0
         with:
-          name: SafeLens-${{ matrix.name }}
-          path: artifacts/*
+          projectPath: apps/desktop
+          tauriScript: bun tauri
+          args: ${{ matrix.args }}
+          uploadWorkflowArtifacts: true
+          workflowArtifactNamePattern: SafeLens-${{ matrix.name }}-[bundle]
 
   release:
     needs: build
@@ -107,7 +78,10 @@ jobs:
       - name: Flatten artifacts
         run: |
           mkdir -p release-files
-          find artifacts -type f -exec cp {} release-files/ \;
+          find artifacts -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+               -o -name '*.deb' -o -name '*.AppImage' \) \
+            -exec cp {} release-files/ \;
           ls -la release-files/
 
       - name: Generate checksums
@@ -124,12 +98,11 @@ jobs:
           body: |
             ## Downloads
 
-            | Platform | Download |
-            |----------|----------|
-            | macOS (Apple Silicon) | `SafeLens-macos-arm64.dmg` |
-            | Windows (installer) | `SafeLens-windows-x64.msi` |
-            | Linux (AppImage) | `SafeLens-linux-x64.AppImage` |
-            | Linux (Debian) | `SafeLens-linux-x64.deb` |
+            | Platform | Bundles |
+            |----------|---------|
+            | macOS (Apple Silicon) | `.dmg` |
+            | Windows x64 | `.msi`, `.exe` (NSIS) |
+            | Linux x64 | `.deb`, `.AppImage` |
 
             ## Checksums
 
