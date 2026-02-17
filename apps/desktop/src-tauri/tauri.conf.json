@@ -1,6 +1,6 @@
 {
   "productName": "SafeLens",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.safelens.app",
   "build": {
     "beforeDevCommand": "bun run --filter @safelens/desktop dev",
