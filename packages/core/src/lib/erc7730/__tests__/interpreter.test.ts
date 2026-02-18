@@ -59,6 +59,10 @@ describe("createERC7730Interpreter", () => {
       dataDecoded,
       "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
       0,
+      undefined,
+      1,
+      "1000000000000000000",
+      "0x1111111111111111111111111111111111111111",
     );
 
     expect(result).not.toBeNull();
@@ -68,9 +72,10 @@ describe("createERC7730Interpreter", () => {
     }
     expect(result.protocol).toBe("Lido");
     expect(result.action).toBe("Stake ETH to receive stETH");
-    // Only the Referral field is present (Amount uses @.value which isn't passed through the pipeline)
-    expect(result.details.fields).toHaveLength(1);
-    expect(result.details.fields[0].label).toBe("Referral");
+    expect(result.details.fields).toHaveLength(2);
+    expect(result.details.fields[0].label).toBe("Amount");
+    expect(result.details.fields[0].value).toContain("1");
+    expect(result.details.fields[1].label).toBe("Referral");
   });
 
   it("returns null for unknown contract", () => {

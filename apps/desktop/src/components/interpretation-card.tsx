@@ -14,6 +14,10 @@ interface InterpretationCardProps {
   txData?: string | null;
   /** Chain ID for token metadata resolution. */
   chainId?: number;
+  /** Transaction value in wei. */
+  txValue?: string;
+  /** Transaction sender (Safe address for Safe executions). */
+  txFrom?: string;
   /** Optional evidence-level context for richer display. */
   context?: EvidenceContext;
   /** Interpreter IDs to skip. */
@@ -26,12 +30,24 @@ export function InterpretationCard({
   txOperation,
   txData,
   chainId,
+  txValue,
+  txFrom,
   context,
   disabledInterpreters,
 }: InterpretationCardProps) {
   const interpretation = useMemo(
-    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId),
-    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId],
+    () =>
+      interpretTransaction(
+        dataDecoded,
+        txTo,
+        txOperation,
+        disabledInterpreters,
+        txData,
+        chainId,
+        txValue,
+        txFrom,
+      ),
+    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId, txValue, txFrom],
   );
 
   if (!interpretation) return null;

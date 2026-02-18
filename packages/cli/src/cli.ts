@@ -167,7 +167,11 @@ function printVerificationText(
       evidence.dataDecoded,
       evidence.transaction.to,
       evidence.transaction.operation,
-      settings?.disabledInterpreters ?? []
+      settings?.disabledInterpreters ?? [],
+      evidence.transaction.data,
+      evidence.chainId,
+      evidence.transaction.value,
+      evidence.safeAddress,
     );
 
     if (interpretation) {

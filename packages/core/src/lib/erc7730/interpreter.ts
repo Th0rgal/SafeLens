@@ -339,6 +339,8 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     _txOperation: number,
     txData?: string | null,
     txChainId?: number,
+    txValue?: string,
+    txFrom?: string,
   ): Interpretation | null {
     // If caller provides a specific chainId, try it first; otherwise try all
     const chainsToTry = txChainId ? [txChainId, ...chainIds.filter(c => c !== txChainId)] : chainIds;
@@ -363,7 +365,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
         }
 
         if (entry) {
-          return buildInterpretation(entry, decoded, txTo, txChainId);
+          return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom);
         }
       }
     }
@@ -378,7 +380,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
           // Try to decode raw calldata using the ERC-7730 signature
           const decoded = decodeRawCalldata(txData, entry);
           if (decoded) {
-            return buildInterpretation(entry, decoded, txTo, txChainId);
+            return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom);
           }
 
           // Decoding failed — return interpretation with intent only

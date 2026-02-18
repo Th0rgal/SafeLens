@@ -158,4 +158,6 @@ export type Interpreter = (
   txOperation: number,
   txData?: string | null,
   chainId?: number,
+  txValue?: string,
+  txFrom?: string,
 ) => Interpretation | null;
