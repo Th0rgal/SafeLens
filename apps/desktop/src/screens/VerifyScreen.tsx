@@ -213,6 +213,7 @@ export default function VerifyScreen() {
             txTo={evidence.transaction.to}
             txOperation={evidence.transaction.operation}
             txData={evidence.transaction.data}
+            chainId={evidence.chainId}
             context={{
               currentThreshold: evidence.confirmationsRequired,
             }}

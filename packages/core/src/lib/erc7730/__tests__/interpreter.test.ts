@@ -259,7 +259,7 @@ describe("createERC7730Interpreter", () => {
     expect(result.details.fields).toHaveLength(0); // no decoded params
   });
 
-  it("decodes raw calldata fields using the ERC-7730 signature", () => {
+  it("decodes raw calldata fields using the ERC-7730 signature (no chainId)", () => {
     const sig = "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
     const takerAssetAddr = BigInt("0x6B175474E89094C44Da98b954EedeAC495271d0F"); // DAI
     const receiverAddr = BigInt("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
@@ -317,6 +317,7 @@ describe("createERC7730Interpreter", () => {
     const index = buildIndex([descriptor]);
     const interpret = createERC7730Interpreter(index);
 
+    // No chainId — fallback shows raw value + token address
     const result = interpret(
       null,
       "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",
@@ -333,7 +334,7 @@ describe("createERC7730Interpreter", () => {
     expect(result.action).toBe("create order");
     expect(result.details.fields).toHaveLength(2);
 
-    // tokenAmount with tokenPath: shows raw value + resolved token address
+    // tokenAmount without chainId: shows raw value + token address
     expect(result.details.fields[0].label).toBe("Minimum to receive");
     expect(result.details.fields[0].value).toContain("500000000000000000");
     expect(result.details.fields[0].value).toContain("0x6b175474e89094c44da98b954eedeac495271d0f");
@@ -341,6 +342,78 @@ describe("createERC7730Interpreter", () => {
     // addressName: uint256 is converted to hex address
     expect(result.details.fields[1].label).toBe("Beneficiary");
     expect(result.details.fields[1].value).toBe("0xd8da6bf26964af9d7eed9e03e53415d37aa96045");
+  });
+
+  it("resolves token name and decimals when chainId is provided", () => {
+    const sig = "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
+    // USDC on Gnosis (0xDDAfbb505ad214D7b80b1f830fccc89B60fb7A83, 6 decimals)
+    const takerAssetAddr = BigInt("0xDDAfbb505ad214D7b80b1f830fccc89B60fb7A83");
+    const receiverAddr = BigInt("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 100, address: "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01" }],
+        },
+      },
+      metadata: {
+        owner: "1inch",
+      },
+      display: {
+        formats: {
+          [sig]: {
+            intent: "create order",
+            fields: [
+              {
+                label: "Minimum to receive",
+                path: "makerOrder.takingAmount",
+                format: "tokenAmount",
+                params: {
+                  tokenPath: "makerOrder.takerAsset",
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const abiItem = parseAbiItem(`function ${sig}`);
+    const txData = encodeFunctionData({
+      abi: [abiItem],
+      functionName: "create",
+      args: [{
+        salt: 1n,
+        maker: 0x1234n,
+        receiver: receiverAddr,
+        makerAsset: 0x5555n,
+        takerAsset: takerAssetAddr,
+        makingAmount: 1000n,
+        takingAmount: 998945n, // 0.998945 USDC (6 decimals)
+        makerTraits: 0n,
+      }],
+    });
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    // With chainId=100 (Gnosis), USDC should be resolved from token list
+    const result = interpret(
+      null,
+      "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",
+      0,
+      txData,
+      100,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.details.fields).toHaveLength(1);
+    expect(result.details.fields[0].label).toBe("Minimum to receive");
+    expect(result.details.fields[0].value).toBe("0.998945 USDC");
   });
 
   it("resolves bare single-segment field paths like _value and _to", () => {

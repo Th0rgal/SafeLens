@@ -11,6 +11,7 @@ import type { Interpretation } from "../interpret/types";
 import type { DescriptorIndex, IndexEntry } from "./index";
 import { lookupFormat, lookupFormatByMethodName } from "./index";
 import type { FieldDefinition, ERC7730Descriptor } from "./types";
+import { lookupToken } from "./tokens";
 
 // ── Field value extraction ──────────────────────────────────────────
 
@@ -193,6 +194,7 @@ function formatValue(
   field: FieldDefinition,
   descriptor: ERC7730Descriptor,
   dataDecoded?: DataDecoded,
+  chainId?: number,
 ): string {
   const format = field.format ?? "raw";
 
@@ -225,13 +227,25 @@ function formatValue(
         }
       }
 
-      // No static token metadata — resolve tokenPath to show token address
+      // No static token metadata — resolve tokenPath and look up token list
       const tokenPath =
         (field.params?.tokenPath as string) ?? field.tokenPath;
       if (tokenPath && dataDecoded) {
         const tokenAddressRaw = extractValue(tokenPath, dataDecoded);
         if (tokenAddressRaw) {
           const tokenAddress = toAddress(tokenAddressRaw);
+          // Try well-known token list for decimals and symbol
+          if (chainId) {
+            const tokenMeta = lookupToken(chainId, tokenAddress);
+            if (tokenMeta) {
+              try {
+                const formatted = formatUnits(BigInt(value), tokenMeta.decimals);
+                return `${formatted} ${tokenMeta.symbol}`;
+              } catch {
+                // fall through
+              }
+            }
+          }
           return `${value} (token: ${tokenAddress})`;
         }
       }
@@ -324,7 +338,11 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     txTo: string,
     _txOperation: number,
     txData?: string | null,
+    txChainId?: number,
   ): Interpretation | null {
+    // If caller provides a specific chainId, try it first; otherwise try all
+    const chainsToTry = txChainId ? [txChainId, ...chainIds.filter(c => c !== txChainId)] : chainIds;
+
     // Try decoded method lookup first
     if (
       dataDecoded &&
@@ -333,7 +351,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     ) {
       const decoded = dataDecoded as DataDecoded;
 
-      for (const chainId of chainIds) {
+      for (const chainId of chainsToTry) {
         // Try by method name first (most descriptors use human-readable signatures)
         let entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
 
@@ -345,7 +363,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
         }
 
         if (entry) {
-          return buildInterpretation(entry, decoded, txTo);
+          return buildInterpretation(entry, decoded, txTo, txChainId);
         }
       }
     }
@@ -354,13 +372,13 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     if (txData && txData.length >= 10) {
       const selector = txData.slice(0, 10).toLowerCase();
 
-      for (const chainId of chainIds) {
+      for (const chainId of chainsToTry) {
         const entry = lookupFormat(index, chainId, txTo, selector);
         if (entry) {
           // Try to decode raw calldata using the ERC-7730 signature
           const decoded = decodeRawCalldata(txData, entry);
           if (decoded) {
-            return buildInterpretation(entry, decoded, txTo);
+            return buildInterpretation(entry, decoded, txTo, txChainId);
           }
 
           // Decoding failed — return interpretation with intent only
@@ -388,6 +406,7 @@ function buildInterpretation(
   entry: import("./index").IndexEntry,
   decoded: DataDecoded,
   txTo: string,
+  chainId?: number,
   txValue?: string,
   txFrom?: string,
 ): Interpretation {
@@ -411,6 +430,7 @@ function buildInterpretation(
       fieldDef,
       entry.descriptor,
       decoded,
+      chainId,
     );
 
     fields.push({

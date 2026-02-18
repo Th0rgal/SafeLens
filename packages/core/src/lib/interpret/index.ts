@@ -26,8 +26,8 @@ import { getGlobalIndex } from "../erc7730/global-index";
 
 // Lazy ERC-7730 interpreter — calls getGlobalIndex() on each invocation
 // so that setGlobalDescriptors() changes take effect without re-importing.
-const erc7730Interpreter: Interpreter = (dataDecoded, txTo, txOperation, txData) =>
-  createERC7730Interpreter(getGlobalIndex())(dataDecoded, txTo, txOperation, txData);
+const erc7730Interpreter: Interpreter = (dataDecoded, txTo, txOperation, txData, chainId) =>
+  createERC7730Interpreter(getGlobalIndex())(dataDecoded, txTo, txOperation, txData, chainId);
 
 const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,
@@ -46,9 +46,10 @@ export function interpretTransaction(
   txOperation: number,
   disabledIds?: string[],
   txData?: string | null,
+  chainId?: number,
 ): Interpretation | null {
   for (const interpret of INTERPRETERS) {
-    const result = interpret(dataDecoded, txTo, txOperation, txData);
+    const result = interpret(dataDecoded, txTo, txOperation, txData, chainId);
     if (result) {
       if (disabledIds?.includes(result.id)) continue;
       return result;

@@ -12,6 +12,8 @@ interface InterpretationCardProps {
   txOperation: number;
   /** Raw calldata hex for selector-based fallback when dataDecoded is null. */
   txData?: string | null;
+  /** Chain ID for token metadata resolution. */
+  chainId?: number;
   /** Optional evidence-level context for richer display. */
   context?: EvidenceContext;
   /** Interpreter IDs to skip. */
@@ -23,12 +25,13 @@ export function InterpretationCard({
   txTo,
   txOperation,
   txData,
+  chainId,
   context,
   disabledInterpreters,
 }: InterpretationCardProps) {
   const interpretation = useMemo(
-    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters, txData),
-    [dataDecoded, txTo, txOperation, disabledInterpreters, txData],
+    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId),
+    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId],
   );
 
   if (!interpretation) return null;

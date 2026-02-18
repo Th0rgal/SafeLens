@@ -157,4 +157,5 @@ export type Interpreter = (
   txTo: string,
   txOperation: number,
   txData?: string | null,
+  chainId?: number,
 ) => Interpretation | null;
