@@ -172,12 +172,27 @@ function convertBigInts(value: unknown): unknown {
 // ── Field formatting ────────────────────────────────────────────────
 
 /**
+ * Try to convert a decimal uint256 string to a 0x hex address.
+ * Returns the value unchanged if it's already a hex address.
+ */
+function toAddress(value: string): string {
+  if (value.startsWith("0x")) return value;
+  try {
+    const hex = BigInt(value).toString(16).padStart(40, "0");
+    return `0x${hex.slice(-40)}`;
+  } catch {
+    return value;
+  }
+}
+
+/**
  * Format a raw value according to its field definition.
  */
 function formatValue(
   value: string,
   field: FieldDefinition,
-  descriptor: ERC7730Descriptor
+  descriptor: ERC7730Descriptor,
+  dataDecoded?: DataDecoded,
 ): string {
   const format = field.format ?? "raw";
 
@@ -186,9 +201,8 @@ function formatValue(
       return value;
 
     case "addressName":
-      // For now, just return the address. In the future, this could
-      // look up names from the contract registry or address book.
-      return value;
+      // Convert uint256-encoded addresses to hex format
+      return toAddress(value);
 
     case "amount":
       // Native currency (ETH) — 18 decimals
@@ -200,15 +214,30 @@ function formatValue(
       }
 
     case "tokenAmount": {
-      // Token amount — need decimals from metadata.token or tokenPath
-      const decimals = descriptor.metadata.token?.decimals ?? 18;
-      const symbol = descriptor.metadata.token?.ticker ?? "";
-      try {
-        const formatted = formatUnits(BigInt(value), decimals);
-        return symbol ? `${formatted} ${symbol}` : formatted;
-      } catch {
-        return value;
+      // Use metadata.token if available (static decimals/symbol)
+      if (descriptor.metadata.token) {
+        const { decimals, ticker: symbol } = descriptor.metadata.token;
+        try {
+          const formatted = formatUnits(BigInt(value), decimals);
+          return symbol ? `${formatted} ${symbol}` : formatted;
+        } catch {
+          return value;
+        }
       }
+
+      // No static token metadata — resolve tokenPath to show token address
+      const tokenPath =
+        (field.params?.tokenPath as string) ?? field.tokenPath;
+      if (tokenPath && dataDecoded) {
+        const tokenAddressRaw = extractValue(tokenPath, dataDecoded);
+        if (tokenAddressRaw) {
+          const tokenAddress = toAddress(tokenAddressRaw);
+          return `${value} (token: ${tokenAddress})`;
+        }
+      }
+
+      // Fallback: raw value without assuming 18 decimals
+      return value;
     }
 
     case "date":
@@ -371,7 +400,8 @@ function buildInterpretation(
     const formattedValue = formatValue(
       rawValue,
       fieldDef,
-      entry.descriptor
+      entry.descriptor,
+      decoded,
     );
 
     fields.push({

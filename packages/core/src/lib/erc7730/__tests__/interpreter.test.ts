@@ -261,6 +261,8 @@ describe("createERC7730Interpreter", () => {
 
   it("decodes raw calldata fields using the ERC-7730 signature", () => {
     const sig = "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
+    const takerAssetAddr = BigInt("0x6B175474E89094C44Da98b954EedeAC495271d0F"); // DAI
+    const receiverAddr = BigInt("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
 
     const descriptor: ERC7730Descriptor = {
       context: {
@@ -279,12 +281,15 @@ describe("createERC7730Interpreter", () => {
               {
                 label: "Minimum to receive",
                 path: "makerOrder.takingAmount",
-                format: "raw",
+                format: "tokenAmount",
+                params: {
+                  tokenPath: "makerOrder.takerAsset",
+                },
               },
               {
                 label: "Beneficiary",
                 path: "makerOrder.receiver",
-                format: "raw",
+                format: "addressName",
               },
             ],
           },
@@ -300,11 +305,11 @@ describe("createERC7730Interpreter", () => {
       args: [{
         salt: 1n,
         maker: 0x1234n,
-        receiver: 0xABCDn,
+        receiver: receiverAddr,
         makerAsset: 0x5555n,
-        takerAsset: 0x6666n,
+        takerAsset: takerAssetAddr,
         makingAmount: 1000n,
-        takingAmount: 500n,
+        takingAmount: 500000000000000000n, // 0.5 in 18-decimal units
         makerTraits: 0n,
       }],
     });
@@ -327,10 +332,15 @@ describe("createERC7730Interpreter", () => {
     expect(result.protocol).toBe("1inch");
     expect(result.action).toBe("create order");
     expect(result.details.fields).toHaveLength(2);
+
+    // tokenAmount with tokenPath: shows raw value + resolved token address
     expect(result.details.fields[0].label).toBe("Minimum to receive");
-    expect(result.details.fields[0].value).toBe("500");
+    expect(result.details.fields[0].value).toContain("500000000000000000");
+    expect(result.details.fields[0].value).toContain("0x6b175474e89094c44da98b954eedeac495271d0f");
+
+    // addressName: uint256 is converted to hex address
     expect(result.details.fields[1].label).toBe("Beneficiary");
-    expect(result.details.fields[1].value).toBe("43981"); // 0xABCD = 43981
+    expect(result.details.fields[1].value).toBe("0xd8da6bf26964af9d7eed9e03e53415d37aa96045");
   });
 
   it("returns null for raw calldata with unknown selector", () => {
