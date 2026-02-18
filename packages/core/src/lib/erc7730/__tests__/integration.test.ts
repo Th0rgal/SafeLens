@@ -23,8 +23,8 @@ describe("ERC-7730 integration", () => {
 
     expect(result).not.toBeNull();
     expect(result!.id).toBe("erc7730");
-    expect(result!.protocol).toBe("Lido");
-    expect(result!.action).toContain("Stake ETH");
+    expect(result!.protocol).toBe("Lido DAO");
+    expect(result!.action).toContain("Stake");
   });
 
   it("returns null for an unknown contract", () => {

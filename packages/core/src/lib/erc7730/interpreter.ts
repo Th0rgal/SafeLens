@@ -245,18 +245,20 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
           );
 
           fields.push({
-            label: fieldDef.label,
+            label: fieldDef.label ?? fieldDef.path ?? "Unknown",
             value: formattedValue,
             format: fieldDef.format ?? "raw",
           });
         }
 
+        const intent = entry.formatEntry.intent ?? decoded.method;
+
         return {
           id: "erc7730",
           protocol: entry.descriptor.metadata.owner,
-          action: entry.formatEntry.intent,
+          action: intent,
           severity: "info",
-          summary: entry.formatEntry.intent,
+          summary: intent,
           details: { fields },
         };
       }

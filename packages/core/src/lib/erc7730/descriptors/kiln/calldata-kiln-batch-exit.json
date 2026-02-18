@@ -1,0 +1,42 @@
+{
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x004c226fff73aa94b78a4df1a0e861797ba16819"
+        },
+        {
+          "chainId": 560048,
+          "address": "0x06f9C32A3093DDE837a2E172041DF79B4b850A2e"
+        }
+      ],
+      "addressMatcher": null,
+      "factory": null
+    }
+  },
+  "metadata": {
+    "owner": "Kiln",
+    "info": {
+      "legalName": "Kiln",
+      "url": "https://kiln.fi"
+    }
+  },
+  "display": {
+    "formats": {
+      "requestExit(bytes[])": {
+        "intent": "Request Validator Exit",
+        "fields": [
+          {
+            "label": "Validators",
+            "format": "raw",
+            "path": "#.validators_.[]"
+          }
+        ],
+        "required": [
+          "#.validators_.[]"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x0000000000bbf5c5fd284e657f01bd000933c96d"
+        },
+        {
+          "chainId": 10,
+          "address": "0x0000000000bbf5c5fd284e657f01bd000933c96d"
+        },
+        {
+          "chainId": 56,
+          "address": "0x0000000000bbf5c5fd284e657f01bd000933c96d"
+        },
+        {
+          "chainId": 8453,
+          "address": "0x0000000000bbf5c5fd284e657f01bd000933c96d"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Velora"
+  },
+  "display": {
+    "formats": {
+      "Order": {
+        "intent": "Swap order",
+        "fields": [
+          {
+            "path": "srcAmount",
+            "label": "Amount to send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "srcToken"
+            }
+          },
+          {
+            "path": "destAmount",
+            "label": "Minimum to receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "destToken"
+            }
+          },
+          {
+            "path": "bridge.destinationChainId",
+            "label": "Destination chain ID",
+            "format": "raw"
+          },
+          {
+            "path": "beneficiary",
+            "label": "Beneficiary",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "Expiration time",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

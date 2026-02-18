@@ -26,13 +26,15 @@ const MetadataSchema = z.object({
     .object({
       legalName: z.string().optional(),
       lastUpdate: z.string().optional(),
+      deploymentDate: z.string().optional(),
       url: z.string().optional(),
     })
+    .passthrough()
     .optional(),
   token: TokenMetadataSchema.optional(),
   constants: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   enums: z.record(z.record(z.string())).optional(),
-});
+}).passthrough();
 
 const FieldFormatSchema = z.enum([
   "raw",
@@ -43,30 +45,33 @@ const FieldFormatSchema = z.enum([
   "unit",
   "enum",
   "percentage",
+  "calldata",
 ]);
 
 const FieldDefinitionSchema: z.ZodType<any> = z.lazy(() =>
   z.object({
-    label: z.string(),
+    label: z.string().optional(),
     path: z.string().optional(),
     format: FieldFormatSchema.optional(),
     tokenPath: z.string().optional(),
     unit: z.string().optional(),
     enum: z.string().optional(),
     $ref: z.string().optional(),
-    params: z.record(z.unknown()).optional(),
-  })
+    params: z.record(z.unknown()).optional().nullable(),
+    fields: z.array(z.unknown()).optional(),
+    value: z.unknown().optional(),
+  }).passthrough()
 );
 
 const FormatEntrySchema = z.object({
-  intent: z.string(),
+  intent: z.string().optional(),
   fields: z.array(FieldDefinitionSchema),
-});
+}).passthrough();
 
 const DisplaySchema = z.object({
   formats: z.record(FormatEntrySchema),
   definitions: z.record(FieldDefinitionSchema).optional(),
-});
+}).passthrough();
 
 const ContractContextSchema = z.object({
   deployments: z.array(DeploymentSchema),
