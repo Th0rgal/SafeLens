@@ -37,23 +37,9 @@ interface DescriptorGroup {
 function getGroupIdentity(descriptor: ERC7730Descriptor) {
   const owner = descriptor.metadata.owner.trim();
   const ownerToken = owner.split(/[\s-]/)[0] ?? owner;
-  const url = descriptor.metadata.info?.url;
-  let key: string | undefined;
-
-  if (url) {
-    try {
-      const host = new URL(url).hostname.toLowerCase();
-      const parts = host.split(".").filter(Boolean);
-      if (parts.length > 0) {
-        key = parts[0] === "www" ? parts[1] ?? parts[0] : parts[0];
-      }
-    } catch {
-      // Ignore malformed metadata URL and fall back to owner token.
-    }
-  }
 
   return {
-    key: (key ?? ownerToken.toLowerCase()),
+    key: ownerToken.toLowerCase(),
     label: ownerToken,
   };
 }

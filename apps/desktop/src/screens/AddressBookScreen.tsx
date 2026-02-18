@@ -52,6 +52,7 @@ export default function AddressBookScreen() {
       }
       nextGroups.Custom = nextGroups.Custom ?? true;
       setExpandedGroups(nextGroups);
+      setChainIdDrafts({});
       setEntryGroupModes({});
       setEntryNewGroupNames({});
       setNewGroup("Custom");
@@ -119,6 +120,7 @@ export default function AddressBookScreen() {
       }
       return next;
     });
+    setChainIdDrafts((prev) => shiftIndexedModeMap(prev, i));
     setEntryGroupModes((prev) => shiftIndexedModeMap(prev, i));
     setEntryNewGroupNames((prev) => shiftIndexedModeMap(prev, i));
   };
@@ -165,6 +167,7 @@ export default function AddressBookScreen() {
     }
     nextGroups.Custom = nextGroups.Custom ?? true;
     setExpandedGroups(nextGroups);
+    setChainIdDrafts({});
     setEntryGroupModes({});
     setEntryNewGroupNames({});
     setNewGroup("Custom");
