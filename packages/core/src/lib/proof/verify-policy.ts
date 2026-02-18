@@ -168,7 +168,15 @@ export function verifyPolicyProof(
     storageProofs,
     slotToKey(SLOT_SINGLETON)
   );
-  if (singletonProof) {
+  if (!singletonProof) {
+    errors.push("Missing storage proof for singleton (slot 0)");
+    checks.push({
+      id: "singleton",
+      label: "Singleton (implementation)",
+      passed: false,
+      detail: "No storage proof provided for singleton slot",
+    });
+  } else {
     const provenSingleton = storageValueToAddress(singletonProof.value);
     const claimed = normalizeAddress(proof.decodedPolicy.singleton);
     const proven = normalizeAddress(provenSingleton);
@@ -193,7 +201,15 @@ export function verifyPolicyProof(
     storageProofs,
     slotToKey(SLOT_THRESHOLD)
   );
-  if (thresholdProof) {
+  if (!thresholdProof) {
+    errors.push("Missing storage proof for threshold (slot 4)");
+    checks.push({
+      id: "threshold",
+      label: "Threshold",
+      passed: false,
+      detail: "No storage proof provided for threshold slot",
+    });
+  } else {
     const provenThreshold = Number(storageValueToUint(thresholdProof.value));
     const match = provenThreshold === proof.decodedPolicy.threshold;
     checks.push({
@@ -213,7 +229,15 @@ export function verifyPolicyProof(
 
   // 5. Verify nonce (slot 5)
   const nonceProof = findStorageProof(storageProofs, slotToKey(SLOT_NONCE));
-  if (nonceProof) {
+  if (!nonceProof) {
+    errors.push("Missing storage proof for nonce (slot 5)");
+    checks.push({
+      id: "nonce",
+      label: "Nonce",
+      passed: false,
+      detail: "No storage proof provided for nonce slot",
+    });
+  } else {
     const provenNonce = Number(storageValueToUint(nonceProof.value));
     const match = provenNonce === proof.decodedPolicy.nonce;
     checks.push({
@@ -236,7 +260,15 @@ export function verifyPolicyProof(
     storageProofs,
     slotToKey(SLOT_OWNER_COUNT)
   );
-  if (ownerCountProof) {
+  if (!ownerCountProof) {
+    errors.push("Missing storage proof for ownerCount (slot 3)");
+    checks.push({
+      id: "owner-count",
+      label: "Owner count",
+      passed: false,
+      detail: "No storage proof provided for ownerCount slot",
+    });
+  } else {
     const provenOwnerCount = Number(
       storageValueToUint(ownerCountProof.value)
     );
@@ -271,7 +303,15 @@ export function verifyPolicyProof(
 
   // 8. Verify guard (keccak256 sentinel slot)
   const guardProof = findStorageProof(storageProofs, GUARD_STORAGE_SLOT);
-  if (guardProof) {
+  if (!guardProof) {
+    errors.push("Missing storage proof for guard slot");
+    checks.push({
+      id: "guard",
+      label: "Guard",
+      passed: false,
+      detail: "No storage proof provided for guard slot",
+    });
+  } else {
     const provenGuard = storageValueToAddress(guardProof.value);
     const claimed = normalizeAddress(proof.decodedPolicy.guard);
     const proven = normalizeAddress(provenGuard);
@@ -296,7 +336,15 @@ export function verifyPolicyProof(
     storageProofs,
     FALLBACK_HANDLER_STORAGE_SLOT
   );
-  if (fallbackProof) {
+  if (!fallbackProof) {
+    errors.push("Missing storage proof for fallback handler slot");
+    checks.push({
+      id: "fallback-handler",
+      label: "Fallback handler",
+      passed: false,
+      detail: "No storage proof provided for fallback handler slot",
+    });
+  } else {
     const provenFallback = storageValueToAddress(fallbackProof.value);
     const claimed = normalizeAddress(proof.decodedPolicy.fallbackHandler);
     const proven = normalizeAddress(provenFallback);

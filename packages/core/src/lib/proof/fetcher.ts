@@ -115,6 +115,9 @@ export async function fetchOnchainPolicyProof(
 
   // Get the block to pin the state root
   const block = await client.getBlock({ blockTag });
+  if (block.number == null) {
+    throw new Error("Block number is null (pending block). Use a finalized block tag.");
+  }
   const blockNumber = Number(block.number);
   const stateRoot = block.stateRoot;
 

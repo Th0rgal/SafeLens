@@ -11,6 +11,15 @@ import { verifyPolicyProof } from "../verify-policy";
 import { verifyAccountProof, verifyStorageProof } from "../mpt";
 import type { OnchainPolicyProof } from "../../types";
 import type { Address, Hex } from "viem";
+import {
+  slotToKey,
+  SLOT_SINGLETON,
+  SLOT_OWNER_COUNT,
+  SLOT_THRESHOLD,
+  SLOT_NONCE,
+  GUARD_STORAGE_SLOT,
+  FALLBACK_HANDLER_STORAGE_SLOT,
+} from "../safe-layout";
 
 // Load real on-chain proof data
 import fixtureJson from "./fixtures/safe-policy-proof.json";
@@ -281,5 +290,77 @@ describe("verifyPolicyProof end-to-end with real mainnet data", () => {
     );
     expect(modulesCheck?.passed).toBe(true);
     expect(modulesCheck?.detail).toContain("sentinel");
+  });
+});
+
+describe("verifyPolicyProof rejects missing storage proof keys", () => {
+  /** Strip a specific storage key from the proof and return a new proof object. */
+  function stripStorageKey(key: Hex): OnchainPolicyProof {
+    const proof = makeProof();
+    const normalizedKey = key.toLowerCase();
+    proof.accountProof.storageProof = proof.accountProof.storageProof.filter(
+      (sp) => sp.key.toLowerCase() !== normalizedKey
+    );
+    return proof;
+  }
+
+  it("fails when singleton proof key is missing", () => {
+    const proof = stripStorageKey(slotToKey(SLOT_SINGLETON));
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "singleton");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
+  });
+
+  it("fails when threshold proof key is missing", () => {
+    const proof = stripStorageKey(slotToKey(SLOT_THRESHOLD));
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "threshold");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
+  });
+
+  it("fails when nonce proof key is missing", () => {
+    const proof = stripStorageKey(slotToKey(SLOT_NONCE));
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "nonce");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
+  });
+
+  it("fails when ownerCount proof key is missing", () => {
+    const proof = stripStorageKey(slotToKey(SLOT_OWNER_COUNT));
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "owner-count");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
+  });
+
+  it("fails when guard proof key is missing", () => {
+    const proof = stripStorageKey(GUARD_STORAGE_SLOT);
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "guard");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
+  });
+
+  it("fails when fallback handler proof key is missing", () => {
+    const proof = stripStorageKey(FALLBACK_HANDLER_STORAGE_SLOT);
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "fallback-handler");
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("No storage proof provided");
   });
 });
