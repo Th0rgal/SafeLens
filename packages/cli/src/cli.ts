@@ -6,6 +6,7 @@ import {
   parseSafeUrl,
   fetchSafeTransaction,
   createEvidencePackage,
+  enrichWithOnchainProof,
   exportEvidencePackage,
   parseEvidencePackage,
   verifyEvidencePackage,
@@ -48,15 +49,18 @@ function printHelp() {
   console.log(`SafeLens CLI
 
 Usage:
-  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings]
+  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings] [--rpc-url <url>]
   safelens verify [--file evidence.json] [--json <string>] [--settings <path>] [--no-settings] [--format text|json]
   safelens sources
   safelens settings init [--path <file>]
   safelens settings show [--path <file>]
 
+Options:
+  --rpc-url <url>   Fetch on-chain policy proof via eth_getProof (enables proof-verified trust level)
+
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
-  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --format json
+  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --rpc-url https://eth.llamarpc.com
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --no-settings
   safelens verify --file evidence.json
   safelens sources
@@ -254,6 +258,24 @@ function printVerificationText(
     console.log(warningsOutput);
   }
 
+  // ── Policy Proof ───────────────────────────────────────────────────
+  if (report.policyProof) {
+    const pp = report.policyProof;
+    const proofRows: Array<[string, string]> = [];
+
+    for (const check of pp.checks) {
+      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
+      proofRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
+    }
+
+    const proofTitle = pp.valid
+      ? "🔒 On-Chain Policy Proof " + trustBadge("proof-verified")
+      : "🔒 On-Chain Policy Proof " + colors.red("(INVALID)");
+
+    console.log("");
+    console.log(box(table(proofRows, 22), proofTitle));
+  }
+
   // ── Signatures ──────────────────────────────────────────────────────
   const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
 
@@ -289,9 +311,17 @@ async function runAnalyze(args: string[]) {
   const pretty = hasFlag(args, "--pretty") || !hasFlag(args, "--compact");
   const format = getOutputFormat(args, "text");
 
+  const rpcUrl = getFlag(args, "--rpc-url");
+
   const parsed = parseSafeUrl(url);
   const tx = await fetchSafeTransaction(parsed.chainId, parsed.safeTxHash);
-  const evidence = createEvidencePackage(tx, parsed.chainId, url);
+  let evidence = createEvidencePackage(tx, parsed.chainId, url);
+
+  // Fetch on-chain policy proof if RPC URL is provided
+  if (rpcUrl) {
+    evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
+  }
+
   const settings = await loadSettingsForVerify(args);
   const report = await verifyEvidencePackage(evidence, { settings });
   const json = pretty ? exportEvidencePackage(evidence) : JSON.stringify(evidence);

@@ -30,3 +30,8 @@ export {
   type PolicyProofVerificationResult,
   type PolicyProofCheck,
 } from "./verify-policy";
+
+export {
+  fetchOnchainPolicyProof,
+  type FetchOnchainProofOptions,
+} from "./fetcher";

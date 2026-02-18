@@ -1,5 +1,10 @@
-import { EvidencePackage, SafeTransaction } from "../types";
+import type { EvidencePackage, SafeTransaction } from "../types";
+import type { Address } from "viem";
 import { getSafeApiUrl } from "../safe/url-parser";
+import {
+  fetchOnchainPolicyProof,
+  type FetchOnchainProofOptions,
+} from "../proof";
 
 /**
  * Create an evidence package from a Safe transaction
@@ -42,6 +47,30 @@ export function createEvidencePackage(
   };
 
   return evidence;
+}
+
+/**
+ * Enrich an evidence package with an on-chain policy proof.
+ *
+ * Fetches `eth_getProof` for the Safe at the latest (or specified) block,
+ * walks the owner/module linked lists, and attaches the result as
+ * `onchainPolicyProof`. Bumps version to "1.1".
+ */
+export async function enrichWithOnchainProof(
+  evidence: EvidencePackage,
+  options: FetchOnchainProofOptions = {}
+): Promise<EvidencePackage> {
+  const proof = await fetchOnchainPolicyProof(
+    evidence.safeAddress as Address,
+    evidence.chainId,
+    options
+  );
+
+  return {
+    ...evidence,
+    version: "1.1",
+    onchainPolicyProof: proof,
+  };
 }
 
 /**

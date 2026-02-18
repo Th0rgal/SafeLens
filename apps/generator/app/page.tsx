@@ -12,6 +12,7 @@ import {
   fetchSafeTransaction,
   fetchPendingTransactions,
   createEvidencePackage,
+  enrichWithOnchainProof,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
@@ -36,12 +37,20 @@ function extractAddress(input: string): string | null {
 
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
   const [copied, setCopied] = useState(false);
   const [pendingTxs, setPendingTxs] = useState<PendingTx[] | null>(null);
   const [safeAddress, setSafeAddress] = useState<string | null>(null);
+
+  /** Optionally enrich a package with an on-chain policy proof. */
+  const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
+    const trimmedRpc = rpcUrl.trim();
+    if (!trimmedRpc) return pkg;
+    return enrichWithOnchainProof(pkg, { rpcUrl: trimmedRpc });
+  };
 
   const handleAnalyze = async () => {
     setError(null);
@@ -79,7 +88,8 @@ export default function AnalyzePage() {
 
         if (result.type === "transaction") {
           const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
-          const pkg = createEvidencePackage(tx, result.data.chainId, input);
+          let pkg = createEvidencePackage(tx, result.data.chainId, input);
+          pkg = await maybeEnrich(pkg);
           setEvidence(pkg);
         } else {
           const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
@@ -107,7 +117,8 @@ export default function AnalyzePage() {
       const prefix = getChainPrefix(tx._chainId);
       const addr = safeAddress ?? tx.safe;
       const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
-      const pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      let pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      pkg = await maybeEnrich(pkg);
       setEvidence(pkg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create evidence package");
@@ -160,7 +171,7 @@ export default function AnalyzePage() {
             Paste a transaction URL, a queue URL, or a Safe address (0x...)
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               type="text"
@@ -172,6 +183,18 @@ export default function AnalyzePage() {
             <Button onClick={handleAnalyze} disabled={loading || !url}>
               {loading ? "Searching..." : "Analyze"}
             </Button>
+          </div>
+          <div>
+            <Input
+              type="text"
+              placeholder="RPC URL (optional — enables on-chain policy proof)"
+              value={rpcUrl}
+              onChange={(e) => setRpcUrl(e.target.value)}
+              className="text-xs"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Provide an Ethereum RPC URL to include a cryptographic policy proof (owners, threshold, modules) via eth_getProof.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -304,6 +327,14 @@ export default function AnalyzePage() {
                 <div className="font-medium text-muted">Safe TX Hash</div>
                 <AddressDisplay address={evidence.safeTxHash} />
               </div>
+              {evidence.onchainPolicyProof && (
+                <div className="col-span-2">
+                  <div className="font-medium text-muted">Policy Proof</div>
+                  <div className="text-xs text-blue-400">
+                    Included (block {evidence.onchainPolicyProof.blockNumber}, {evidence.onchainPolicyProof.decodedPolicy.owners.length} owners, threshold {evidence.onchainPolicyProof.decodedPolicy.threshold})
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-4">
