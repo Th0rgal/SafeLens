@@ -34,6 +34,7 @@ const erc7730Interpreter: Interpreter = (
   chainId,
   txValue,
   txFrom,
+  chains,
 ) =>
   createERC7730Interpreter(getGlobalIndex())(
     dataDecoded,
@@ -43,6 +44,7 @@ const erc7730Interpreter: Interpreter = (
     chainId,
     txValue,
     txFrom,
+    chains,
   );
 
 const INTERPRETERS: Interpreter[] = [
@@ -65,6 +67,7 @@ export function interpretTransaction(
   chainId?: number,
   txValue?: string,
   txFrom?: string,
+  chains?: Record<string, { nativeTokenSymbol?: string }>,
 ): Interpretation | null {
   for (const interpret of INTERPRETERS) {
     const result = interpret(
@@ -75,6 +78,7 @@ export function interpretTransaction(
       chainId,
       txValue,
       txFrom,
+      chains,
     );
     if (result) {
       if (disabledIds?.includes(result.id)) continue;

@@ -78,6 +78,51 @@ describe("createERC7730Interpreter", () => {
     expect(result.details.fields[1].label).toBe("Referral");
   });
 
+  it("uses chain native token symbol from settings when formatting amount", () => {
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 100, address: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84" }],
+        },
+      },
+      metadata: {
+        owner: "Lido",
+      },
+      display: {
+        formats: {
+          "submit(address)": {
+            intent: "Stake",
+            fields: [
+              {
+                label: "Amount",
+                path: "@.value",
+                format: "amount",
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const interpret = createERC7730Interpreter(buildIndex([descriptor]));
+    const result = interpret(
+      { method: "submit", parameters: [{ name: "_referral", type: "address", value: "0x0000000000000000000000000000000000000000" }] },
+      "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+      0,
+      undefined,
+      100,
+      "1000000000000000000",
+      undefined,
+      { "100": { nativeTokenSymbol: "DAI" } },
+    );
+
+    expect(result).not.toBeNull();
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.details.fields[0].value).toBe("1 DAI");
+  });
+
   it("returns null for unknown contract", () => {
     const descriptor: ERC7730Descriptor = {
       context: {

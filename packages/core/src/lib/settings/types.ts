@@ -3,6 +3,7 @@ import { ERC7730DescriptorSchema } from "../erc7730/parser";
 
 export const chainConfigSchema = z.object({
   name: z.string().min(1),
+  nativeTokenSymbol: z.string().min(1).optional(),
 });
 
 export const addressRegistryEntrySchema = z.object({

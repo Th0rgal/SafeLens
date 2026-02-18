@@ -160,4 +160,5 @@ export type Interpreter = (
   chainId?: number,
   txValue?: string,
   txFrom?: string,
+  chains?: Record<string, { nativeTokenSymbol?: string }>,
 ) => Interpretation | null;

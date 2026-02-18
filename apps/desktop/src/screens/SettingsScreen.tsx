@@ -28,6 +28,7 @@ export default function SettingsScreen() {
 
   const [newChainId, setNewChainId] = useState("");
   const [newChainName, setNewChainName] = useState("");
+  const [newChainNativeSymbol, setNewChainNativeSymbol] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
@@ -108,10 +109,11 @@ export default function SettingsScreen() {
     if (!newChainId || !newChainName) return;
     setChainEntries((prev) => [
       ...prev,
-      [newChainId, { name: newChainName }],
+      [newChainId, { name: newChainName, ...(newChainNativeSymbol ? { nativeTokenSymbol: newChainNativeSymbol } : {}) }],
     ]);
     setNewChainId("");
     setNewChainName("");
+    setNewChainNativeSymbol("");
   };
 
   return (
@@ -147,7 +149,7 @@ export default function SettingsScreen() {
           <CardContent className="space-y-2">
             {chainEntries.map(([chainId, chain], index) => (
               <div key={index} className="flex items-start gap-2">
-                <div className="grid flex-1 grid-cols-2 gap-2">
+                <div className="grid flex-1 grid-cols-3 gap-2">
                   <Input
                     value={chainId}
                     onChange={(e) => renameChain(index, e.target.value)}
@@ -159,6 +161,12 @@ export default function SettingsScreen() {
                     placeholder="Name"
                     className="text-xs"
                   />
+                  <Input
+                    value={chain.nativeTokenSymbol ?? ""}
+                    onChange={(e) => updateChain(index, { nativeTokenSymbol: e.target.value || undefined })}
+                    placeholder="Native token symbol"
+                    className="text-xs"
+                  />
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
                   <X className="h-3.5 w-3.5" />
@@ -166,9 +174,10 @@ export default function SettingsScreen() {
               </div>
             ))}
             <div className="flex items-start gap-2 border-t border-border/15 pt-2">
-              <div className="grid flex-1 grid-cols-2 gap-2">
+              <div className="grid flex-1 grid-cols-3 gap-2">
                 <Input value={newChainId} onChange={(e) => setNewChainId(e.target.value)} placeholder="Chain ID" className="text-xs" />
                 <Input value={newChainName} onChange={(e) => setNewChainName(e.target.value)} placeholder="Name" className="text-xs" />
+                <Input value={newChainNativeSymbol} onChange={(e) => setNewChainNativeSymbol(e.target.value)} placeholder="Native token symbol" className="text-xs" />
               </div>
               <Button variant="ghost" size="icon" onClick={handleAddChain} disabled={!newChainId || !newChainName} className="h-9 w-9 shrink-0">
                 <Plus className="h-3.5 w-3.5" />

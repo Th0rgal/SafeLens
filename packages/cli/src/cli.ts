@@ -175,6 +175,7 @@ function printVerificationText(
     evidence.chainId,
     evidence.transaction.value,
     evidence.safeAddress,
+    settings?.chains,
   );
 
   if (interpretation) {

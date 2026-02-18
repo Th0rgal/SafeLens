@@ -32,6 +32,25 @@ const KNOWN_CHAIN_NAMES: Record<number, string> = {
   11155420: "Optimism Sepolia",
 };
 
+const KNOWN_NATIVE_SYMBOLS: Record<number, string> = {
+  1: "ETH",
+  10: "ETH",
+  56: "BNB",
+  100: "DAI",
+  137: "POL",
+  146: "S",
+  250: "FTM",
+  324: "ETH",
+  8453: "ETH",
+  8217: "KLAY",
+  42220: "CELO",
+  43114: "AVAX",
+  59144: "ETH",
+  81457: "ETH",
+  42161: "ETH",
+  1313161554: "ETH",
+};
+
 function getDeployments(descriptor: ERC7730Descriptor): Deployment[] {
   return [
     ...(descriptor.context.contract?.deployments ?? []),
@@ -51,7 +70,13 @@ function buildChains(descriptors: ERC7730Descriptor[]): Record<string, ChainConf
   return Object.fromEntries(
     Array.from(chainIds)
       .sort((a, b) => a - b)
-      .map((chainId) => [String(chainId), { name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}` }])
+      .map((chainId) => [
+        String(chainId),
+        {
+          name: KNOWN_CHAIN_NAMES[chainId] ?? `Chain ${chainId}`,
+          nativeTokenSymbol: KNOWN_NATIVE_SYMBOLS[chainId] ?? "ETH",
+        },
+      ])
   );
 }
 

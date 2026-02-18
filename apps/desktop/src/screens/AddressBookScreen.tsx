@@ -154,6 +154,15 @@ export default function AddressBookScreen() {
           <CardTitle>Registry</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
+          <div className="flex items-center gap-2 border-b border-border/15 pb-2">
+            <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
+            <Input value={newGroup} onChange={(e) => setNewGroup(e.target.value)} placeholder="Directory" className="w-40 text-xs" />
+            <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+
           {orderedGroups.map((groupName) => (
             <div key={groupName} className="rounded-md border border-border/15 glass-subtle">
               <button
@@ -246,15 +255,6 @@ export default function AddressBookScreen() {
               )}
             </div>
           ))}
-
-          <div className="flex items-center gap-2 border-t border-border/15 pt-2">
-            <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
-            <Input value={newGroup} onChange={(e) => setNewGroup(e.target.value)} placeholder="Directory" className="w-40 text-xs" />
-            <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </div>

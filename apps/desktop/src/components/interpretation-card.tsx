@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { interpretTransaction } from "@safelens/core";
 import { getRenderer, SEVERITY_STYLES } from "@/components/interpretations/registry";
 import type { EvidenceContext } from "@/components/interpretations/registry";
+import { useSettingsConfig } from "@/lib/settings/hooks";
 
 interface InterpretationCardProps {
   dataDecoded: unknown;
@@ -35,6 +36,7 @@ export function InterpretationCard({
   context,
   disabledInterpreters,
 }: InterpretationCardProps) {
+  const { config } = useSettingsConfig();
   const interpretation = useMemo(
     () =>
       interpretTransaction(
@@ -46,8 +48,9 @@ export function InterpretationCard({
         chainId,
         txValue,
         txFrom,
+        config?.chains,
       ),
-    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId, txValue, txFrom],
+    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId, txValue, txFrom, config?.chains],
   );
 
   if (!interpretation) return null;

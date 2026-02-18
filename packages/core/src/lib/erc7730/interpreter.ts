@@ -195,6 +195,7 @@ function formatValue(
   descriptor: ERC7730Descriptor,
   dataDecoded?: DataDecoded,
   chainId?: number,
+  nativeTokenSymbol = "ETH",
 ): string {
   const format = field.format ?? "raw";
 
@@ -207,10 +208,10 @@ function formatValue(
       return toAddress(value);
 
     case "amount":
-      // Native currency (ETH) — 18 decimals
+      // Native currency amount — 18 decimals.
       try {
         const formatted = formatUnits(BigInt(value), 18);
-        return `${formatted} ETH`;
+        return `${formatted} ${nativeTokenSymbol}`;
       } catch {
         return value;
       }
@@ -350,9 +351,13 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     txChainId?: number,
     txValue?: string,
     txFrom?: string,
+    chains?: Record<string, { nativeTokenSymbol?: string }>,
   ): Interpretation | null {
     // If caller provides a specific chainId, try it first; otherwise try all
     const chainsToTry = txChainId ? [txChainId, ...chainIds.filter(c => c !== txChainId)] : chainIds;
+    const nativeTokenSymbol = txChainId
+      ? (chains?.[String(txChainId)]?.nativeTokenSymbol ?? "ETH")
+      : "ETH";
 
     // Try decoded method lookup first
     if (
@@ -374,7 +379,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
         }
 
         if (entry) {
-          return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom);
+          return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom, nativeTokenSymbol);
         }
       }
     }
@@ -389,7 +394,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
           // Try to decode raw calldata using the ERC-7730 signature
           const decoded = decodeRawCalldata(txData, entry);
           if (decoded) {
-            return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom);
+            return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom, nativeTokenSymbol);
           }
 
           // Decoding failed — return interpretation with intent only
@@ -420,6 +425,7 @@ function buildInterpretation(
   chainId?: number,
   txValue?: string,
   txFrom?: string,
+  nativeTokenSymbol = "ETH",
 ): Interpretation {
   const fields: ERC7730Details["fields"] = [];
 
@@ -442,6 +448,7 @@ function buildInterpretation(
       entry.descriptor,
       decoded,
       chainId,
+      nativeTokenSymbol,
     );
 
     fields.push({

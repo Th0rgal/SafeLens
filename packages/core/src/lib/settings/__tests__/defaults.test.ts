@@ -32,6 +32,11 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
     expect(actual).toEqual(expected);
   });
 
+  it("includes default native token symbols for known chains", () => {
+    expect(DEFAULT_SETTINGS_CONFIG.chains["1"]?.nativeTokenSymbol).toBe("ETH");
+    expect(DEFAULT_SETTINGS_CONFIG.chains["100"]?.nativeTokenSymbol).toBe("DAI");
+  });
+
   it("builds non-empty address registry with audit metadata", () => {
     expect(DEFAULT_SETTINGS_CONFIG.addressRegistry.length).toBeGreaterThan(0);
 
