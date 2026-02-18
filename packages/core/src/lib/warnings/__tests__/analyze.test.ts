@@ -14,6 +14,8 @@ const mockConfig: SettingsConfig = {
   contractRegistry: [
     { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1" },
   ],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("identifyProposer", () => {
@@ -103,6 +105,24 @@ describe("analyzeTarget", () => {
       mockConfig
     );
     expect(warnings).toHaveLength(0);
+  });
+
+  it("treats chain-scoped entries as unknown on other chains", () => {
+    const scopedConfig: SettingsConfig = {
+      ...mockConfig,
+      contractRegistry: [
+        { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", chainIds: [1] },
+      ],
+    };
+
+    const warnings = analyzeTarget(
+      "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+      1,
+      scopedConfig,
+      8453
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].level).toBe("danger");
   });
 });
 

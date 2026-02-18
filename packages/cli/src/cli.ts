@@ -120,9 +120,13 @@ function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSo
  * Known addresses show their name in bold green
  * Unknown addresses show full address in orange
  */
-function formatAddressWithName(address: string, settings: SettingsConfig | null): string {
+function formatAddressWithName(
+  address: string,
+  settings: SettingsConfig | null,
+  chainId?: number,
+): string {
   if (settings) {
-    const name = resolveAddress(address, settings);
+    const name = resolveAddress(address, settings, chainId);
     if (name) {
       return colors.bold(colors.green(name));
     }
@@ -183,7 +187,7 @@ function printVerificationText(
   console.log(box(
     table([
       ["Chain", `${code(getChainName(evidence.chainId))} (${evidence.chainId}) ${trustBadge("self-verified")}`],
-      ["Safe Address", `${formatAddressWithName(evidence.safeAddress, settings)} ${trustBadge("self-verified")}`],
+      ["Safe Address", `${formatAddressWithName(evidence.safeAddress, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
       ["Safe URL", evidence.sources?.transactionUrl ? formatUrl(evidence.sources.transactionUrl) : label("N/A")],
     ], 15),
     "Transaction Overview"
@@ -219,7 +223,7 @@ function printVerificationText(
   console.log("");
   console.log(box(
     table([
-      ["Target Contract", `${formatAddressWithName(evidence.transaction.to, settings)} ${trustBadge("self-verified")}`],
+      ["Target Contract", `${formatAddressWithName(evidence.transaction.to, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
       ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
       ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
       ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
@@ -247,7 +251,7 @@ function printVerificationText(
   ];
 
   if (proposer) {
-    signaturesRows.push(["Proposed by", formatAddressWithName(proposer, settings)]);
+    signaturesRows.push(["Proposed by", formatAddressWithName(proposer, settings, evidence.chainId)]);
   }
 
   console.log(box(

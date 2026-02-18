@@ -351,14 +351,14 @@ describe("createERC7730Interpreter", () => {
 
   it("resolves token name and decimals when chainId is provided", () => {
     const sig = "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
-    // USDC on Gnosis (0xDDAfbb505ad214D7b80b1f830fccc89B60fb7A83, 6 decimals)
-    const takerAssetAddr = BigInt("0xDDAfbb505ad214D7b80b1f830fccc89B60fb7A83");
+    // USDT on Ethereum (0xdAC17F958D2ee523a2206206994597C13D831ec7, 6 decimals)
+    const takerAssetAddr = BigInt("0xdAC17F958D2ee523a2206206994597C13D831ec7");
     const receiverAddr = BigInt("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
 
     const descriptor: ERC7730Descriptor = {
       context: {
         contract: {
-          deployments: [{ chainId: 100, address: "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01" }],
+          deployments: [{ chainId: 1, address: "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01" }],
         },
       },
       metadata: {
@@ -402,13 +402,13 @@ describe("createERC7730Interpreter", () => {
     const index = buildIndex([descriptor]);
     const interpret = createERC7730Interpreter(index);
 
-    // With chainId=100 (Gnosis), USDC should be resolved from token list
+    // With chainId=1 (Ethereum), USDT should be resolved from token list
     const result = interpret(
       null,
       "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",
       0,
       txData,
-      100,
+      1,
     );
 
     expect(result).not.toBeNull();
@@ -418,7 +418,7 @@ describe("createERC7730Interpreter", () => {
     }
     expect(result.details.fields).toHaveLength(1);
     expect(result.details.fields[0].label).toBe("Minimum to receive");
-    expect(result.details.fields[0].value).toBe("0.998945 USDC");
+    expect(result.details.fields[0].value).toBe("0.998945 USDT");
   });
 
   it("resolves bare single-segment field paths like _value and _to", () => {

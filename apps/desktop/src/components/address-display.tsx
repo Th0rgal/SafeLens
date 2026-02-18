@@ -8,10 +8,11 @@ import { resolveAddress, resolveContract } from "@safelens/core";
 
 interface AddressDisplayProps {
   address: string;
+  chainId?: number;
   className?: string;
 }
 
-export function AddressDisplay({ address, className }: AddressDisplayProps) {
+export function AddressDisplay({ address, chainId, className }: AddressDisplayProps) {
   const { config, saveConfig } = useSettingsConfig();
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
@@ -23,7 +24,7 @@ export function AddressDisplay({ address, className }: AddressDisplayProps) {
   const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
 
   const resolved = config
-    ? resolveAddress(address, config) ?? resolveContract(address, config)?.name ?? null
+    ? resolveAddress(address, config, chainId) ?? resolveContract(address, config, chainId)?.name ?? null
     : null;
 
   const displayText = resolved ?? address;

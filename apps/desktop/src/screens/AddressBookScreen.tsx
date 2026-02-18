@@ -17,6 +17,8 @@ export default function AddressBookScreen() {
   const [newName, setNewName] = useState("");
   const [newContract, setNewContract] = useState("");
   const [newContractName, setNewContractName] = useState("");
+  const [newAddressChainIds, setNewAddressChainIds] = useState("");
+  const [newContractChainIds, setNewContractChainIds] = useState("");
 
   useEffect(() => {
     if (savedConfig) {
@@ -34,14 +36,30 @@ export default function AddressBookScreen() {
   const updateEntry = (i: number, updates: Partial<AddressBookEntry>) =>
     setEntries((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...updates } : e)));
 
+  const parseChainIds = (input: string): number[] | undefined => {
+    const parsed = input
+      .split(",")
+      .map((part) => Number.parseInt(part.trim(), 10))
+      .filter((num) => Number.isFinite(num) && num > 0);
+    if (parsed.length === 0) return undefined;
+    return Array.from(new Set(parsed));
+  };
+
+  const entryChainIdsText = (entry: { chainIds?: number[] }): string => {
+    if (entry.chainIds && entry.chainIds.length > 0) return entry.chainIds.join(", ");
+    return "";
+  };
+
   const removeEntry = (i: number) =>
     setEntries((prev) => prev.filter((_, idx) => idx !== i));
 
   const handleAdd = () => {
     if (!newAddress || !newName) return;
-    setEntries((prev) => [...prev, { address: newAddress, name: newName }]);
+    const chainIds = parseChainIds(newAddressChainIds);
+    setEntries((prev) => [...prev, { address: newAddress, name: newName, ...(chainIds ? { chainIds } : {}) }]);
     setNewAddress("");
     setNewName("");
+    setNewAddressChainIds("");
   };
 
   const updateContract = (i: number, updates: Partial<ContractRegistryEntry>) =>
@@ -52,9 +70,11 @@ export default function AddressBookScreen() {
 
   const handleAddContract = () => {
     if (!newContract || !newContractName) return;
-    setContracts((prev) => [...prev, { address: newContract, name: newContractName }]);
+    const chainIds = parseChainIds(newContractChainIds);
+    setContracts((prev) => [...prev, { address: newContract, name: newContractName, ...(chainIds ? { chainIds } : {}) }]);
     setNewContract("");
     setNewContractName("");
+    setNewContractChainIds("");
   };
 
   const handleSave = async () => {
@@ -112,7 +132,20 @@ export default function AddressBookScreen() {
               <Input
                 value={entry.name}
                 onChange={(e) => updateEntry(i, { name: e.target.value })}
-                className="w-40 text-xs"
+                className="w-36 text-xs"
+              />
+              <Input
+                value={entryChainIdsText(entry)}
+                onChange={(e) => {
+                  const chainIds = parseChainIds(e.target.value);
+                  if (chainIds) {
+                    updateEntry(i, { chainIds });
+                  } else {
+                    updateEntry(i, { chainIds: undefined });
+                  }
+                }}
+                placeholder="Chain IDs (optional)"
+                className="w-48 text-xs"
               />
               <Button variant="ghost" size="icon" onClick={() => removeEntry(i)} className="h-9 w-9 shrink-0">
                 <X className="h-3.5 w-3.5" />
@@ -121,7 +154,13 @@ export default function AddressBookScreen() {
           ))}
           <div className="flex items-center gap-2 border-t border-border/15 pt-2">
             <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-36 text-xs" />
+            <Input
+              value={newAddressChainIds}
+              onChange={(e) => setNewAddressChainIds(e.target.value)}
+              placeholder="Chain IDs (optional)"
+              className="w-48 text-xs"
+            />
             <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -144,7 +183,20 @@ export default function AddressBookScreen() {
               <Input
                 value={entry.name}
                 onChange={(e) => updateContract(i, { name: e.target.value })}
-                className="w-40 text-xs"
+                className="w-36 text-xs"
+              />
+              <Input
+                value={entryChainIdsText(entry)}
+                onChange={(e) => {
+                  const chainIds = parseChainIds(e.target.value);
+                  if (chainIds) {
+                    updateContract(i, { chainIds });
+                  } else {
+                    updateContract(i, { chainIds: undefined });
+                  }
+                }}
+                placeholder="Chain IDs (optional)"
+                className="w-48 text-xs"
               />
               <Button variant="ghost" size="icon" onClick={() => removeContract(i)} className="h-9 w-9 shrink-0">
                 <X className="h-3.5 w-3.5" />
@@ -153,7 +205,13 @@ export default function AddressBookScreen() {
           ))}
           <div className="flex items-center gap-2 border-t border-border/15 pt-2">
             <Input value={newContract} onChange={(e) => setNewContract(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
-            <Input value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
+            <Input value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="Name" className="w-36 text-xs" />
+            <Input
+              value={newContractChainIds}
+              onChange={(e) => setNewContractChainIds(e.target.value)}
+              placeholder="Chain IDs (optional)"
+              className="w-48 text-xs"
+            />
             <Button variant="ghost" size="icon" onClick={handleAddContract} disabled={!newContract || !newContractName} className="h-9 w-9 shrink-0">
               <Plus className="h-3.5 w-3.5" />
             </Button>

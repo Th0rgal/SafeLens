@@ -33,6 +33,38 @@ describe("resolveAddress", () => {
     const config = makeConfig({ addressBook: [] });
     expect(resolveAddress("0x0000000000000000000000000000000000000001", config)).toBeNull();
   });
+
+  it("prefers a matching chain entry when chainId is provided", () => {
+    const config = makeConfig({
+      addressBook: [
+        { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "Mainnet Treasury", chainIds: [1] },
+        { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "Base Treasury", chainIds: [8453] },
+      ],
+    });
+
+    expect(resolveAddress("0x9fC3dc011b461664c835F2527fffb1169b3C213e", config, 8453)).toBe("Base Treasury");
+  });
+
+  it("supports chainIds list matching", () => {
+    const config = makeConfig({
+      addressBook: [
+        { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "Multichain Treasury", chainIds: [1, 8453] },
+      ],
+    });
+
+    expect(resolveAddress("0x9fC3dc011b461664c835F2527fffb1169b3C213e", config, 8453)).toBe("Multichain Treasury");
+  });
+
+  it("falls back to global entry when no chain-specific match exists", () => {
+    const config = makeConfig({
+      addressBook: [
+        { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "Global Treasury" },
+        { address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e", name: "Mainnet Treasury", chainIds: [1] },
+      ],
+    });
+
+    expect(resolveAddress("0x9fC3dc011b461664c835F2527fffb1169b3C213e", config, 8453)).toBe("Global Treasury");
+  });
 });
 
 describe("resolveContract", () => {
@@ -75,5 +107,24 @@ describe("resolveContract", () => {
 
     const result = resolveContract("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", config);
     expect(result!.abi).toEqual(mockAbi);
+  });
+
+  it("supports chainIds list for contracts", () => {
+    const config = makeConfig({
+      contractRegistry: [
+        {
+          address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+          name: "Wrapped Native",
+          chainIds: [1, 10, 42161],
+        },
+      ],
+    });
+
+    const result = resolveContract(
+      "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+      config,
+      10
+    );
+    expect(result?.name).toBe("Wrapped Native");
   });
 });

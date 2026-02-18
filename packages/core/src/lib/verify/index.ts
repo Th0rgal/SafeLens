@@ -47,7 +47,8 @@ export async function verifyEvidencePackage(
     ? analyzeTarget(
         evidence.transaction.to,
         evidence.transaction.operation,
-        settings
+        settings,
+        evidence.chainId
       )
     : [];
 

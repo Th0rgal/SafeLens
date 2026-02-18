@@ -9,6 +9,8 @@ const VOID_SETTINGS: SettingsConfig = {
   chains: {},
   addressBook: [],
   contractRegistry: [],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("verifyEvidencePackage", () => {

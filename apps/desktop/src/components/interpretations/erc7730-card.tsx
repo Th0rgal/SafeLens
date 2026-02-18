@@ -13,7 +13,7 @@ interface ERC7730CardProps {
  * Renders fields dynamically based on their format type, with format-aware
  * rendering for addresses, amounts, dates, etc.
  */
-export function ERC7730Card({ details }: ERC7730CardProps) {
+export function ERC7730Card({ details, context }: ERC7730CardProps) {
   return (
     <div className="space-y-3 text-sm">
       {details.fields.map((field, index) => (
@@ -21,7 +21,7 @@ export function ERC7730Card({ details }: ERC7730CardProps) {
           <span className="font-medium text-muted">{field.label}</span>
           <div>
             {field.format === "addressName" ? (
-              <AddressDisplay address={field.value} />
+              <AddressDisplay address={field.value} chainId={context?.chainId} />
             ) : field.format === "tokenAmount" ||
               field.format === "amount" ? (
               <span className="font-mono">{field.value}</span>

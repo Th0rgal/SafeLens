@@ -8,14 +8,16 @@ export const chainConfigSchema = z.object({
 export const addressBookEntrySchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   name: z.string().min(1),
-  chainId: z.number().optional(),
+  chainIds: z.array(z.number()).optional(),
 });
 
 export const contractRegistryEntrySchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   name: z.string().min(1),
   abi: z.any().optional(),
-  chainId: z.number().optional(),
+  chainIds: z.array(z.number()).optional(),
+  note: z.string().optional(),
+  sourceUrl: z.string().url().optional(),
 });
 
 export const settingsConfigSchema = z.object({

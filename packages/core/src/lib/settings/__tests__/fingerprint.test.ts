@@ -11,6 +11,8 @@ const baseConfig: SettingsConfig = {
     { address: "0x1111111111111111111111111111111111111111", name: "Alice" },
   ],
   contractRegistry: [],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("computeConfigFingerprint", () => {
@@ -31,6 +33,8 @@ describe("computeConfigFingerprint", () => {
       chains: { "1": { name: "Eth" } },
       addressBook: [],
       contractRegistry: [],
+      erc7730Descriptors: [],
+      disabledInterpreters: [],
     };
     // Same data, different key order
     const config2 = {
@@ -38,6 +42,8 @@ describe("computeConfigFingerprint", () => {
       addressBook: [],
       version: "1.0" as const,
       chains: { "1": { name: "Eth" } },
+      erc7730Descriptors: [],
+      disabledInterpreters: [],
     };
     const a = await computeConfigFingerprint(config1);
     const b = await computeConfigFingerprint(config2);
