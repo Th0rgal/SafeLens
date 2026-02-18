@@ -98,11 +98,26 @@ function createVerifyPayload(
   };
 }
 
+function formatTrustLevel(trust: string): string {
+  switch (trust) {
+    case "proof-verified":
+      return colors.blue("🔒 proof-verified");
+    case "self-verified":
+      return colors.green("✓ self-verified");
+    case "rpc-sourced":
+      return colors.yellow("⚡ rpc-sourced");
+    case "api-sourced":
+      return colors.yellow("⚠ api-sourced");
+    case "user-provided":
+      return colors.gray("👤 user-provided");
+    default:
+      return colors.gray(`? ${trust}`);
+  }
+}
+
 function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
   for (const source of sources) {
-    const trustLevel = source.trust === "self-verified"
-      ? colors.green("✓ self-verified")
-      : colors.yellow("⚠ api-sourced");
+    const trustLevel = formatTrustLevel(source.trust);
 
     const status = source.status === "enabled"
       ? colors.green("enabled")
@@ -365,6 +380,8 @@ async function runSources() {
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
     })
   );
   console.log("");
@@ -374,6 +391,8 @@ async function runSources() {
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
     })
   );
 }

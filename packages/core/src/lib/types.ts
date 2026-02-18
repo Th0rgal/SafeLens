@@ -60,9 +60,93 @@ export const safeTransactionSchema = z.object({
 
 export type SafeTransaction = z.infer<typeof safeTransactionSchema>;
 
+// Trust classification for evidence sections
+export const trustClassificationSchema = z.enum([
+  "proof-verified",
+  "self-verified",
+  "rpc-sourced",
+  "api-sourced",
+  "user-provided",
+]);
+
+export type TrustClassification = z.infer<typeof trustClassificationSchema>;
+
+// Storage proof for a single slot
+export const storageProofEntrySchema = z.object({
+  key: hashSchema,
+  value: hashSchema,
+  proof: z.array(hexDataSchema),
+});
+
+export type StorageProofEntry = z.infer<typeof storageProofEntrySchema>;
+
+// Account proof from eth_getProof
+export const accountProofSchema = z.object({
+  address: addressSchema,
+  balance: z.string(),
+  codeHash: hashSchema,
+  nonce: z.number(),
+  storageHash: hashSchema,
+  accountProof: z.array(hexDataSchema),
+  storageProof: z.array(storageProofEntrySchema),
+});
+
+export type AccountProof = z.infer<typeof accountProofSchema>;
+
+// On-chain policy proof section (Phase 2 will populate these)
+export const onchainPolicyProofSchema = z.object({
+  blockNumber: z.number(),
+  stateRoot: hashSchema,
+  accountProof: accountProofSchema,
+  decodedPolicy: z.object({
+    owners: z.array(addressSchema),
+    threshold: z.number(),
+    nonce: z.number(),
+    modules: z.array(addressSchema),
+    guard: addressSchema,
+    fallbackHandler: addressSchema,
+    singleton: addressSchema,
+  }),
+  trust: trustClassificationSchema,
+});
+
+export type OnchainPolicyProof = z.infer<typeof onchainPolicyProofSchema>;
+
+// Simulation log entry
+export const simulationLogSchema = z.object({
+  address: addressSchema,
+  topics: z.array(hashSchema),
+  data: hexDataSchema,
+});
+
+export type SimulationLog = z.infer<typeof simulationLogSchema>;
+
+// State diff entry
+export const stateDiffEntrySchema = z.object({
+  address: addressSchema,
+  key: hashSchema,
+  before: hashSchema,
+  after: hashSchema,
+});
+
+export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
+
+// Simulation section (Phase 3 will populate these)
+export const simulationSchema = z.object({
+  success: z.boolean(),
+  returnData: hexDataSchema.nullable(),
+  gasUsed: z.string(),
+  logs: z.array(simulationLogSchema),
+  stateDiffs: z.array(stateDiffEntrySchema).optional(),
+  blockNumber: z.number(),
+  trust: trustClassificationSchema,
+});
+
+export type Simulation = z.infer<typeof simulationSchema>;
+
 // Evidence package schema
 export const evidencePackageSchema = z.object({
-  version: z.literal("1.0"),
+  version: z.union([z.literal("1.0"), z.literal("1.1")]),
   safeAddress: addressSchema,
   safeTxHash: hashSchema,
   chainId: z.number(),
@@ -88,6 +172,8 @@ export const evidencePackageSchema = z.object({
   confirmationsRequired: z.number(),
   ethereumTxHash: hashSchema.nullable().optional(),
   dataDecoded: z.any().nullable().optional(),
+  onchainPolicyProof: onchainPolicyProofSchema.optional(),
+  simulation: simulationSchema.optional(),
   sources: z.object({
     safeApiUrl: z.string().url(),
     transactionUrl: z.string().url(),

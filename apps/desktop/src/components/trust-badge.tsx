@@ -1,9 +1,11 @@
-import { ShieldCheck, Globe, User } from "lucide-react";
+import { ShieldCheck, Lock, Server, Globe, User } from "lucide-react";
 import { type TrustLevel, TRUST_CONFIG } from "@safelens/core";
 import { cn } from "@/lib/utils";
 
 const iconMap = {
   ShieldCheck,
+  Lock,
+  Server,
   Globe,
   User,
 };

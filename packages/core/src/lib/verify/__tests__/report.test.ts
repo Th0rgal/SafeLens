@@ -21,10 +21,13 @@ describe("verifyEvidencePackage", () => {
     expect(result.signatures.summary.total).toBe(evidence.confirmations.length);
     expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
     expect(result.signatures.byOwner[evidence.confirmations[0].owner].status).toBe("valid");
-    expect(result.sources).toHaveLength(7);
+    expect(result.sources).toHaveLength(9);
     expect(result.sources.find((s) => s.id === "settings")?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === "safe-owners-threshold")?.trust).toBe("api-sourced");
     expect(result.sources.find((s) => s.id === "decoded-calldata")?.status).toBe("enabled");
+    // Without policy proof or simulation, those sections should be disabled
+    expect(result.sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("disabled");
+    expect(result.sources.find((s) => s.id === "simulation")?.status).toBe("disabled");
   });
 
   it("returns target warnings when settings are unavailable", async () => {

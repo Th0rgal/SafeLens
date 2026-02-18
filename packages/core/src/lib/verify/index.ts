@@ -104,6 +104,10 @@ export async function verifyEvidencePackage(
       hasSettings: Boolean(settings),
       hasUnsupportedSignatures: summary.unsupported > 0,
       hasDecodedData: Boolean(evidence.dataDecoded),
+      hasOnchainPolicyProof: Boolean(evidence.onchainPolicyProof),
+      hasSimulation: Boolean(evidence.simulation),
+      onchainPolicyProofTrust: evidence.onchainPolicyProof?.trust,
+      simulationTrust: evidence.simulation?.trust,
     }),
     signatures: {
       list: signatureList,

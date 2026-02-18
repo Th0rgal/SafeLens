@@ -80,14 +80,16 @@ describe("CLI verify output", () => {
       level: "danger",
       message: expect.stringContaining("DelegateCall to unknown contract"),
     });
-    expect(parsed.sources).toHaveLength(7);
+    expect(parsed.sources).toHaveLength(9);
     expect(parsed.sources.map((item: { id: string }) => item.id)).toEqual([
       "evidence-package",
       "hash-recompute",
       "signatures",
       "signature-scheme-coverage",
       "safe-owners-threshold",
+      "onchain-policy-proof",
       "decoded-calldata",
+      "simulation",
       "settings",
     ]);
     expect(

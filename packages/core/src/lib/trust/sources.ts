@@ -15,6 +15,10 @@ export interface VerificationSourceContext {
   hasSettings: boolean;
   hasUnsupportedSignatures: boolean;
   hasDecodedData: boolean;
+  hasOnchainPolicyProof: boolean;
+  hasSimulation: boolean;
+  onchainPolicyProofTrust?: TrustLevel;
+  simulationTrust?: TrustLevel;
 }
 
 /**
@@ -115,15 +119,47 @@ export function buildVerificationSources(
             "Assumption: none additional. No contract signature (v=0) or pre-approved hash (v=1) entries were detected.",
           status: "disabled",
         },
-    {
-      id: "safe-owners-threshold",
-      title: "Safe owners and threshold",
-      trust: "api-sourced",
-      summary: "Owner set and threshold are accepted from evidence.",
-      detail:
-        "Assumption: confirmations and confirmationsRequired in the package reflect the Safe's real policy for this transaction.",
-      status: "enabled",
-    },
+    context.hasOnchainPolicyProof
+      ? {
+          id: "safe-owners-threshold",
+          title: "Safe owners and threshold",
+          trust: context.onchainPolicyProofTrust ?? "proof-verified",
+          summary:
+            "Owner set and threshold verified against on-chain storage proofs.",
+          detail:
+            "On-chain Merkle storage proofs confirm owners, threshold, nonce, modules, guard, fallback handler, and singleton at a pinned block.",
+          status: "enabled" as VerificationSourceStatus,
+        }
+      : {
+          id: "safe-owners-threshold",
+          title: "Safe owners and threshold",
+          trust: "api-sourced" as TrustLevel,
+          summary: "Owner set and threshold are accepted from evidence.",
+          detail:
+            "Assumption: confirmations and confirmationsRequired in the package reflect the Safe's real policy for this transaction.",
+          status: "enabled" as VerificationSourceStatus,
+        },
+    context.hasOnchainPolicyProof
+      ? {
+          id: "onchain-policy-proof",
+          title: "On-chain policy proof",
+          trust: context.onchainPolicyProofTrust ?? "proof-verified",
+          summary:
+            "Safe policy verified via eth_getProof Merkle storage proofs.",
+          detail:
+            "Storage proofs for owners, threshold, nonce, modules, guard, fallback handler, and singleton are verified against the provided state root.",
+          status: "enabled" as VerificationSourceStatus,
+        }
+      : {
+          id: "onchain-policy-proof",
+          title: "On-chain policy proof",
+          trust: "api-sourced" as TrustLevel,
+          summary:
+            "No on-chain policy proof included. Safe policy is api-sourced.",
+          detail:
+            "Without storage proofs, the Safe's owners, threshold, and configuration are trusted from the API response. Enable proof generation to upgrade this to proof-verified.",
+          status: "disabled" as VerificationSourceStatus,
+        },
     context.hasDecodedData
       ? {
           id: "decoded-calldata",
@@ -142,6 +178,26 @@ export function buildVerificationSources(
           detail:
             "Assumption: none for decoded metadata because this package contains only raw calldata.",
           status: "disabled",
+        },
+    context.hasSimulation
+      ? {
+          id: "simulation",
+          title: "Transaction simulation",
+          trust: context.simulationTrust ?? "rpc-sourced",
+          summary:
+            "Transaction simulated via execTransaction with state overrides.",
+          detail:
+            "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified if backed by consensus proofs.",
+          status: "enabled" as VerificationSourceStatus,
+        }
+      : {
+          id: "simulation",
+          title: "Transaction simulation",
+          trust: "rpc-sourced" as TrustLevel,
+          summary: "No simulation included in evidence.",
+          detail:
+            "Without simulation data, the transaction's execution outcome is unknown until it is signed and broadcast.",
+          status: "disabled" as VerificationSourceStatus,
         },
     context.hasSettings
       ? {
