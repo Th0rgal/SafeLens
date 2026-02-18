@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { encodeFunctionData, parseAbiItem } from "viem";
 import { createERC7730Interpreter } from "../interpreter";
 import { buildIndex, computeSelector } from "../index";
 import type { ERC7730Descriptor } from "../types";
@@ -256,6 +257,80 @@ describe("createERC7730Interpreter", () => {
     expect(result.protocol).toBe("1inch");
     expect(result.action).toBe("Create Limit Order");
     expect(result.details.fields).toHaveLength(0); // no decoded params
+  });
+
+  it("decodes raw calldata fields using the ERC-7730 signature", () => {
+    const sig = "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
+
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 100, address: "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01" }],
+        },
+      },
+      metadata: {
+        owner: "1inch",
+      },
+      display: {
+        formats: {
+          [sig]: {
+            intent: "create order",
+            fields: [
+              {
+                label: "Minimum to receive",
+                path: "makerOrder.takingAmount",
+                format: "raw",
+              },
+              {
+                label: "Beneficiary",
+                path: "makerOrder.receiver",
+                format: "raw",
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    // Encode real calldata
+    const abiItem = parseAbiItem(`function ${sig}`);
+    const txData = encodeFunctionData({
+      abi: [abiItem],
+      functionName: "create",
+      args: [{
+        salt: 1n,
+        maker: 0x1234n,
+        receiver: 0xABCDn,
+        makerAsset: 0x5555n,
+        takerAsset: 0x6666n,
+        makingAmount: 1000n,
+        takingAmount: 500n,
+        makerTraits: 0n,
+      }],
+    });
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    const result = interpret(
+      null,
+      "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",
+      0,
+      txData,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.protocol).toBe("1inch");
+    expect(result.action).toBe("create order");
+    expect(result.details.fields).toHaveLength(2);
+    expect(result.details.fields[0].label).toBe("Minimum to receive");
+    expect(result.details.fields[0].value).toBe("500");
+    expect(result.details.fields[1].label).toBe("Beneficiary");
+    expect(result.details.fields[1].value).toBe("43981"); // 0xABCD = 43981
   });
 
   it("returns null for raw calldata with unknown selector", () => {

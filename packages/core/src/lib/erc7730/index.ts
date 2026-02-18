@@ -14,6 +14,8 @@ export interface IndexEntry {
   descriptor: ERC7730Descriptor;
   formatEntry: FormatEntry;
   selector: string; // 4-byte hex selector (e.g. "0x12345678")
+  /** Original ERC-7730 format key (human-readable signature with param names). */
+  formatKey: string;
 }
 
 export interface DescriptorIndex {
@@ -191,6 +193,7 @@ export function buildIndex(
           descriptor: resolved,
           formatEntry,
           selector,
+          formatKey,
         };
 
         // Index by selector
