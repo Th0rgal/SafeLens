@@ -10,7 +10,12 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ["lucide-react"],
+    exclude: [
+      "@tauri-apps/api",
+      "@tauri-apps/plugin-fs",
+      "@tauri-apps/plugin-dialog",
+      "lucide-react",
+    ],
   },
   server: {
     port: 5173,

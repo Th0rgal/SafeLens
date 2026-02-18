@@ -1,0 +1,52 @@
+{
+  "identifier": "default",
+  "description": "SafeLens default capabilities — minimal surface for offline verification",
+  "windows": ["main"],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:event:default",
+    "dialog:allow-save",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOCUMENT/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOCUMENT/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOCUMENT/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        { "path": "$APPDATA/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$DOCUMENT/**" }
+      ]
+    },
+    "core:path:default"
+  ]
+}
