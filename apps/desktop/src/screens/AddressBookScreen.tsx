@@ -57,8 +57,15 @@ export default function AddressBookScreen() {
       .join(", ");
   };
 
-  const updateEntry = (i: number, updates: Partial<AddressRegistryEntry>) =>
+  const updateEntry = (i: number, updates: Partial<AddressRegistryEntry>) => {
     setEntries((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...updates } : e)));
+
+    // Keep target directory expanded while editing (especially when renaming/moving group).
+    if (typeof updates.group === "string") {
+      const nextGroup = updates.group.trim() || "Custom";
+      setExpandedGroups((prev) => ({ ...prev, [nextGroup]: true }));
+    }
+  };
 
   const removeEntry = (i: number) => {
     setEntries((prev) => prev.filter((_, idx) => idx !== i));
@@ -175,7 +182,7 @@ export default function AddressBookScreen() {
                 <span className="text-xs text-muted">({groupedEntries[groupName].length})</span>
               </button>
 
-              {expandedGroups[groupName] && (
+              {(expandedGroups[groupName] ?? true) && (
                 <div className="space-y-2 border-t border-border/15 px-2 py-2">
                   {groupedEntries[groupName].map(({ entry, index: i }) => (
                     <div key={i} className="rounded-md border border-border/15 bg-surface-2/20 px-2 py-2">
