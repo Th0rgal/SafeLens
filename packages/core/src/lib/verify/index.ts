@@ -2,6 +2,7 @@ import { analyzeTarget, identifyProposer, type TransactionWarning } from "../war
 import type { EvidencePackage } from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
+import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources } from "../trust";
@@ -30,6 +31,7 @@ export type EvidenceVerificationReport = {
   signatures: SignatureCheckBundle;
   sources: ReturnType<typeof buildVerificationSources>;
   hashDetails?: SafeTxHashDetails;
+  policyProof?: PolicyProofVerificationResult;
 };
 
 export interface VerifyEvidenceOptions {
@@ -97,6 +99,15 @@ export async function verifyEvidencePackage(
     nonce: evidence.transaction.nonce,
   });
 
+  // Verify on-chain policy proof if present
+  let policyProof: PolicyProofVerificationResult | undefined;
+  if (evidence.onchainPolicyProof) {
+    policyProof = verifyPolicyProof(
+      evidence.onchainPolicyProof,
+      evidence.safeAddress as Address
+    );
+  }
+
   return {
     proposer,
     targetWarnings,
@@ -115,5 +126,6 @@ export async function verifyEvidencePackage(
       summary,
     },
     hashDetails,
+    policyProof,
   };
 }
