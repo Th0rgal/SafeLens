@@ -343,6 +343,121 @@ describe("createERC7730Interpreter", () => {
     expect(result.details.fields[1].value).toBe("0xd8da6bf26964af9d7eed9e03e53415d37aa96045");
   });
 
+  it("resolves bare single-segment field paths like _value and _to", () => {
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 1, address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" }],
+        },
+      },
+      metadata: {
+        owner: "Tether",
+        token: { name: "Tether USD", ticker: "USDT", decimals: 6 },
+      },
+      display: {
+        formats: {
+          "transfer(address,uint256)": {
+            intent: "Send",
+            fields: [
+              { path: "_value", label: "Amount", format: "tokenAmount" },
+              { path: "_to", label: "To", format: "addressName" },
+            ],
+          },
+        },
+      },
+    };
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    const dataDecoded = {
+      method: "transfer",
+      parameters: [
+        { name: "_to", type: "address", value: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+        { name: "_value", type: "uint256", value: "1000000" },
+      ],
+    };
+
+    const result = interpret(
+      dataDecoded,
+      "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      0,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") throw new Error("Expected ERC-7730");
+    expect(result.details.fields).toHaveLength(2);
+    expect(result.details.fields[0].label).toBe("Amount");
+    expect(result.details.fields[0].value).toBe("1 USDT");
+    expect(result.details.fields[1].label).toBe("To");
+    expect(result.details.fields[1].value).toBe("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045");
+  });
+
+  it("matches descriptors with selector-only format keys when dataDecoded is available", () => {
+    // Simulates Uniswap V3 Router where format key is "0x04e45aaf" instead of a function signature
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 1, address: "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45" }],
+        },
+      },
+      metadata: { owner: "Uniswap" },
+      display: {
+        formats: {
+          "0x04e45aaf": {
+            intent: "swap",
+            fields: [
+              { path: "params.amountIn", label: "Send", format: "raw" },
+            ],
+          },
+        },
+      },
+    };
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    // dataDecoded is available (from Safe tx service) with method name
+    const dataDecoded = {
+      method: "exactInputSingle",
+      parameters: [
+        {
+          name: "params",
+          type: "tuple",
+          value: {
+            amountIn: "1000000000000000000",
+            amountOutMinimum: "500000",
+            tokenIn: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+            tokenOut: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            fee: "3000",
+            recipient: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+            sqrtPriceLimitX96: "0",
+          },
+        },
+      ],
+    };
+
+    // txData starts with 0x04e45aaf selector
+    const txData = "0x04e45aaf" + "0".repeat(512);
+
+    const result = interpret(
+      dataDecoded,
+      "0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45",
+      0,
+      txData,
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") throw new Error("Expected ERC-7730");
+    expect(result.protocol).toBe("Uniswap");
+    expect(result.action).toBe("swap");
+    expect(result.details.fields).toHaveLength(1);
+    expect(result.details.fields[0].label).toBe("Send");
+    expect(result.details.fields[0].value).toBe("1000000000000000000");
+  });
+
   it("returns null for raw calldata with unknown selector", () => {
     const descriptor: ERC7730Descriptor = {
       context: {

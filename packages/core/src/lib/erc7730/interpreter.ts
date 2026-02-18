@@ -74,9 +74,9 @@ function extractValue(
     return txTo ?? null;
   }
 
-  // Bare dotted path (e.g. "makerOrder.takingAmount") — used by ERC-7730 descriptors
+  // Bare path (e.g. "makerOrder.takingAmount", "_value", "amount") — used by ERC-7730 descriptors.
   // These reference calldata parameters by their ERC-7730 name, not by #. prefix.
-  if (path.includes(".") && !path.startsWith("$")) {
+  if (!path.startsWith("$")) {
     const parts = path.split(".");
     const paramName = parts[0];
     const param = dataDecoded.parameters?.find((p) => p.name === paramName);
@@ -334,14 +334,23 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
       const decoded = dataDecoded as DataDecoded;
 
       for (const chainId of chainIds) {
-        const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
+        // Try by method name first (most descriptors use human-readable signatures)
+        let entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
+
+        // Fall back to selector lookup — some descriptors (e.g. Uniswap V3 Router)
+        // use raw 4-byte selectors as format keys, so method name lookup won't match.
+        if (!entry && txData && txData.length >= 10) {
+          const selector = txData.slice(0, 10).toLowerCase();
+          entry = lookupFormat(index, chainId, txTo, selector);
+        }
+
         if (entry) {
           return buildInterpretation(entry, decoded, txTo);
         }
       }
     }
 
-    // Fallback: extract 4-byte selector from raw calldata and decode it
+    // Fallback: no dataDecoded — extract 4-byte selector from raw calldata and decode it
     if (txData && txData.length >= 10) {
       const selector = txData.slice(0, 10).toLowerCase();
 
