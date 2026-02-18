@@ -18,6 +18,10 @@ export default function AddressBookScreen() {
   const [newAddress, setNewAddress] = useState("");
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("Custom");
+  const [newGroupMode, setNewGroupMode] = useState<"existing" | "new">("existing");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [entryGroupModes, setEntryGroupModes] = useState<Record<number, "existing" | "new">>({});
+  const [entryNewGroupNames, setEntryNewGroupNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (savedConfig) {
@@ -30,6 +34,11 @@ export default function AddressBookScreen() {
       }
       nextGroups.Custom = nextGroups.Custom ?? true;
       setExpandedGroups(nextGroups);
+      setEntryGroupModes({});
+      setEntryNewGroupNames({});
+      setNewGroup("Custom");
+      setNewGroupMode("existing");
+      setNewGroupName("");
     }
   }, [savedConfig]);
 
@@ -68,6 +77,19 @@ export default function AddressBookScreen() {
     }
   };
 
+  const shiftIndexedModeMap = <T extends string>(
+    source: Record<number, T>,
+    removedIndex: number,
+  ): Record<number, T> => {
+    const next: Record<number, T> = {};
+    for (const [key, value] of Object.entries(source)) {
+      const idx = Number.parseInt(key, 10);
+      if (idx < removedIndex) next[idx] = value;
+      if (idx > removedIndex) next[idx - 1] = value;
+    }
+    return next;
+  };
+
   const removeEntry = (i: number) => {
     setEntries((prev) => prev.filter((_, idx) => idx !== i));
     setExpanded((prev) => {
@@ -79,6 +101,8 @@ export default function AddressBookScreen() {
       }
       return next;
     });
+    setEntryGroupModes((prev) => shiftIndexedModeMap(prev, i));
+    setEntryNewGroupNames((prev) => shiftIndexedModeMap(prev, i));
   };
 
   const toggleExpanded = (i: number) => {
@@ -87,15 +111,20 @@ export default function AddressBookScreen() {
 
   const handleAdd = () => {
     if (!newAddress || !newName) return;
+    const selectedGroup = newGroupMode === "new" ? newGroupName.trim() : newGroup.trim();
+    if (newGroupMode === "new" && !selectedGroup) return;
     setEntries((prev) => [...prev, {
       address: newAddress,
       name: newName,
       kind: "eoa",
-      group: newGroup.trim() || "Custom",
+      group: selectedGroup || "Custom",
     }]);
     setNewAddress("");
     setNewName("");
-    setExpandedGroups((prev) => ({ ...prev, [newGroup.trim() || "Custom"]: true }));
+    setExpandedGroups((prev) => ({ ...prev, [selectedGroup || "Custom"]: true }));
+    setNewGroupMode("existing");
+    setNewGroup(selectedGroup || "Custom");
+    setNewGroupName("");
   };
 
   const handleSave = async () => {
@@ -118,6 +147,11 @@ export default function AddressBookScreen() {
     }
     nextGroups.Custom = nextGroups.Custom ?? true;
     setExpandedGroups(nextGroups);
+    setEntryGroupModes({});
+    setEntryNewGroupNames({});
+    setNewGroup("Custom");
+    setNewGroupMode("existing");
+    setNewGroupName("");
   };
 
   const groupedEntries = entries.reduce<Record<string, Array<{ entry: AddressRegistryEntry; index: number }>>>((acc, entry, index) => {
@@ -127,6 +161,9 @@ export default function AddressBookScreen() {
     return acc;
   }, {});
   const orderedGroups = Object.keys(groupedEntries).sort((a, b) => a.localeCompare(b));
+  const availableGroups = Array.from(
+    new Set(entries.map((entry) => entry.group?.trim() || "Custom").concat("Custom"))
+  ).sort((a, b) => a.localeCompare(b));
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
@@ -165,8 +202,39 @@ export default function AddressBookScreen() {
           <div className="flex items-center gap-2 border-b border-border/15 pb-2">
             <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
             <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
-            <Input value={newGroup} onChange={(e) => setNewGroup(e.target.value)} placeholder="Directory" className="w-40 text-xs" />
-            <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
+            <select
+              value={newGroupMode === "new" ? "__new__" : (availableGroups.includes(newGroup) ? newGroup : "Custom")}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  setNewGroupMode("new");
+                  setNewGroupName("");
+                } else {
+                  setNewGroupMode("existing");
+                  setNewGroup(e.target.value);
+                }
+              }}
+              className="h-9 w-40 rounded border border-border/15 bg-surface-2/40 px-2 text-xs text-fg"
+            >
+              {availableGroups.map((group) => (
+                <option key={group} value={group}>{group}</option>
+              ))}
+              <option value="__new__">+ Create new...</option>
+            </select>
+            {newGroupMode === "new" && (
+              <Input
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="New directory"
+                className="w-40 text-xs"
+              />
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleAdd}
+              disabled={!newAddress || !newName || (newGroupMode === "new" && !newGroupName.trim())}
+              className="h-9 w-9 shrink-0"
+            >
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -214,11 +282,39 @@ export default function AddressBookScreen() {
                         <div className="mt-2 space-y-2 border-t border-border/15 pt-2">
                           <div className="grid grid-cols-[120px_1fr] items-center gap-2">
                             <span className="text-xs text-muted">Directory</span>
-                            <Input
-                              value={entry.group ?? "Custom"}
-                              onChange={(e) => updateEntry(i, { group: e.target.value || "Custom" })}
-                              className="text-xs"
-                            />
+                            <div className="space-y-2">
+                              <select
+                                value={(entryGroupModes[i] ?? "existing") === "new"
+                                  ? "__new__"
+                                  : (availableGroups.includes((entry.group?.trim() || "Custom")) ? (entry.group?.trim() || "Custom") : "Custom")}
+                                onChange={(e) => {
+                                  if (e.target.value === "__new__") {
+                                    setEntryGroupModes((prev) => ({ ...prev, [i]: "new" }));
+                                    setEntryNewGroupNames((prev) => ({ ...prev, [i]: "" }));
+                                  } else {
+                                    setEntryGroupModes((prev) => ({ ...prev, [i]: "existing" }));
+                                    updateEntry(i, { group: e.target.value });
+                                  }
+                                }}
+                                className="h-8 w-full rounded border border-border/15 bg-surface-2/40 px-2 text-xs text-fg"
+                              >
+                                {availableGroups.map((group) => (
+                                  <option key={group} value={group}>{group}</option>
+                                ))}
+                                <option value="__new__">+ Create new...</option>
+                              </select>
+                              {(entryGroupModes[i] ?? "existing") === "new" && (
+                                <Input
+                                  value={entryNewGroupNames[i] ?? ""}
+                                  onChange={(e) => {
+                                    setEntryNewGroupNames((prev) => ({ ...prev, [i]: e.target.value }));
+                                    updateEntry(i, { group: e.target.value });
+                                  }}
+                                  placeholder="New directory"
+                                  className="text-xs"
+                                />
+                              )}
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-[120px_1fr] items-center gap-2">
