@@ -24,6 +24,24 @@ export default function AddressBookScreen() {
   const [entryNewGroupNames, setEntryNewGroupNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
+    const groups = new Set(entries.map((entry) => entry.group?.trim() || "Custom"));
+
+    // Drop empty folders from expansion state.
+    setExpandedGroups((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const [groupName, isOpen] of Object.entries(prev)) {
+        if (groups.has(groupName)) next[groupName] = isOpen;
+      }
+      return next;
+    });
+
+    // If add-form points to a removed folder, fall back to Custom.
+    if (newGroupMode === "existing" && !groups.has(newGroup)) {
+      setNewGroup("Custom");
+    }
+  }, [entries, newGroupMode, newGroup]);
+
+  useEffect(() => {
     if (savedConfig) {
       setEntries(savedConfig.addressRegistry);
       setExpanded({});
