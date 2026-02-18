@@ -55,8 +55,7 @@ describe("CLI verify output", () => {
         {
           version: "1.0",
           chains: {},
-          addressBook: [],
-          contractRegistry: [],
+          addressRegistry: [],
         },
         null,
         2
@@ -150,7 +149,7 @@ describe("CLI verify output", () => {
     expect(result.stdout).toContain(String(CHAIN_ID));
     expect(result.stdout).toContain("Valid Signatures");
     expect(result.stdout).toContain("Warnings");
-    expect(result.stdout).toContain("DelegateCall to MultiSend 1.4.1");
+    expect(result.stdout).toContain("DelegateCall to unknown contract");
     // Sources of Truth section removed - not shown in app
   });
 
@@ -214,7 +213,7 @@ describe("CLI verify output", () => {
 
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("Warnings");
-    expect(result.stdout).toContain("DelegateCall to MultiSend 1.4.1");
+    expect(result.stdout).toContain("DelegateCall to unknown contract");
     expect(result.stdout).toContain("Signatures");
     expect(result.stdout).toContain("1");  // Valid signatures count
     // Sources of Truth section removed - not shown in app

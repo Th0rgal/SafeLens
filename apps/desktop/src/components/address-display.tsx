@@ -32,7 +32,6 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
   const displayText = resolved ?? address;
   const isResolved = resolved !== null;
 
-  // Position the popup so it stays within the viewport
   useEffect(() => {
     if (!open || !popupRef.current || !ref.current) return;
     const popup = popupRef.current;
@@ -42,11 +41,9 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
     const pad = 8;
 
     let top: number;
-    // Prefer above the trigger
     if (triggerRect.top - popupRect.height - pad >= 0) {
       top = -(popupRect.height + 8);
     } else {
-      // Flip below
       top = triggerRect.height + 8;
     }
 
@@ -77,11 +74,12 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
     try {
       await saveConfig({
         ...config,
-        addressBook: [
-          ...config.addressBook,
+        addressRegistry: [
+          ...config.addressRegistry,
           {
             address,
             name: nameInput.trim(),
+            kind: "eoa",
             ...(selectedChainId !== undefined && { chainIds: [selectedChainId] }),
           },
         ],
@@ -101,14 +99,12 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
     setSelectedChainId(chainId);
   }, [chainId]);
 
-  // Focus input when adding mode activates
   useEffect(() => {
     if (adding && inputRef.current) {
       inputRef.current.focus();
     }
   }, [adding]);
 
-  // Close on click outside
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -123,7 +119,6 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
     return () => document.removeEventListener("mousedown", handler);
   }, [open, chainId]);
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -160,7 +155,7 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
           className="absolute z-50 flex flex-col gap-2 whitespace-nowrap rounded-md border border-border/15 glass-panel px-3 py-2 text-xs shadow-lg"
         >
           {!isResolved && (
-            <span className="text-[10px] font-medium text-amber-400">Not in your address book</span>
+            <span className="text-[10px] font-medium text-amber-400">Not in your address registry</span>
           )}
           <span className="flex items-center gap-2">
             <code className="font-mono text-fg">{address}</code>
@@ -183,7 +178,7 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
               className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[10px] font-medium text-accent hover:bg-surface-2/40 transition-colors"
             >
               <Plus className="h-3 w-3" />
-              Add to address book
+              Add to registry
             </button>
           )}
           {!isResolved && adding && (

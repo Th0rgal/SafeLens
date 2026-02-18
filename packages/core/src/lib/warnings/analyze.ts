@@ -71,7 +71,7 @@ export function analyzeSigners(
     if (resolved === null) {
       warnings.push({
         level: "warning",
-        message: "Unknown signer — not in your address book",
+        message: "Unknown signer — not in your address registry",
       });
     }
 

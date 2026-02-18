@@ -34,13 +34,13 @@ describe("loadSettingsConfig", () => {
   it("returns stored config when valid", async () => {
     const custom = {
       ...DEFAULT_SETTINGS_CONFIG,
-      addressBook: [{ address: "0x0000000000000000000000000000000000000001", name: "Test" }],
+      addressRegistry: [{ address: "0x0000000000000000000000000000000000000001", name: "Test", kind: "eoa" }],
     };
     storage.value = JSON.stringify(custom);
 
     const config = await loadSettingsConfig(store);
-    expect(config.addressBook).toHaveLength(1);
-    expect(config.addressBook[0].name).toBe("Test");
+    expect(config.addressRegistry).toHaveLength(1);
+    expect(config.addressRegistry[0].name).toBe("Test");
   });
 
   it("returns defaults for corrupt data", async () => {
@@ -86,12 +86,12 @@ describe("importSettingsConfig", () => {
   it("imports valid config and saves it", async () => {
     const custom = {
       ...DEFAULT_SETTINGS_CONFIG,
-      addressBook: [{ address: "0x0000000000000000000000000000000000000001", name: "Imported" }],
+      addressRegistry: [{ address: "0x0000000000000000000000000000000000000001", name: "Imported", kind: "eoa" }],
     };
     const json = JSON.stringify(custom);
 
     const config = await importSettingsConfig(store, json);
-    expect(config.addressBook[0].name).toBe("Imported");
+    expect(config.addressRegistry[0].name).toBe("Imported");
     expect(store.write).toHaveBeenCalled();
   });
 

@@ -1,6 +1,6 @@
 import type { Deployment, ERC7730Descriptor } from "../erc7730/types";
 import { bundledDescriptors } from "../erc7730/descriptors/index";
-import type { SettingsConfig, ChainConfig, ContractRegistryEntry } from "./types";
+import type { SettingsConfig, ChainConfig, AddressRegistryEntry } from "./types";
 
 export const CLEAR_SIGNING_REGISTRY_COMMIT = "eeaceef158f27730157d97e649d4b5671f293426";
 export const CLEAR_SIGNING_REGISTRY_URL =
@@ -54,7 +54,7 @@ function buildChains(descriptors: ERC7730Descriptor[]): Record<string, ChainConf
   );
 }
 
-function buildContractRegistry(descriptors: ERC7730Descriptor[]): ContractRegistryEntry[] {
+function buildAddressRegistry(descriptors: ERC7730Descriptor[]): AddressRegistryEntry[] {
   const entries = new Map<string, {
     address: string;
     name: string;
@@ -87,6 +87,7 @@ function buildContractRegistry(descriptors: ERC7730Descriptor[]): ContractRegist
     .map((entry) => ({
       address: entry.address,
       name: entry.name,
+      kind: "contract" as const,
       chainIds: Array.from(entry.chainIds).sort((a, b) => a - b),
       note: `Source: Ledger ERC-7730 clear-signing registry (${Array.from(entry.owners).sort().join(", ")}) @ ${CLEAR_SIGNING_REGISTRY_COMMIT}`,
       sourceUrl: CLEAR_SIGNING_REGISTRY_URL,
@@ -109,6 +110,5 @@ export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
   erc7730Descriptors: bundledDescriptors as SettingsConfig["erc7730Descriptors"],
   disabledInterpreters: [],
   chains: buildChains(registryDescriptors),
-  addressBook: [],
-  contractRegistry: buildContractRegistry(registryDescriptors),
+  addressRegistry: buildAddressRegistry(registryDescriptors),
 };

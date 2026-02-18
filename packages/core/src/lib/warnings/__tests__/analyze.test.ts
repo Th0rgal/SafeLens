@@ -7,12 +7,10 @@ const mockConfig: SettingsConfig = {
   chains: {
     "1": { name: "Ethereum" },
   },
-  addressBook: [
-    { address: "0xd779332c5A52566Dada11A075a735b18DAa6c1f4", name: "Signer 1" },
-    { address: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12", name: "Signer 2" },
-  ],
-  contractRegistry: [
-    { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1" },
+  addressRegistry: [
+    { address: "0xd779332c5A52566Dada11A075a735b18DAa6c1f4", name: "Signer 1", kind: "eoa" },
+    { address: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12", name: "Signer 2", kind: "eoa" },
+    { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", kind: "contract" },
   ],
   erc7730Descriptors: [],
   disabledInterpreters: [],
@@ -89,7 +87,7 @@ describe("analyzeTarget", () => {
     expect(warnings[0].message).toContain("DelegateCall to unknown contract");
   });
 
-  it("resolves addresses from address book too", () => {
+  it("resolves EOAs from address registry too", () => {
     const warnings = analyzeTarget(
       "0xd779332c5A52566Dada11A075a735b18DAa6c1f4",
       0,
@@ -110,8 +108,8 @@ describe("analyzeTarget", () => {
   it("treats chain-scoped entries as unknown on other chains", () => {
     const scopedConfig: SettingsConfig = {
       ...mockConfig,
-      contractRegistry: [
-        { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", chainIds: [1] },
+      addressRegistry: [
+        { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", kind: "contract", chainIds: [1] },
       ],
     };
 

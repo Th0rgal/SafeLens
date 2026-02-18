@@ -32,10 +32,11 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
     expect(actual).toEqual(expected);
   });
 
-  it("builds non-empty contract registry with audit metadata", () => {
-    expect(DEFAULT_SETTINGS_CONFIG.contractRegistry.length).toBeGreaterThan(0);
+  it("builds non-empty address registry with audit metadata", () => {
+    expect(DEFAULT_SETTINGS_CONFIG.addressRegistry.length).toBeGreaterThan(0);
 
-    for (const entry of DEFAULT_SETTINGS_CONFIG.contractRegistry) {
+    for (const entry of DEFAULT_SETTINGS_CONFIG.addressRegistry) {
+      expect(entry.kind).toBe("contract");
       expect(entry.chainIds && entry.chainIds.length > 0).toBe(true);
       expect(entry.note).toContain("Ledger ERC-7730 clear-signing registry");
       expect(entry.note).toContain(CLEAR_SIGNING_REGISTRY_COMMIT);
@@ -44,7 +45,7 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
   });
 
   it("resolves entries chain-correctly in default data", () => {
-    const mainnetUsdt = DEFAULT_SETTINGS_CONFIG.contractRegistry.find(
+    const mainnetUsdt = DEFAULT_SETTINGS_CONFIG.addressRegistry.find(
       (e) => e.address.toLowerCase() === "0xdac17f958d2ee523a2206206994597c13d831ec7"
     );
     expect(mainnetUsdt).toBeDefined();

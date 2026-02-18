@@ -116,7 +116,7 @@ function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSo
 }
 
 /**
- * Format an address with name resolution from address book
+ * Format an address with name resolution from address registry
  * Known addresses show their name in bold green
  * Unknown addresses show full address in orange
  */

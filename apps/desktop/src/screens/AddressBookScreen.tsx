@@ -1,42 +1,31 @@
 import { useState, useEffect } from "react";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import type { SettingsConfig, AddressBookEntry, ContractRegistryEntry } from "@safelens/core";
+import type { SettingsConfig, AddressRegistryEntry } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 
 export default function AddressBookScreen() {
   const { config: savedConfig, saveConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
-  const [entries, setEntries] = useState<AddressBookEntry[]>([]);
-  const [contracts, setContracts] = useState<ContractRegistryEntry[]>([]);
+  const [entries, setEntries] = useState<AddressRegistryEntry[]>([]);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [newAddress, setNewAddress] = useState("");
   const [newName, setNewName] = useState("");
-  const [newContract, setNewContract] = useState("");
-  const [newContractName, setNewContractName] = useState("");
-  const [newAddressChainIds, setNewAddressChainIds] = useState("");
-  const [newContractChainIds, setNewContractChainIds] = useState("");
-  const [entryChainIdDrafts, setEntryChainIdDrafts] = useState<Record<number, string>>({});
-  const [contractChainIdDrafts, setContractChainIdDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (savedConfig) {
-      setEntries(savedConfig.addressBook);
-      setContracts(savedConfig.contractRegistry);
+      setEntries(savedConfig.addressRegistry);
+      setExpanded({});
     }
   }, [savedConfig]);
 
   if (!savedConfig) return null;
 
-  const isModified =
-    JSON.stringify(entries) !== JSON.stringify(savedConfig.addressBook) ||
-    JSON.stringify(contracts) !== JSON.stringify(savedConfig.contractRegistry);
-
-  const updateEntry = (i: number, updates: Partial<AddressBookEntry>) =>
-    setEntries((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...updates } : e)));
+  const isModified = JSON.stringify(entries) !== JSON.stringify(savedConfig.addressRegistry);
 
   const parseChainIds = (input: string): number[] | undefined => {
     const parsed = input
@@ -47,60 +36,67 @@ export default function AddressBookScreen() {
     return Array.from(new Set(parsed));
   };
 
-  const entryChainIdsText = (entry: { chainIds?: number[] }): string => {
-    if (entry.chainIds && entry.chainIds.length > 0) return entry.chainIds.join(", ");
-    return "";
+  const chainIdsText = (entry: AddressRegistryEntry): string => {
+    if (!entry.chainIds || entry.chainIds.length === 0) return "";
+    return entry.chainIds.join(", ");
   };
 
-  const removeEntry = (i: number) =>
+  const chainNamesText = (chainIds?: number[]): string => {
+    if (!chainIds || chainIds.length === 0) return "All chains";
+    return chainIds
+      .map((id) => savedConfig.chains[String(id)]?.name ?? `Chain ${id}`)
+      .join(", ");
+  };
+
+  const updateEntry = (i: number, updates: Partial<AddressRegistryEntry>) =>
+    setEntries((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...updates } : e)));
+
+  const removeEntry = (i: number) => {
     setEntries((prev) => prev.filter((_, idx) => idx !== i));
+    setExpanded((prev) => {
+      const next: Record<number, boolean> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const idx = Number.parseInt(key, 10);
+        if (idx < i) next[idx] = value;
+        if (idx > i) next[idx - 1] = value;
+      }
+      return next;
+    });
+  };
+
+  const toggleExpanded = (i: number) => {
+    setExpanded((prev) => ({ ...prev, [i]: !prev[i] }));
+  };
 
   const handleAdd = () => {
     if (!newAddress || !newName) return;
-    const chainIds = parseChainIds(newAddressChainIds);
-    setEntries((prev) => [...prev, { address: newAddress, name: newName, ...(chainIds ? { chainIds } : {}) }]);
+    setEntries((prev) => [...prev, { address: newAddress, name: newName, kind: "eoa" }]);
     setNewAddress("");
     setNewName("");
-    setNewAddressChainIds("");
-  };
-
-  const updateContract = (i: number, updates: Partial<ContractRegistryEntry>) =>
-    setContracts((prev) => prev.map((e, idx) => (idx === i ? { ...e, ...updates } : e)));
-
-  const removeContract = (i: number) =>
-    setContracts((prev) => prev.filter((_, idx) => idx !== i));
-
-  const handleAddContract = () => {
-    if (!newContract || !newContractName) return;
-    const chainIds = parseChainIds(newContractChainIds);
-    setContracts((prev) => [...prev, { address: newContract, name: newContractName, ...(chainIds ? { chainIds } : {}) }]);
-    setNewContract("");
-    setNewContractName("");
-    setNewContractChainIds("");
   };
 
   const handleSave = async () => {
-    const updated: SettingsConfig = { ...savedConfig, addressBook: entries, contractRegistry: contracts };
+    const updated: SettingsConfig = { ...savedConfig, addressRegistry: entries };
     try {
       await saveConfig(updated);
-      toastSuccess("Address book saved", "Your address book has been updated.");
+      toastSuccess("Registry saved", "Your address registry has been updated.");
     } catch {
       toastWarning("Save failed", "Could not persist settings to disk.");
     }
   };
 
   const handleDiscard = () => {
-    setEntries(savedConfig.addressBook);
-    setContracts(savedConfig.contractRegistry);
+    setEntries(savedConfig.addressRegistry);
+    setExpanded({});
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="mb-2 text-2xl font-bold">Address Book</h2>
+          <h2 className="mb-2 text-2xl font-bold">Address Registry</h2>
           <p className="text-muted">
-            Label addresses and contracts so they are easier to identify during verification.
+            Label addresses for verification. Expand an entry to set chains, note, and type (EOA or contract).
           </p>
         </div>
         {isModified && (
@@ -121,108 +117,79 @@ export default function AddressBookScreen() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Addresses</CardTitle>
+          <CardTitle>Registry</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {entries.map((entry, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Input
-                value={entry.address}
-                onChange={(e) => updateEntry(i, { address: e.target.value })}
-                className="flex-1 text-xs font-mono"
-              />
-              <Input
-                value={entry.name}
-                onChange={(e) => updateEntry(i, { name: e.target.value })}
-                className="w-36 text-xs"
-              />
-              <Input
-                value={entryChainIdDrafts[i] ?? entryChainIdsText(entry)}
-                onChange={(e) => setEntryChainIdDrafts((prev) => ({ ...prev, [i]: e.target.value }))}
-                onBlur={() => {
-                  const raw = entryChainIdDrafts[i];
-                  if (raw === undefined) return;
-                  const chainIds = parseChainIds(raw);
-                  updateEntry(i, { chainIds: chainIds ?? undefined });
-                  setEntryChainIdDrafts((prev) => {
-                    const next = { ...prev };
-                    delete next[i];
-                    return next;
-                  });
-                }}
-                placeholder="Chain IDs (optional)"
-                className="w-48 text-xs"
-              />
-              <Button variant="ghost" size="icon" onClick={() => removeEntry(i)} className="h-9 w-9 shrink-0">
-                <X className="h-3.5 w-3.5" />
-              </Button>
+            <div key={i} className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(i)}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-surface-2/40"
+                >
+                  {expanded[i] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                </button>
+                <Input
+                  value={entry.address}
+                  onChange={(e) => updateEntry(i, { address: e.target.value })}
+                  className="flex-1 text-xs font-mono"
+                />
+                <Input
+                  value={entry.name}
+                  onChange={(e) => updateEntry(i, { name: e.target.value })}
+                  className="w-40 text-xs"
+                />
+                <Button variant="ghost" size="icon" onClick={() => removeEntry(i)} className="h-9 w-9 shrink-0">
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+
+              {expanded[i] && (
+                <div className="mt-2 space-y-2 border-t border-border/15 pt-2">
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <span className="text-xs text-muted">Type</span>
+                    <select
+                      value={entry.kind}
+                      onChange={(e) => updateEntry(i, { kind: e.target.value as "eoa" | "contract" })}
+                      className="h-8 rounded border border-border/15 bg-surface-2/40 px-2 text-xs text-fg"
+                    >
+                      <option value="eoa">EOA</option>
+                      <option value="contract">Contract</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                    <span className="text-xs text-muted">Note</span>
+                    <Input
+                      value={entry.note ?? ""}
+                      onChange={(e) => updateEntry(i, { note: e.target.value || undefined })}
+                      placeholder="Optional note"
+                      className="text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-[120px_1fr] items-start gap-2">
+                    <span className="pt-2 text-xs text-muted">Chains</span>
+                    <div>
+                      <Input
+                        value={chainIdsText(entry)}
+                        onChange={(e) => updateEntry(i, { chainIds: parseChainIds(e.target.value) })}
+                        placeholder="Chain IDs (optional)"
+                        className="text-xs"
+                      />
+                      <p className="mt-1 text-[10px] text-muted">{chainNamesText(entry.chainIds)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
+
           <div className="flex items-center gap-2 border-t border-border/15 pt-2">
             <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-36 text-xs" />
-            <Input
-              value={newAddressChainIds}
-              onChange={(e) => setNewAddressChainIds(e.target.value)}
-              placeholder="Chain IDs (optional)"
-              className="w-48 text-xs"
-            />
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
             <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Contract Registry</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {contracts.map((entry, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Input
-                value={entry.address}
-                onChange={(e) => updateContract(i, { address: e.target.value })}
-                className="flex-1 text-xs font-mono"
-              />
-              <Input
-                value={entry.name}
-                onChange={(e) => updateContract(i, { name: e.target.value })}
-                className="w-36 text-xs"
-              />
-              <Input
-                value={contractChainIdDrafts[i] ?? entryChainIdsText(entry)}
-                onChange={(e) => setContractChainIdDrafts((prev) => ({ ...prev, [i]: e.target.value }))}
-                onBlur={() => {
-                  const raw = contractChainIdDrafts[i];
-                  if (raw === undefined) return;
-                  const chainIds = parseChainIds(raw);
-                  updateContract(i, { chainIds: chainIds ?? undefined });
-                  setContractChainIdDrafts((prev) => {
-                    const next = { ...prev };
-                    delete next[i];
-                    return next;
-                  });
-                }}
-                placeholder="Chain IDs (optional)"
-                className="w-48 text-xs"
-              />
-              <Button variant="ghost" size="icon" onClick={() => removeContract(i)} className="h-9 w-9 shrink-0">
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          ))}
-          <div className="flex items-center gap-2 border-t border-border/15 pt-2">
-            <Input value={newContract} onChange={(e) => setNewContract(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
-            <Input value={newContractName} onChange={(e) => setNewContractName(e.target.value)} placeholder="Name" className="w-36 text-xs" />
-            <Input
-              value={newContractChainIds}
-              onChange={(e) => setNewContractChainIds(e.target.value)}
-              placeholder="Chain IDs (optional)"
-              className="w-48 text-xs"
-            />
-            <Button variant="ghost" size="icon" onClick={handleAddContract} disabled={!newContract || !newContractName} className="h-9 w-9 shrink-0">
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </div>
