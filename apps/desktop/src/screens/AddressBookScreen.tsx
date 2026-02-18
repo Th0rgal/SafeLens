@@ -19,6 +19,8 @@ export default function AddressBookScreen() {
   const [newContractName, setNewContractName] = useState("");
   const [newAddressChainIds, setNewAddressChainIds] = useState("");
   const [newContractChainIds, setNewContractChainIds] = useState("");
+  const [entryChainIdDrafts, setEntryChainIdDrafts] = useState<Record<number, string>>({});
+  const [contractChainIdDrafts, setContractChainIdDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (savedConfig) {
@@ -135,14 +137,18 @@ export default function AddressBookScreen() {
                 className="w-36 text-xs"
               />
               <Input
-                value={entryChainIdsText(entry)}
-                onChange={(e) => {
-                  const chainIds = parseChainIds(e.target.value);
-                  if (chainIds) {
-                    updateEntry(i, { chainIds });
-                  } else {
-                    updateEntry(i, { chainIds: undefined });
-                  }
+                value={entryChainIdDrafts[i] ?? entryChainIdsText(entry)}
+                onChange={(e) => setEntryChainIdDrafts((prev) => ({ ...prev, [i]: e.target.value }))}
+                onBlur={() => {
+                  const raw = entryChainIdDrafts[i];
+                  if (raw === undefined) return;
+                  const chainIds = parseChainIds(raw);
+                  updateEntry(i, { chainIds: chainIds ?? undefined });
+                  setEntryChainIdDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[i];
+                    return next;
+                  });
                 }}
                 placeholder="Chain IDs (optional)"
                 className="w-48 text-xs"
@@ -186,14 +192,18 @@ export default function AddressBookScreen() {
                 className="w-36 text-xs"
               />
               <Input
-                value={entryChainIdsText(entry)}
-                onChange={(e) => {
-                  const chainIds = parseChainIds(e.target.value);
-                  if (chainIds) {
-                    updateContract(i, { chainIds });
-                  } else {
-                    updateContract(i, { chainIds: undefined });
-                  }
+                value={contractChainIdDrafts[i] ?? entryChainIdsText(entry)}
+                onChange={(e) => setContractChainIdDrafts((prev) => ({ ...prev, [i]: e.target.value }))}
+                onBlur={() => {
+                  const raw = contractChainIdDrafts[i];
+                  if (raw === undefined) return;
+                  const chainIds = parseChainIds(raw);
+                  updateContract(i, { chainIds: chainIds ?? undefined });
+                  setContractChainIdDrafts((prev) => {
+                    const next = { ...prev };
+                    delete next[i];
+                    return next;
+                  });
                 }}
                 placeholder="Chain IDs (optional)"
                 className="w-48 text-xs"

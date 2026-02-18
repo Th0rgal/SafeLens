@@ -156,7 +156,10 @@ export default function ERC7730Screen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const descriptors = (config?.erc7730Descriptors ?? []) as unknown as ERC7730Descriptor[];
+  const descriptors = useMemo(
+    () => (config?.erc7730Descriptors ?? []) as unknown as ERC7730Descriptor[],
+    [config?.erc7730Descriptors],
+  );
   const groupedDescriptors = useMemo(() => groupDescriptors(descriptors), [descriptors]);
   const disabledInterpreters = config?.disabledInterpreters ?? [];
 
