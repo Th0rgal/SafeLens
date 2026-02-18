@@ -162,22 +162,20 @@ function printVerificationText(
   console.log(legend());
 
   // ── Transaction Interpretation ──────────────────────────────────────
-  if (evidence.dataDecoded) {
-    const interpretation = interpretTransaction(
-      evidence.dataDecoded,
-      evidence.transaction.to,
-      evidence.transaction.operation,
-      settings?.disabledInterpreters ?? [],
-      evidence.transaction.data,
-      evidence.chainId,
-      evidence.transaction.value,
-      evidence.safeAddress,
-    );
+  const interpretation = interpretTransaction(
+    evidence.dataDecoded,
+    evidence.transaction.to,
+    evidence.transaction.operation,
+    settings?.disabledInterpreters ?? [],
+    evidence.transaction.data,
+    evidence.chainId,
+    evidence.transaction.value,
+    evidence.safeAddress,
+  );
 
-    if (interpretation) {
-      console.log("");
-      console.log(renderInterpretation(interpretation));
-    }
+  if (interpretation) {
+    console.log("");
+    console.log(renderInterpretation(interpretation));
   }
 
   // ── Transaction Overview ────────────────────────────────────────────
