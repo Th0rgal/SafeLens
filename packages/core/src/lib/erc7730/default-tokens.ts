@@ -84,9 +84,8 @@ export function buildBuiltinTokenMap(descriptors: ERC7730Descriptor[]): Map<stri
         : descriptorSymbol;
       if (!symbol) continue;
 
-      const decimals = typeof descriptorDecimals === "number"
-        ? descriptorDecimals
-        : TOKEN_DECIMALS_BY_SYMBOL[symbol];
+      const decimals = TOKEN_DECIMALS_BY_SYMBOL[symbol]
+        ?? (typeof descriptorDecimals === "number" ? descriptorDecimals : undefined);
       if (typeof decimals !== "number") continue;
 
       for (const deployment of deployments) {
