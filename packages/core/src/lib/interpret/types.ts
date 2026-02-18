@@ -156,4 +156,5 @@ export type Interpreter = (
   dataDecoded: unknown,
   txTo: string,
   txOperation: number,
+  txData?: string | null,
 ) => Interpretation | null;

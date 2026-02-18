@@ -208,17 +208,16 @@ export default function VerifyScreen() {
 
       {verified && evidence && (
         <div className="space-y-6">
-          {evidence.dataDecoded && (
-            <InterpretationCard
-              dataDecoded={evidence.dataDecoded}
-              txTo={evidence.transaction.to}
-              txOperation={evidence.transaction.operation}
-              context={{
-                currentThreshold: evidence.confirmationsRequired,
-              }}
-              disabledInterpreters={config?.disabledInterpreters}
-            />
-          )}
+          <InterpretationCard
+            dataDecoded={evidence.dataDecoded}
+            txTo={evidence.transaction.to}
+            txOperation={evidence.transaction.operation}
+            txData={evidence.transaction.data}
+            context={{
+              currentThreshold: evidence.confirmationsRequired,
+            }}
+            disabledInterpreters={config?.disabledInterpreters}
+          />
 
           <Card>
             <CardHeader>

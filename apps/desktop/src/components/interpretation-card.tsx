@@ -10,6 +10,8 @@ interface InterpretationCardProps {
   dataDecoded: unknown;
   txTo: string;
   txOperation: number;
+  /** Raw calldata hex for selector-based fallback when dataDecoded is null. */
+  txData?: string | null;
   /** Optional evidence-level context for richer display. */
   context?: EvidenceContext;
   /** Interpreter IDs to skip. */
@@ -20,12 +22,13 @@ export function InterpretationCard({
   dataDecoded,
   txTo,
   txOperation,
+  txData,
   context,
   disabledInterpreters,
 }: InterpretationCardProps) {
   const interpretation = useMemo(
-    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters),
-    [dataDecoded, txTo, txOperation, disabledInterpreters],
+    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters, txData),
+    [dataDecoded, txTo, txOperation, disabledInterpreters, txData],
   );
 
   if (!interpretation) return null;

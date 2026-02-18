@@ -8,7 +8,7 @@
 import { formatUnits } from "viem";
 import type { Interpretation } from "../interpret/types";
 import type { DescriptorIndex } from "./index";
-import { lookupFormatByMethodName } from "./index";
+import { lookupFormat, lookupFormatByMethodName } from "./index";
 import type { FieldDefinition, ERC7730Descriptor } from "./types";
 
 // ── Field value extraction ──────────────────────────────────────────
@@ -201,69 +201,96 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     dataDecoded: unknown,
     txTo: string,
     _txOperation: number,
-    txValue?: string,
-    txFrom?: string
+    txData?: string | null,
   ): Interpretation | null {
-    // Type guard for dataDecoded
+    // Try decoded method lookup first
     if (
-      !dataDecoded ||
-      typeof dataDecoded !== "object" ||
-      !("method" in dataDecoded)
+      dataDecoded &&
+      typeof dataDecoded === "object" &&
+      "method" in dataDecoded
     ) {
-      return null;
+      const decoded = dataDecoded as DataDecoded;
+
+      for (const chainId of chainIds) {
+        const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
+        if (entry) {
+          return buildInterpretation(entry, decoded, txTo);
+        }
+      }
     }
 
-    const decoded = dataDecoded as DataDecoded;
+    // Fallback: extract 4-byte selector from raw calldata
+    if (txData && txData.length >= 10) {
+      const selector = txData.slice(0, 10).toLowerCase();
 
-    // Try to find a match on any chain in the index
-    for (const chainId of chainIds) {
-      const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
-      if (entry) {
-        // Extract and format all fields
-        const fields: ERC7730Details["fields"] = [];
+      for (const chainId of chainIds) {
+        const entry = lookupFormat(index, chainId, txTo, selector);
+        if (entry) {
+          // No decoded params available — return interpretation with intent only
+          const intent = entry.formatEntry.intent ?? "Transaction";
 
-        for (const fieldDef of entry.formatEntry.fields) {
-          if (!fieldDef.path) continue;
-
-          const rawValue = extractValue(
-            fieldDef.path,
-            decoded,
-            txValue,
-            txFrom,
-            txTo
-          );
-
-          if (rawValue === null) {
-            // Field not found — skip it
-            continue;
-          }
-
-          const formattedValue = formatValue(
-            rawValue,
-            fieldDef,
-            entry.descriptor
-          );
-
-          fields.push({
-            label: fieldDef.label ?? fieldDef.path ?? "Unknown",
-            value: formattedValue,
-            format: fieldDef.format ?? "raw",
-          });
+          return {
+            id: "erc7730",
+            protocol: entry.descriptor.metadata.owner,
+            action: intent,
+            severity: "info",
+            summary: intent,
+            details: { fields: [] },
+          };
         }
-
-        const intent = entry.formatEntry.intent ?? decoded.method;
-
-        return {
-          id: "erc7730",
-          protocol: entry.descriptor.metadata.owner,
-          action: intent,
-          severity: "info",
-          summary: intent,
-          details: { fields },
-        };
       }
     }
 
     return null;
+  };
+}
+
+/**
+ * Build an interpretation result from a matched index entry and decoded data.
+ */
+function buildInterpretation(
+  entry: import("./index").IndexEntry,
+  decoded: DataDecoded,
+  txTo: string,
+  txValue?: string,
+  txFrom?: string,
+): Interpretation {
+  const fields: ERC7730Details["fields"] = [];
+
+  for (const fieldDef of entry.formatEntry.fields) {
+    if (!fieldDef.path) continue;
+
+    const rawValue = extractValue(
+      fieldDef.path,
+      decoded,
+      txValue,
+      txFrom,
+      txTo
+    );
+
+    if (rawValue === null) continue;
+
+    const formattedValue = formatValue(
+      rawValue,
+      fieldDef,
+      entry.descriptor
+    );
+
+    fields.push({
+      label: fieldDef.label ?? fieldDef.path ?? "Unknown",
+      value: formattedValue,
+      format: fieldDef.format ?? "raw",
+    });
+  }
+
+  const intent = entry.formatEntry.intent ?? decoded.method;
+
+  return {
+    id: "erc7730",
+    protocol: entry.descriptor.metadata.owner,
+    action: intent,
+    severity: "info",
+    summary: intent,
+    details: { fields },
   };
 }

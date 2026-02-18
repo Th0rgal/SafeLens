@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  canonicalizeSignature,
   computeSelector,
   isSelector,
   normalizeFormatKey,
@@ -7,6 +8,36 @@ import {
   lookupFormat,
 } from "../index";
 import type { ERC7730Descriptor } from "../types";
+
+describe("canonicalizeSignature", () => {
+  it("leaves already-canonical signatures unchanged", () => {
+    expect(canonicalizeSignature("transfer(address,uint256)")).toBe("transfer(address,uint256)");
+  });
+
+  it("strips parameter names from simple signatures", () => {
+    expect(canonicalizeSignature("swap(uint256 amount, address to)")).toBe("swap(uint256,address)");
+  });
+
+  it("strips parameter names from tuple signatures", () => {
+    expect(
+      canonicalizeSignature("create((uint256 salt, uint256 maker) order)")
+    ).toBe("create((uint256,uint256))");
+  });
+
+  it("handles the 1inch NativeOrderFactory.create signature", () => {
+    const sig =
+      "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
+    expect(canonicalizeSignature(sig)).toBe(
+      "create((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))"
+    );
+  });
+
+  it("handles nested tuples", () => {
+    expect(
+      canonicalizeSignature("foo((uint256 a, (address b, uint256 c) inner) outer)")
+    ).toBe("foo((uint256,(address,uint256)))");
+  });
+});
 
 describe("computeSelector", () => {
   it("computes the correct selector for transfer(address,uint256)", () => {
@@ -17,6 +48,14 @@ describe("computeSelector", () => {
   it("computes the correct selector for submit(address)", () => {
     const selector = computeSelector("submit(address)");
     expect(selector).toBe("0xa1903eab");
+  });
+
+  it("strips parameter names before hashing", () => {
+    // "create((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))"
+    // should produce 0x8c72b608
+    const sig =
+      "create((uint256 salt, uint256 maker, uint256 receiver, uint256 makerAsset, uint256 takerAsset, uint256 makingAmount, uint256 takingAmount, uint256 makerTraits) makerOrder)";
+    expect(computeSelector(sig)).toBe("0x8c72b608");
   });
 });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createERC7730Interpreter } from "../interpreter";
-import { buildIndex } from "../index";
+import { buildIndex, computeSelector } from "../index";
 import type { ERC7730Descriptor } from "../types";
 
 describe("createERC7730Interpreter", () => {
@@ -58,8 +58,6 @@ describe("createERC7730Interpreter", () => {
       dataDecoded,
       "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
       0,
-      "1000000000000000000", // 1 ETH
-      "0x1111111111111111111111111111111111111111"
     );
 
     expect(result).not.toBeNull();
@@ -69,10 +67,9 @@ describe("createERC7730Interpreter", () => {
     }
     expect(result.protocol).toBe("Lido");
     expect(result.action).toBe("Stake ETH to receive stETH");
-    expect(result.details.fields).toHaveLength(2);
-    expect(result.details.fields[0].label).toBe("Amount");
-    expect(result.details.fields[0].value).toContain("ETH");
-    expect(result.details.fields[1].label).toBe("Referral");
+    // Only the Referral field is present (Amount uses @.value which isn't passed through the pipeline)
+    expect(result.details.fields).toHaveLength(1);
+    expect(result.details.fields[0].label).toBe("Referral");
   });
 
   it("returns null for unknown contract", () => {
@@ -214,5 +211,83 @@ describe("createERC7730Interpreter", () => {
     }
     expect(result.details.fields).toHaveLength(1);
     expect(result.details.fields[0].label).toBe("Present Field");
+  });
+
+  it("falls back to raw calldata selector when dataDecoded is null", () => {
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 100, address: "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01" }],
+        },
+      },
+      metadata: {
+        owner: "1inch",
+      },
+      display: {
+        formats: {
+          "create((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))": {
+            intent: "Create Limit Order",
+            fields: [],
+          },
+        },
+      },
+    };
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    // selector for create((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))
+    const selector = computeSelector("create((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))");
+    const txData = selector + "0".repeat(512); // selector + dummy calldata
+
+    // dataDecoded is null, but txData provides the selector
+    const result = interpret(
+      null,
+      "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",
+      0,
+      txData
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe("erc7730");
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.protocol).toBe("1inch");
+    expect(result.action).toBe("Create Limit Order");
+    expect(result.details.fields).toHaveLength(0); // no decoded params
+  });
+
+  it("returns null for raw calldata with unknown selector", () => {
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 1, address: "0x1234567890123456789012345678901234567890" }],
+        },
+      },
+      metadata: {
+        owner: "TestProtocol",
+      },
+      display: {
+        formats: {
+          "testMethod()": {
+            intent: "Test action",
+            fields: [],
+          },
+        },
+      },
+    };
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+
+    const result = interpret(
+      null,
+      "0x1234567890123456789012345678901234567890",
+      0,
+      "0xdeadbeef" // unknown selector
+    );
+
+    expect(result).toBeNull();
   });
 });
