@@ -1,0 +1,174 @@
+{
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 8453,
+          "address": "0xC484D83F667b779cc9907248101214235642258B"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "constants": {
+      "underlyingToken": "0x35E5dB674D8e93a03d814FA0ADa70731efe8a4b9",
+      "underlyingTicker": "USR",
+      "vaultTicker": "aprUSR"
+    },
+    "owner": "Apostro",
+    "info": {
+      "legalName": "Apostro",
+      "url": "https://apostro.xyz"
+    }
+  },
+  "display": {
+    "formats": {
+      "deposit(uint256 assets, address receiver)": {
+        "intent": "Deposit",
+        "fields": [
+          {
+            "path": "assets",
+            "label": "Deposit asset",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.underlyingToken"
+            }
+          },
+          {
+            "label": "Receive shares",
+            "format": "raw",
+            "value": "$.metadata.constants.vaultTicker"
+          },
+          {
+            "path": "receiver",
+            "label": "Send shares to",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "assets",
+          "receiver"
+        ]
+      },
+      "mint(uint256 shares, address receiver)": {
+        "intent": "Mint",
+        "fields": [
+          {
+            "label": "Deposit asset",
+            "format": "raw",
+            "value": "$.metadata.constants.underlyingTicker"
+          },
+          {
+            "path": "shares",
+            "label": "Minted shares",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "@.to"
+            }
+          },
+          {
+            "path": "receiver",
+            "label": "Mint shares to",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "assets",
+          "receiver"
+        ]
+      },
+      "withdraw(uint256 assets,address receiver,address owner)": {
+        "intent": "Withdraw",
+        "fields": [
+          {
+            "path": "assets",
+            "label": "Withdraw exactly",
+            "format": "tokenAmount",
+            "params": {
+              "token": "$.metadata.constants.underlyingToken"
+            }
+          },
+          {
+            "path": "receiver",
+            "label": "To",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "owner",
+            "label": "Owner",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "assets",
+          "receiver",
+          "owner"
+        ]
+      },
+      "redeem(uint256 shares,address receiver,address owner)": {
+        "intent": "Redeem",
+        "fields": [
+          {
+            "path": "shares",
+            "label": "Redeem exactly",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "@.to"
+            }
+          },
+          {
+            "path": "receiver",
+            "label": "To",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          },
+          {
+            "path": "owner",
+            "label": "Owner",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "assets",
+          "receiver",
+          "owner"
+        ]
+      }
+    }
+  }
+}

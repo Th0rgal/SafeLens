@@ -1,0 +1,138 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 10,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 56,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 137,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 8453,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 42161,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 42220,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 43114,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 80001,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 81457,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 84532,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 421614,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 11155111,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 11155420,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Uniswap",
+    "info": {
+      "legalName": "Uniswap Labs",
+      "deploymentDate": "2021-12-14T00:00:00Z",
+      "url": "https://uniswap.org/"
+    }
+  },
+  "display": {
+    "formats": {
+      "PermitWitnessTransferFrom": {
+        "intent": "UniswapX Exclusive Dutch Order",
+        "fields": [
+          {
+            "path": "spender",
+            "label": "Approve to spender",
+            "format": "raw"
+          },
+          {
+            "path": "permitted.amount",
+            "label": "Approve amount",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "permitted.token"
+            }
+          },
+          {
+            "path": "witness.inputStartAmount",
+            "label": "Spend max",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "witness.inputToken"
+            }
+          },
+          {
+            "path": "witness.outputs.[]",
+            "fields": [
+              {
+                "path": "endAmount",
+                "label": "Minimum amounts to receive",
+                "format": "tokenAmount",
+                "params": {
+                  "tokenPath": "token"
+                }
+              },
+              {
+                "path": "recipient",
+                "label": "On Addresses",
+                "format": "raw"
+              }
+            ]
+          },
+          {
+            "path": "deadline",
+            "label": "Approval expire",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ],
+        "excluded": [
+          "nonce",
+          "witness.info",
+          "witness.decayStartTime",
+          "witness.decayEndTime",
+          "witness.exclusiveFiller",
+          "witness.exclusivityOverrideBps",
+          "witness.inputEndAmount",
+          "witness.outputs.[].startAmount"
+        ]
+      }
+    }
+  }
+}

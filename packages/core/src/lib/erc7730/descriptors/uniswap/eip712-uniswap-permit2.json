@@ -1,0 +1,151 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 10,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 56,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 137,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 8453,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 42161,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 42220,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 43114,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 80001,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 81457,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 84532,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 421614,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 11155111,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        },
+        {
+          "chainId": 11155420,
+          "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Uniswap",
+    "info": {
+      "legalName": "Uniswap Labs",
+      "deploymentDate": "2021-12-14T00:00:00Z",
+      "url": "https://uniswap.org/"
+    }
+  },
+  "display": {
+    "formats": {
+      "PermitSingle": {
+        "$id": "Permit2 Permit Single",
+        "intent": "Authorize spending of token",
+        "fields": [
+          {
+            "path": "spender",
+            "label": "Spender",
+            "format": "raw"
+          },
+          {
+            "path": "details.amount",
+            "label": "Amount allowance",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "details.token"
+            }
+          },
+          {
+            "path": "details.expiration",
+            "label": "Approval expires",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ],
+        "required": [
+          "spender",
+          "details.amount"
+        ],
+        "excluded": [
+          "sigDeadline"
+        ],
+        "screens": {}
+      },
+      "PermitBatch": {
+        "$id": "Permit2 Permit Batch",
+        "intent": "Authorize spending of tokens",
+        "fields": [
+          {
+            "path": "spender",
+            "label": "Spender",
+            "format": "raw"
+          },
+          {
+            "path": "details.[]",
+            "fields": [
+              {
+                "path": "amount",
+                "label": "Amount allowance",
+                "format": "tokenAmount",
+                "params": {
+                  "tokenPath": "token"
+                }
+              },
+              {
+                "path": "expiration",
+                "label": "Approval expires",
+                "format": "date",
+                "params": {
+                  "encoding": "timestamp"
+                }
+              }
+            ]
+          }
+        ],
+        "required": [
+          "spender",
+          "details"
+        ],
+        "excluded": [
+          "sigDeadline"
+        ],
+        "screens": {}
+      }
+    }
+  }
+}

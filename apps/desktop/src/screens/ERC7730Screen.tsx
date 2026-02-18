@@ -1,21 +1,12 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Copy, ChevronRight, Trash2, Plus } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { parseDescriptor, type ERC7730Descriptor, type Deployment } from "@safelens/core";
 
-const CHAIN_NAMES: Record<number, string> = {
-  1: "Ethereum",
-  10: "Optimism",
-  100: "Gnosis",
-  137: "Polygon",
-  42161: "Arbitrum",
-  8453: "Base",
-};
-
-function chainLabel(chainId: number) {
-  return CHAIN_NAMES[chainId] ?? `Chain ${chainId}`;
+function chainLabel(chainId: number, chains?: Record<string, { name: string }>) {
+  return chains?.[String(chainId)]?.name ?? `Chain ${chainId}`;
 }
 
 function getDeployments(d: ERC7730Descriptor) {
@@ -30,6 +21,50 @@ function groupByChain(deps: Deployment[]) {
     map.set(d.chainId, arr);
   }
   return map;
+}
+
+interface DescriptorListItem {
+  descriptor: ERC7730Descriptor;
+  index: number;
+}
+
+interface DescriptorGroup {
+  key: string;
+  label: string;
+  items: DescriptorListItem[];
+}
+
+function getGroupIdentity(descriptor: ERC7730Descriptor) {
+  const owner = descriptor.metadata.owner.trim();
+  const ownerToken = owner.split(/[\s-]/)[0] ?? owner;
+
+  return {
+    key: ownerToken.toLowerCase(),
+    label: ownerToken,
+  };
+}
+
+function groupDescriptors(descriptors: ERC7730Descriptor[]): DescriptorGroup[] {
+  const map = new Map<string, DescriptorGroup>();
+
+  descriptors.forEach((descriptor, index) => {
+    const identity = getGroupIdentity(descriptor);
+    const existing = map.get(identity.key);
+    const item = { descriptor, index };
+
+    if (existing) {
+      existing.items.push(item);
+      return;
+    }
+
+    map.set(identity.key, {
+      key: identity.key,
+      label: identity.label,
+      items: [item],
+    });
+  });
+
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function CopyableAddress({ address, onCopy }: { address: string; onCopy: (addr: string) => void }) {
@@ -96,9 +131,24 @@ export default function ERC7730Screen() {
   const { config, saveConfig } = useSettingsConfig();
   const { success, severe } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const descriptors = (config?.erc7730Descriptors ?? []) as unknown as ERC7730Descriptor[];
+  const descriptors = useMemo(
+    () => (config?.erc7730Descriptors ?? []) as unknown as ERC7730Descriptor[],
+    [config?.erc7730Descriptors],
+  );
+  const groupedDescriptors = useMemo(() => groupDescriptors(descriptors), [descriptors]);
   const disabledInterpreters = config?.disabledInterpreters ?? [];
+
+  useEffect(() => {
+    setExpandedGroups((prev) => {
+      const next: Record<string, boolean> = {};
+      for (const group of groupedDescriptors) {
+        next[group.key] = prev[group.key] ?? false;
+      }
+      return next;
+    });
+  }, [groupedDescriptors]);
 
   const toggleInterpreter = async (id: string) => {
     if (!config) return;
@@ -118,6 +168,10 @@ export default function ERC7730Screen() {
     const updated = config.erc7730Descriptors.filter((_, i) => i !== index);
     await saveConfig({ ...config, erc7730Descriptors: updated });
     success("Removed", "Descriptor deleted");
+  };
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,88 +260,110 @@ export default function ERC7730Screen() {
           Import ERC-7730 descriptor
         </button>
 
-        {descriptors.map((desc, i) => {
-          const deployments = getDeployments(desc);
-          const chainGroups = groupByChain(deployments);
-          const formats = desc.display.formats;
-          const methods = Object.entries(formats);
-          const token = desc.metadata.token;
+        {groupedDescriptors.map((group) => {
+          const expanded = expandedGroups[group.key] ?? false;
 
           return (
-            <Card key={i}>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span>{desc.metadata.owner}</span>
-                      {token && (
-                        <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-normal text-muted">
-                          {token.ticker}
-                        </span>
-                      )}
-                    </div>
-                    {desc.metadata.info?.legalName && (
-                      <span className="text-xs font-normal text-muted/60">
-                        {desc.metadata.info.legalName}
-                      </span>
-                    )}
+            <Card key={group.key}>
+              <CardHeader className="pb-4">
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  className="flex w-full items-center justify-between rounded-md px-1 text-left hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <ChevronRight className={`h-4 w-4 shrink-0 text-muted/60 transition-transform ${expanded ? "rotate-90" : ""}`} />
+                    <span className="truncate text-sm font-medium">{group.label}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {desc.metadata.info?.url && (
-                      <span className="text-xs font-normal text-muted">
-                        {desc.metadata.info.url}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(i)}
-                      className="rounded-md p-1 text-muted/40 hover:text-red-400 hover:bg-white/[0.06] transition-colors"
-                      title="Remove descriptor"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </CardTitle>
+                  <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-normal text-muted">
+                    {group.items.length} {group.items.length === 1 ? "descriptor" : "descriptors"}
+                  </span>
+                </button>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {chainGroups.size > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-muted">Contracts</p>
-                    <div className="flex flex-col gap-1.5">
-                      {[...chainGroups.entries()].map(([chainId, addresses]) => (
-                        <div
-                          key={chainId}
-                          className="flex items-center gap-2 rounded-md bg-white/[0.05] px-2.5 py-1.5 text-xs"
-                        >
-                          <span className="shrink-0 text-muted">on {chainLabel(chainId)}</span>
-                          <div className="flex flex-wrap gap-x-3">
-                            {addresses.map((addr) => (
-                              <CopyableAddress key={addr} address={addr} onCopy={handleCopy} />
-                            ))}
+
+              {expanded && (
+                <CardContent className="space-y-3">
+                  {group.items.map(({ descriptor: desc, index }) => {
+                    const deployments = getDeployments(desc);
+                    const chainGroups = groupByChain(deployments);
+                    const methods = Object.entries(desc.display.formats);
+                    const token = desc.metadata.token;
+
+                    return (
+                      <div key={index} className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium">{desc.metadata.owner}</span>
+                              {token && (
+                                <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-muted">
+                                  {token.ticker}
+                                </span>
+                              )}
+                            </div>
+                            {desc.metadata.info?.legalName && (
+                              <p className="text-xs text-muted/60">{desc.metadata.info.legalName}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {desc.metadata.info?.url && (
+                              <span className="max-w-40 truncate text-xs text-muted">{desc.metadata.info.url}</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(index)}
+                              className="rounded-md p-1 text-muted/40 hover:text-red-400 hover:bg-white/[0.06] transition-colors"
+                              title="Remove descriptor"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
-                {methods.length > 0 && (
-                  <div>
-                    <p className="mb-1.5 text-xs font-medium text-muted">Recognized actions</p>
-                    <div className="flex flex-col gap-1">
-                      {methods.map(([sig, entry]) => (
-                        <div
-                          key={sig}
-                          className="flex flex-col gap-0.5 rounded-md bg-white/[0.05] px-2.5 py-1.5 text-xs"
-                        >
-                          <span>{entry.intent}</span>
-                          <ExpandableSignature sig={sig} />
+                        <div className="space-y-3 text-sm">
+                          {chainGroups.size > 0 && (
+                            <div>
+                              <p className="mb-1.5 text-xs font-medium text-muted">Contracts</p>
+                              <div className="flex flex-col gap-1.5">
+                                {[...chainGroups.entries()].map(([chainId, addresses]) => (
+                                  <div
+                                    key={chainId}
+                                    className="flex items-center gap-2 rounded-md bg-white/[0.05] px-2.5 py-1.5 text-xs"
+                                  >
+                                    <span className="shrink-0 text-muted">on {chainLabel(chainId, config?.chains)}</span>
+                                    <div className="flex flex-wrap gap-x-3">
+                                      {addresses.map((addr) => (
+                                        <CopyableAddress key={addr} address={addr} onCopy={handleCopy} />
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {methods.length > 0 && (
+                            <div>
+                              <p className="mb-1.5 text-xs font-medium text-muted">Recognized actions</p>
+                              <div className="flex flex-col gap-1">
+                                {methods.map(([sig, entry]) => (
+                                  <div
+                                    key={sig}
+                                    className="flex flex-col gap-0.5 rounded-md bg-white/[0.05] px-2.5 py-1.5 text-xs"
+                                  >
+                                    <span>{entry.intent}</span>
+                                    <ExpandableSignature sig={sig} />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              )}
             </Card>
           );
         })}

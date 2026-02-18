@@ -1,0 +1,351 @@
+{
+  "metadata": {
+    "owner": "1inch",
+    "info": {
+      "url": "https://1inch.io/",
+      "legalName": "1inch Network",
+      "deploymentDate": "2021-11-05T10:18:09Z"
+    },
+    "constants": {
+      "addressAsEth": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+      "addressAsNull": "0x0000000000000000000000000000000000000000"
+    }
+  },
+  "display": {
+    "definitions": {
+      "sendAmount": {
+        "label": "Amount to Send",
+        "format": "tokenAmount",
+        "params": {
+          "nativeCurrencyAddress": [
+            "$.metadata.constants.addressAsEth",
+            "$.metadata.constants.addressAsNull"
+          ]
+        }
+      },
+      "minReceiveAmount": {
+        "label": "Minimum to Receive",
+        "format": "tokenAmount",
+        "params": {
+          "nativeCurrencyAddress": [
+            "$.metadata.constants.addressAsEth",
+            "$.metadata.constants.addressAsNull"
+          ]
+        }
+      },
+      "lastPool": {
+        "label": "Last pool",
+        "format": "addressName",
+        "params": {
+          "types": [
+            "contract"
+          ]
+        }
+      },
+      "beneficiary": {
+        "label": "Beneficiary",
+        "format": "addressName"
+      }
+    },
+    "formats": {
+      "swap(address caller, (address srcToken, address dstToken, address srcReceiver, address dstReceiver, uint256 amount, uint256 minReturnAmount, uint256 flags, bytes permit) desc, bytes data)": {
+        "$id": "swap",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "desc.srcToken"
+            },
+            "path": "desc.amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "desc.dstToken"
+            },
+            "path": "desc.minReturnAmount"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "desc.dstReceiver"
+          }
+        ],
+        "required": [
+          "desc.amount",
+          "desc.minReturnAmount",
+          "desc.dstReceiver"
+        ],
+        "excluded": [
+          "caller",
+          "desc.srcReceiver",
+          "desc.flags",
+          "desc.permit",
+          "data"
+        ]
+      },
+      "unoswap(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools)": {
+        "$id": "unoswap",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "srcToken"
+            },
+            "path": "amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "minReturn"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "@.from"
+          },
+          {
+            "label": "Last pool",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            },
+            "path": "pools.[-1]"
+          }
+        ],
+        "required": [
+          "amount",
+          "minReturn",
+          "@.from",
+          "pools"
+        ],
+        "excluded": []
+      },
+      "unoswapWithPermit(address srcToken, uint256 amount, uint256 minReturn, bytes32[] pools, bytes permit)": {
+        "$id": "unoswapWithPermit",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "srcToken"
+            },
+            "path": "amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "minReturn"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "@.from"
+          },
+          {
+            "label": "Last pool",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            },
+            "path": "pools.[-1]"
+          }
+        ],
+        "required": [
+          "amount",
+          "minReturn",
+          "@.from",
+          "pools"
+        ],
+        "excluded": [
+          "permit"
+        ]
+      },
+      "uniswapV3Swap(uint256 amount, uint256 minReturn, uint256[] pools)": {
+        "$id": "uniswapV3Swap",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "minReturn"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "@.from"
+          },
+          {
+            "label": "Last pool",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            },
+            "path": "pools.[-1]"
+          }
+        ],
+        "required": [
+          "amount",
+          "minReturn",
+          "@.from",
+          "pools"
+        ],
+        "excluded": []
+      },
+      "uniswapV3SwapTo(address recipient, uint256 amount, uint256 minReturn, uint256[] pools)": {
+        "$id": "uniswapV3SwapTo",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "minReturn"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "recipient"
+          },
+          {
+            "label": "Last pool",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            },
+            "path": "pools.[-1]"
+          }
+        ],
+        "required": [
+          "amount",
+          "minReturn",
+          "recipient",
+          "pools"
+        ],
+        "excluded": []
+      },
+      "uniswapV3SwapToWithPermit(address recipient, address srcToken, uint256 amount, uint256 minReturn, uint256[] pools, bytes permit)": {
+        "$id": "uniswapV3SwapToWithPermit",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "srcToken"
+            },
+            "path": "amount"
+          },
+          {
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "minReturn"
+          },
+          {
+            "label": "Beneficiary",
+            "format": "addressName",
+            "path": "recipient"
+          },
+          {
+            "label": "Last pool",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "contract"
+              ]
+            },
+            "path": "pools.[-1]"
+          }
+        ],
+        "required": [
+          "amount",
+          "minReturn",
+          "recipient",
+          "pools"
+        ],
+        "excluded": [
+          "permit"
+        ]
+      }
+    }
+  },
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 56,
+          "address": "0x1111111254fb6c44bAC0beD2854e76F90643097d"
+        },
+        {
+          "chainId": 137,
+          "address": "0x1111111254fb6c44bAC0beD2854e76F90643097d"
+        }
+      ]
+    }
+  }
+}

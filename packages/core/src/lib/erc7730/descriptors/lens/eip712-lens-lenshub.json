@@ -1,0 +1,618 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 137,
+          "address": "0xdb46d1dc155634fbc732f92e853b10b288ad5a1d"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "LensHub"
+  },
+  "display": {
+    "formats": {
+      "act": {
+        "intent": "act",
+        "fields": [
+          {
+            "path": "actorProfileId",
+            "label": "actorProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "publicationActedId",
+            "label": "publicationActedId",
+            "format": "raw"
+          },
+          {
+            "path": "publicationActedProfileId",
+            "label": "publicationActedProfileId",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline",
+          "actionModuleAddress",
+          "referrerProfileIds.[]",
+          "actionModuleData",
+          "referrerPubIds.[]"
+        ]
+      },
+      "burn": {
+        "intent": "burn",
+        "fields": [
+          {
+            "path": "tokenId",
+            "label": "tokenId",
+            "format": "raw"
+          }
+        ]
+      },
+      "ChangeDelegatedExecutorsConfig": {
+        "intent": "ChangeDelegatedExecutorsConfig",
+        "fields": [
+          {
+            "path": "delegatorProfileId",
+            "label": "Delegator ProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "delegatedExecutors.[]",
+            "label": "Delegated Executors",
+            "format": "raw"
+          },
+          {
+            "path": "approvals.[]",
+            "label": "Approvals",
+            "format": "raw"
+          },
+          {
+            "path": "configNumber",
+            "label": "configNumber",
+            "format": "raw"
+          },
+          {
+            "path": "switchToGivenConfig",
+            "label": "switchToGivenConfig",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline"
+        ]
+      },
+      "collect": {
+        "intent": "collect",
+        "fields": [
+          {
+            "path": "publicationCollectedProfileId",
+            "label": "Publication Collected ProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "publicationCollectedId",
+            "label": "Publication CollectedId",
+            "format": "raw"
+          },
+          {
+            "path": "collectorProfileId",
+            "label": "collector ProfileId",
+            "format": "raw"
+          }
+        ]
+      },
+      "collect_with_sign": {
+        "intent": "collect_with_sign",
+        "fields": [
+          {
+            "path": "publicationCollectedProfileId",
+            "label": "publicationCollectedProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "publicationCollectedId",
+            "label": "publicationCollectedId",
+            "format": "raw"
+          },
+          {
+            "path": "collectorProfileId",
+            "label": "collectorProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "Comment": {
+        "intent": "Comment",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "Profile Id",
+            "format": "raw"
+          },
+          {
+            "path": "contentURI",
+            "label": "content URI",
+            "format": "raw"
+          },
+          {
+            "path": "pointedProfileId",
+            "label": "Pointed Profile Id",
+            "format": "raw"
+          },
+          {
+            "path": "pointedPubId",
+            "label": "Pointed Pub Id",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "referenceModuleInitData",
+          "referenceModuleData",
+          "actionModules",
+          "deadline",
+          "referrerProfileIds",
+          "referenceModule",
+          "actionModulesInitDatas",
+          "referrerPubIds"
+        ]
+      },
+      "comment_with_sign": {
+        "intent": "comment_with_sign",
+        "fields": [
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id_pointed",
+            "label": "profile_id_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "pubid_pointed",
+            "label": "pubid_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "create_profile": {
+        "intent": "create_profile",
+        "fields": [
+          {
+            "path": "to",
+            "label": "to",
+            "format": "raw"
+          },
+          {
+            "path": "followModule",
+            "label": "followModule",
+            "format": "raw"
+          }
+        ]
+      },
+      "Follow": {
+        "intent": "Follow",
+        "fields": [
+          {
+            "path": "followerProfileId",
+            "label": "follower ProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "idsOfProfilesToFollow.[]",
+            "label": "ids Of Profiles To Follow",
+            "format": "raw"
+          },
+          {
+            "path": "followTokenIds.[]",
+            "label": "follow TokenIds",
+            "format": "raw"
+          },
+          {
+            "path": "datas.[]",
+            "label": "datas",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline"
+        ]
+      },
+      "follow_with_sign": {
+        "intent": "follow_with_sign",
+        "fields": [
+          {
+            "path": "followerProfileId",
+            "label": "followerProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "link": {
+        "intent": "link",
+        "fields": [
+          {
+            "path": "handle_id",
+            "label": "handle_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          }
+        ]
+      },
+      "link_with_sig": {
+        "intent": "link_with_sig",
+        "fields": [
+          {
+            "path": "handle_id",
+            "label": "handle_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "mint": {
+        "intent": "mint",
+        "fields": [
+          {
+            "path": "to",
+            "label": "to",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id_pointed",
+            "label": "profile_id_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "pubid_pointed",
+            "label": "pubid_pointed",
+            "format": "raw"
+          }
+        ]
+      },
+      "Mirror": {
+        "intent": "mirror",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "profileId",
+            "format": "raw"
+          },
+          {
+            "path": "metadataURI",
+            "label": "metadataURI",
+            "format": "raw"
+          },
+          {
+            "path": "pointedProfileId",
+            "label": "pointedProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline",
+          "pointedPubId",
+          "referenceModuleData",
+          "referrerProfileIds",
+          "referrerPubIds"
+        ]
+      },
+      "mirror_with_sig": {
+        "intent": "mirror_with_sig",
+        "fields": [
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id_pointed",
+            "label": "profile_id_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "pubid_pointed",
+            "label": "pubid_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "Post": {
+        "intent": "Post",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "Profile Id",
+            "format": "raw"
+          },
+          {
+            "path": "contentURI",
+            "label": "Post URI",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "referenceModuleInitData",
+          "actionModules",
+          "deadline",
+          "referenceModule",
+          "actionModulesInitDatas"
+        ]
+      },
+      "post_with_sign": {
+        "intent": "post_with_sign",
+        "fields": [
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "Quote": {
+        "intent": "Quote",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "profileId",
+            "format": "raw"
+          },
+          {
+            "path": "contentURI",
+            "label": "contentURI",
+            "format": "raw"
+          },
+          {
+            "path": "pointedProfileId",
+            "label": "pointedProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "pointedPubId",
+            "label": "pointedPubId",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "deadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "quote_with_sign": {
+        "intent": "quote_with_sign",
+        "fields": [
+          {
+            "path": "profile_id",
+            "label": "profile_id",
+            "format": "raw"
+          },
+          {
+            "path": "profile_id_pointed",
+            "label": "profile_id_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "pubid_pointed",
+            "label": "pubid_pointed",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "set_block_status": {
+        "intent": "set_block_status",
+        "fields": [
+          {
+            "path": "byProfileId",
+            "label": "byProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "SetProfileMetadataURI": {
+        "intent": "SetProfileMetadataURI",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "profileId",
+            "format": "raw"
+          },
+          {
+            "path": "metadataURI",
+            "label": "metadataURI",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline"
+        ]
+      },
+      "set_block_status_with_sig": {
+        "intent": "set_block_status_with_sig",
+        "fields": [
+          {
+            "path": "byProfileId",
+            "label": "byProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "SetFollowModule": {
+        "intent": "Set Follow Module",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "profileId",
+            "format": "raw"
+          },
+          {
+            "path": "followModule",
+            "label": "followModule",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "deadline",
+          "followModuleInitData"
+        ]
+      },
+      "set_profile_metadata_with_sign": {
+        "intent": "set_profile_metadata_with_sign",
+        "fields": [
+          {
+            "path": "profileId",
+            "label": "profileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "Unfollow": {
+        "intent": "Unfollow",
+        "fields": [
+          {
+            "path": "unfollowerProfileId",
+            "label": "Unfollower ProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "idsOfProfilesToUnfollow.[]",
+            "label": "ids Of Profiles To Unfollow",
+            "format": "raw"
+          },
+          {
+            "path": "nonce",
+            "label": "nonce",
+            "format": "raw"
+          },
+          {
+            "path": "deadline",
+            "label": "deadline",
+            "format": "raw"
+          }
+        ]
+      },
+      "unfollow_with_sign": {
+        "intent": "unfollow_with_sign",
+        "fields": [
+          {
+            "path": "unfollowerProfileId",
+            "label": "unfollowerProfileId",
+            "format": "raw"
+          },
+          {
+            "path": "signatureDeadline",
+            "label": "signatureDeadline",
+            "format": "raw"
+          }
+        ]
+      }
+    }
+  }
+}

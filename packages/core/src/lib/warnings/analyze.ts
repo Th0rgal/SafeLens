@@ -32,10 +32,11 @@ export function identifyProposer(
 export function analyzeTarget(
   to: string,
   operation: number,
-  config: SettingsConfig
+  config: SettingsConfig,
+  chainId?: number,
 ): TransactionWarning[] {
   const warnings: TransactionWarning[] = [];
-  const resolved = resolveAddress(to, config) ?? resolveContract(to, config)?.name ?? null;
+  const resolved = resolveAddress(to, config, chainId) ?? resolveContract(to, config, chainId)?.name ?? null;
 
   if (resolved === null && operation === 1) {
     warnings.push({
@@ -58,18 +59,19 @@ export function analyzeTarget(
  */
 export function analyzeSigners(
   confirmations: { owner: string }[],
-  config: SettingsConfig
+  config: SettingsConfig,
+  chainId?: number,
 ): Record<string, TransactionWarning[]> {
   const results: Record<string, TransactionWarning[]> = {};
 
   for (const conf of confirmations) {
     const warnings: TransactionWarning[] = [];
-    const resolved = resolveAddress(conf.owner, config) ?? resolveContract(conf.owner, config)?.name ?? null;
+    const resolved = resolveAddress(conf.owner, config, chainId) ?? resolveContract(conf.owner, config, chainId)?.name ?? null;
 
     if (resolved === null) {
       warnings.push({
         level: "warning",
-        message: "Unknown signer — not in your address book",
+        message: "Unknown signer — not in your address registry",
       });
     }
 

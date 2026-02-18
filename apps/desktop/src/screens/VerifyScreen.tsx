@@ -208,17 +208,20 @@ export default function VerifyScreen() {
 
       {verified && evidence && (
         <div className="space-y-6">
-          {evidence.dataDecoded && (
-            <InterpretationCard
-              dataDecoded={evidence.dataDecoded}
-              txTo={evidence.transaction.to}
-              txOperation={evidence.transaction.operation}
-              context={{
-                currentThreshold: evidence.confirmationsRequired,
-              }}
-              disabledInterpreters={config?.disabledInterpreters}
-            />
-          )}
+          <InterpretationCard
+            dataDecoded={evidence.dataDecoded}
+            txTo={evidence.transaction.to}
+            txOperation={evidence.transaction.operation}
+            txData={evidence.transaction.data}
+            chainId={evidence.chainId}
+            txValue={evidence.transaction.value}
+            txFrom={evidence.safeAddress}
+            context={{
+              currentThreshold: evidence.confirmationsRequired,
+              chainId: evidence.chainId,
+            }}
+            disabledInterpreters={config?.disabledInterpreters}
+          />
 
           <Card>
             <CardHeader>
@@ -237,7 +240,7 @@ export default function VerifyScreen() {
                   <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
                     Safe Address <TrustBadge level="self-verified" />
                   </div>
-                  <AddressDisplay address={evidence.safeAddress} />
+                  <AddressDisplay address={evidence.safeAddress} chainId={evidence.chainId} />
                 </div>
 
                 {proposer && (
@@ -246,7 +249,7 @@ export default function VerifyScreen() {
                       <UserRound className="h-3.5 w-3.5" />
                       Proposed by
                     </div>
-                    <AddressDisplay address={proposer} />
+                    <AddressDisplay address={proposer} chainId={evidence.chainId} />
                   </div>
                 )}
 
@@ -322,7 +325,7 @@ export default function VerifyScreen() {
                         </div>
                         <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
                       </div>
-                      <AddressDisplay address={conf.owner} />
+                      <AddressDisplay address={conf.owner} chainId={evidence.chainId} />
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
                           Show signature
@@ -348,7 +351,7 @@ export default function VerifyScreen() {
                   <span className="flex items-center gap-2 font-medium text-muted">
                     Target Contract <TrustBadge level="self-verified" />
                   </span>
-                  <AddressDisplay address={evidence.transaction.to} />
+                  <AddressDisplay address={evidence.transaction.to} chainId={evidence.chainId} />
                 </div>
                 {targetWarnings.map((w, i) => (
                   <WarningBanner key={i} warning={w} />

@@ -7,10 +7,11 @@ const baseConfig: SettingsConfig = {
   chains: {
     "1": { name: "Ethereum" },
   },
-  addressBook: [
-    { address: "0x1111111111111111111111111111111111111111", name: "Alice" },
+  addressRegistry: [
+    { address: "0x1111111111111111111111111111111111111111", name: "Alice", kind: "eoa" },
   ],
-  contractRegistry: [],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("computeConfigFingerprint", () => {
@@ -29,26 +30,27 @@ describe("computeConfigFingerprint", () => {
     const config1: SettingsConfig = {
       version: "1.0",
       chains: { "1": { name: "Eth" } },
-      addressBook: [],
-      contractRegistry: [],
+      addressRegistry: [],
+      erc7730Descriptors: [],
+      disabledInterpreters: [],
     };
-    // Same data, different key order
     const config2 = {
-      contractRegistry: [],
-      addressBook: [],
+      addressRegistry: [],
       version: "1.0" as const,
       chains: { "1": { name: "Eth" } },
+      erc7730Descriptors: [],
+      disabledInterpreters: [],
     };
     const a = await computeConfigFingerprint(config1);
     const b = await computeConfigFingerprint(config2);
     expect(a).toBe(b);
   });
 
-  it("changes when an address book name changes", async () => {
+  it("changes when an address registry name changes", async () => {
     const modified: SettingsConfig = {
       ...baseConfig,
-      addressBook: [
-        { address: "0x1111111111111111111111111111111111111111", name: "Bob" },
+      addressRegistry: [
+        { address: "0x1111111111111111111111111111111111111111", name: "Bob", kind: "eoa" },
       ],
     };
     const a = await computeConfigFingerprint(baseConfig);
@@ -56,11 +58,11 @@ describe("computeConfigFingerprint", () => {
     expect(a).not.toBe(b);
   });
 
-  it("changes when an address book address changes", async () => {
+  it("changes when an address registry address changes", async () => {
     const modified: SettingsConfig = {
       ...baseConfig,
-      addressBook: [
-        { address: "0x2222222222222222222222222222222222222222", name: "Alice" },
+      addressRegistry: [
+        { address: "0x2222222222222222222222222222222222222222", name: "Alice", kind: "eoa" },
       ],
     };
     const a = await computeConfigFingerprint(baseConfig);
@@ -80,11 +82,12 @@ describe("computeConfigFingerprint", () => {
     expect(a).not.toBe(b);
   });
 
-  it("changes when a contract registry entry is added", async () => {
+  it("changes when an address registry entry is added", async () => {
     const modified: SettingsConfig = {
       ...baseConfig,
-      contractRegistry: [
-        { address: "0x3333333333333333333333333333333333333333", name: "WETH" },
+      addressRegistry: [
+        ...baseConfig.addressRegistry,
+        { address: "0x3333333333333333333333333333333333333333", name: "WETH", kind: "contract" },
       ],
     };
     const a = await computeConfigFingerprint(baseConfig);

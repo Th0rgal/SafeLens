@@ -5,11 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { interpretTransaction } from "@safelens/core";
 import { getRenderer, SEVERITY_STYLES } from "@/components/interpretations/registry";
 import type { EvidenceContext } from "@/components/interpretations/registry";
+import { useSettingsConfig } from "@/lib/settings/hooks";
 
 interface InterpretationCardProps {
   dataDecoded: unknown;
   txTo: string;
   txOperation: number;
+  /** Raw calldata hex for selector-based fallback when dataDecoded is null. */
+  txData?: string | null;
+  /** Chain ID for token metadata resolution. */
+  chainId?: number;
+  /** Transaction value in wei. */
+  txValue?: string;
+  /** Transaction sender (Safe address for Safe executions). */
+  txFrom?: string;
   /** Optional evidence-level context for richer display. */
   context?: EvidenceContext;
   /** Interpreter IDs to skip. */
@@ -20,12 +29,28 @@ export function InterpretationCard({
   dataDecoded,
   txTo,
   txOperation,
+  txData,
+  chainId,
+  txValue,
+  txFrom,
   context,
   disabledInterpreters,
 }: InterpretationCardProps) {
+  const { config } = useSettingsConfig();
   const interpretation = useMemo(
-    () => interpretTransaction(dataDecoded, txTo, txOperation, disabledInterpreters),
-    [dataDecoded, txTo, txOperation, disabledInterpreters],
+    () =>
+      interpretTransaction(
+        dataDecoded,
+        txTo,
+        txOperation,
+        disabledInterpreters,
+        txData,
+        chainId,
+        txValue,
+        txFrom,
+        config?.chains,
+      ),
+    [dataDecoded, txTo, txOperation, disabledInterpreters, txData, chainId, txValue, txFrom, config?.chains],
   );
 
   if (!interpretation) return null;

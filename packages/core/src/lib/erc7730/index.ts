@@ -14,6 +14,8 @@ export interface IndexEntry {
   descriptor: ERC7730Descriptor;
   formatEntry: FormatEntry;
   selector: string; // 4-byte hex selector (e.g. "0x12345678")
+  /** Original ERC-7730 format key (human-readable signature with param names). */
+  formatKey: string;
 }
 
 export interface DescriptorIndex {
@@ -25,6 +27,100 @@ export interface DescriptorIndex {
   descriptors: ERC7730Descriptor[];
 }
 
+// ── Signature canonicalization ──────────────────────────────────────
+
+/**
+ * Canonicalize an ERC-7730 function signature to the ABI-canonical form.
+ *
+ * ERC-7730 uses human-readable signatures with parameter names and struct
+ * variable names that must be stripped before computing the 4-byte selector.
+ *
+ * Examples:
+ *   "transfer(address,uint256)" -> "transfer(address,uint256)" (unchanged)
+ *   "create((uint256 salt, uint256 maker) order)" -> "create((uint256,uint256))"
+ *   "swap(uint256 amount, address to)" -> "swap(uint256,address)"
+ */
+export function canonicalizeSignature(sig: string): string {
+  const methodEnd = sig.indexOf("(");
+  if (methodEnd === -1) return sig;
+
+  const methodName = sig.substring(0, methodEnd);
+  const paramsStr = sig.substring(methodEnd);
+
+  // Parse the params, stripping variable names and keeping only types.
+  // In ERC-7730 signatures, each parameter is "type [name]" where name is optional.
+  // Tuples are "(type1 name1, type2 name2) tupleName" — the tuple itself is the type.
+  let result = "";
+  let i = 0;
+  let tokenStart = -1;
+  let lastType = "";
+  // After closing a tuple ")", the tuple itself is the type — any following
+  // token before "," or ")" is just a variable name to discard.
+  let afterTupleClose = false;
+
+  const flushPendingToken = (endIndex: number) => {
+    if (tokenStart === -1 || lastType) return;
+    const token = paramsStr.substring(tokenStart, endIndex);
+    if (!token) return;
+
+    if (afterTupleClose) {
+      // Preserve tuple array suffixes like `[]`/`[2]`, but still drop tuple variable names.
+      if (token.startsWith("[")) {
+        result += token;
+      }
+      return;
+    }
+
+    lastType = token;
+  };
+
+  while (i < paramsStr.length) {
+    const ch = paramsStr[i];
+
+    if (ch === "(") {
+      // Emit any pending type before opening a nested tuple
+      if (lastType) {
+        result += lastType;
+        lastType = "";
+      }
+      result += ch;
+      tokenStart = -1;
+      afterTupleClose = false;
+    } else if (ch === ")") {
+      flushPendingToken(i);
+      tokenStart = -1;
+      if (lastType) {
+        result += lastType;
+        lastType = "";
+      }
+      result += ch;
+      afterTupleClose = true;
+    } else if (ch === ",") {
+      flushPendingToken(i);
+      tokenStart = -1;
+      if (lastType) {
+        result += lastType;
+        lastType = "";
+      }
+      result += ",";
+      afterTupleClose = false;
+    } else if (ch === " ") {
+      // Space separates type from name — keep the first token (type)
+      if (tokenStart !== -1) {
+        flushPendingToken(i);
+        tokenStart = -1;
+      }
+    } else {
+      if (tokenStart === -1) {
+        tokenStart = i;
+      }
+    }
+    i++;
+  }
+
+  return methodName + result;
+}
+
 // ── Selector computation ────────────────────────────────────────────
 
 /**
@@ -32,7 +128,8 @@ export interface DescriptorIndex {
  * Example: "transfer(address,uint256)" -> "0xa9059cbb"
  */
 export function computeSelector(signature: string): string {
-  const hash = keccak256(toBytes(signature));
+  const canonical = canonicalizeSignature(signature);
+  const hash = keccak256(toBytes(canonical));
   return toHex(toBytes(hash).slice(0, 4));
 }
 
@@ -104,6 +201,7 @@ export function buildIndex(
           descriptor: resolved,
           formatEntry,
           selector,
+          formatKey,
         };
 
         // Index by selector

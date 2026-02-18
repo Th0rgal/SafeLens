@@ -24,6 +24,8 @@ import { ERC7730Card } from "./erc7730-card";
 export interface EvidenceContext {
   /** Current signing threshold (api-sourced). */
   currentThreshold?: number;
+  /** Chain ID from the evidence package. */
+  chainId?: number;
 }
 
 // ── Component registry ──────────────────────────────────────────────

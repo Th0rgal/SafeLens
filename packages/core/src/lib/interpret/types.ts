@@ -156,4 +156,9 @@ export type Interpreter = (
   dataDecoded: unknown,
   txTo: string,
   txOperation: number,
+  txData?: string | null,
+  chainId?: number,
+  txValue?: string,
+  txFrom?: string,
+  chains?: Record<string, { nativeTokenSymbol?: string }>,
 ) => Interpretation | null;

@@ -7,13 +7,13 @@ const mockConfig: SettingsConfig = {
   chains: {
     "1": { name: "Ethereum" },
   },
-  addressBook: [
-    { address: "0xd779332c5A52566Dada11A075a735b18DAa6c1f4", name: "Signer 1" },
-    { address: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12", name: "Signer 2" },
+  addressRegistry: [
+    { address: "0xd779332c5A52566Dada11A075a735b18DAa6c1f4", name: "Signer 1", kind: "eoa" },
+    { address: "0xABCDEF1234567890ABCDEF1234567890ABCDEF12", name: "Signer 2", kind: "eoa" },
+    { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", kind: "contract" },
   ],
-  contractRegistry: [
-    { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1" },
-  ],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("identifyProposer", () => {
@@ -87,7 +87,7 @@ describe("analyzeTarget", () => {
     expect(warnings[0].message).toContain("DelegateCall to unknown contract");
   });
 
-  it("resolves addresses from address book too", () => {
+  it("resolves EOAs from address registry too", () => {
     const warnings = analyzeTarget(
       "0xd779332c5A52566Dada11A075a735b18DAa6c1f4",
       0,
@@ -103,6 +103,24 @@ describe("analyzeTarget", () => {
       mockConfig
     );
     expect(warnings).toHaveLength(0);
+  });
+
+  it("treats chain-scoped entries as unknown on other chains", () => {
+    const scopedConfig: SettingsConfig = {
+      ...mockConfig,
+      addressRegistry: [
+        { address: "0x9641d764fc13c8B624c04430C7356C1C7C8102e2", name: "MultiSend 1.4.1", kind: "contract", chainIds: [1] },
+      ],
+    };
+
+    const warnings = analyzeTarget(
+      "0x9641d764fc13c8B624c04430C7356C1C7C8102e2",
+      1,
+      scopedConfig,
+      8453
+    );
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].level).toBe("danger");
   });
 });
 

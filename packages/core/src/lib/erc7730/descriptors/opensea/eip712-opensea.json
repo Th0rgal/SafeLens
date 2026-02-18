@@ -1,0 +1,61 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x7f268357a8c2552623316e2562d90e642bb538e5"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Wyvern Exchange Contract"
+  },
+  "display": {
+    "formats": {
+      "Order": {
+        "intent": "OpenSea Listing",
+        "fields": [
+          {
+            "path": "exchange",
+            "label": "Contract address",
+            "format": "raw"
+          },
+          {
+            "path": "basePrice",
+            "label": "Price",
+            "format": "raw"
+          },
+          {
+            "path": "expirationTime",
+            "label": "Offer expiration",
+            "format": "raw"
+          }
+        ],
+        "excluded": [
+          "side",
+          "extra",
+          "saleKind",
+          "staticTarget",
+          "target",
+          "howToCall",
+          "makerRelayerFee",
+          "feeMethod",
+          "replacementPattern",
+          "takerRelayerFee",
+          "taker",
+          "listingTime",
+          "staticExtradata",
+          "makerProtocolFee",
+          "takerProtocolFee",
+          "paymentToken",
+          "calldata",
+          "salt",
+          "feeRecipient",
+          "maker"
+        ]
+      }
+    }
+  }
+}

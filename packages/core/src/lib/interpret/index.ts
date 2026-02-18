@@ -24,10 +24,37 @@ import { getGlobalIndex } from "../erc7730/global-index";
 // Each interpreter is tried in order; the first non-null result wins.
 // Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
 
-// Lazy ERC-7730 interpreter — calls getGlobalIndex() on each invocation
-// so that setGlobalDescriptors() changes take effect without re-importing.
-const erc7730Interpreter: Interpreter = (...args) =>
-  createERC7730Interpreter(getGlobalIndex())(...args);
+// Lazy ERC-7730 interpreter — caches the inner interpreter and rebuilds
+// only when the global index identity changes (after setGlobalDescriptors).
+let cachedIndex: ReturnType<typeof getGlobalIndex> | null = null;
+let cachedInterpreter: ReturnType<typeof createERC7730Interpreter> | null = null;
+
+const erc7730Interpreter: Interpreter = (
+  dataDecoded,
+  txTo,
+  txOperation,
+  txData,
+  chainId,
+  txValue,
+  txFrom,
+  chains,
+) => {
+  const index = getGlobalIndex();
+  if (index !== cachedIndex) {
+    cachedIndex = index;
+    cachedInterpreter = createERC7730Interpreter(index);
+  }
+  return cachedInterpreter!(
+    dataDecoded,
+    txTo,
+    txOperation,
+    txData,
+    chainId,
+    txValue,
+    txFrom,
+    chains,
+  );
+};
 
 const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,
@@ -45,9 +72,23 @@ export function interpretTransaction(
   txTo: string,
   txOperation: number,
   disabledIds?: string[],
+  txData?: string | null,
+  chainId?: number,
+  txValue?: string,
+  txFrom?: string,
+  chains?: Record<string, { nativeTokenSymbol?: string }>,
 ): Interpretation | null {
   for (const interpret of INTERPRETERS) {
-    const result = interpret(dataDecoded, txTo, txOperation);
+    const result = interpret(
+      dataDecoded,
+      txTo,
+      txOperation,
+      txData,
+      chainId,
+      txValue,
+      txFrom,
+      chains,
+    );
     if (result) {
       if (disabledIds?.includes(result.id)) continue;
       return result;

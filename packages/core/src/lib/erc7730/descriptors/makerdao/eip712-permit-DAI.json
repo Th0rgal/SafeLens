@@ -1,0 +1,76 @@
+{
+  "context": {
+    "eip712": {
+      "deployments": [
+        {
+          "chainId": 42,
+          "address": "0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa"
+        }
+      ]
+    }
+  },
+  "display": {
+    "formats": {
+      "Permit": {
+        "intent": "Authorize spending of tokens",
+        "fields": [
+          {
+            "path": "spender",
+            "label": "Spender",
+            "format": "raw"
+          },
+          {
+            "path": "value",
+            "label": "Max spending amount",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "@.to"
+            }
+          },
+          {
+            "path": "deadline",
+            "label": "Valid until",
+            "format": "date",
+            "params": {
+              "encoding": "timestamp"
+            }
+          }
+        ],
+        "required": [
+          "spender",
+          "value"
+        ],
+        "excluded": [
+          "owner",
+          "nonce"
+        ],
+        "screens": {
+          "stax": [
+            {
+              "type": "propertyPage",
+              "label": "DAI Permit",
+              "content": [
+                "spender",
+                "value",
+                "deadline"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "metadata": {
+    "owner": "MakerDAO",
+    "info": {
+      "legalName": "Maker Foundation",
+      "url": "https://makerdao.com/",
+      "deploymentDate": "2017-12-18T00:00:00Z"
+    },
+    "token": {
+      "name": "Dai Stablecoin",
+      "ticker": "DAI",
+      "decimals": 18
+    }
+  }
+}

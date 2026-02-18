@@ -1,0 +1,69 @@
+{
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
+        },
+        {
+          "chainId": 560048,
+          "address": "0x00000000219ab540356cBB839Cbe05303d7705Fa"
+        }
+      ],
+      "addressMatcher": null,
+      "factory": null
+    }
+  },
+  "metadata": {
+    "owner": "Ethereum",
+    "info": {
+      "legalName": "Ethereum Foundation",
+      "url": "https://ethereum.foundation"
+    }
+  },
+  "display": {
+    "formats": {
+      "deposit(bytes,bytes,bytes,bytes32)": {
+        "$id": null,
+        "intent": "Stake ETH",
+        "screens": null,
+        "fields": [
+          {
+            "$id": null,
+            "label": "Validator public key",
+            "format": "raw",
+            "params": null,
+            "path": "#.pubkey",
+            "value": null
+          },
+          {
+            "$id": null,
+            "label": "Withdraw credentials",
+            "format": "raw",
+            "params": null,
+            "path": "#.withdrawal_credentials",
+            "value": null
+          },
+          {
+            "$id": null,
+            "label": "Amount to deposit",
+            "format": "amount",
+            "params": null,
+            "path": "@.value",
+            "value": null
+          }
+        ],
+        "required": [
+          "#.pubkey",
+          "#.withdrawal_credentials",
+          "@.value"
+        ],
+        "excluded": [
+          "#.signature",
+          "#.deposit_data_root"
+        ]
+      }
+    }
+  }
+}

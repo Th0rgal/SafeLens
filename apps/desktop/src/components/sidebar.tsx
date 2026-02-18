@@ -5,7 +5,7 @@ import { useSettingsConfig } from "@/lib/settings/hooks";
 
 const NAV_ITEMS = [
   { id: "verify", label: "Verify", icon: ShieldCheck, badge: undefined },
-  { id: "address-book", label: "Registries", icon: Library, badge: undefined },
+  { id: "address-book", label: "Registry", icon: Library, badge: undefined },
   { id: "erc7730", label: "Clear Signing", icon: ScrollText, badge: undefined },
   { id: "settings", label: "Settings", icon: Settings, badge: undefined },
 ] as const;

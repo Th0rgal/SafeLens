@@ -1,0 +1,37 @@
+{
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0xa88f0329C2c4ce51ba3fc619BBf44efE7120Dd0d"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "Lido DAO",
+    "info": {
+      "legalName": "Lido DAO",
+      "url": "https://lido.fi"
+    }
+  },
+  "display": {
+    "formats": {
+      "stakeETH(address)": {
+        "intent": "Stake ETH",
+        "fields": [
+          {
+            "label": "Amount to stake",
+            "format": "amount",
+            "path": "@.value"
+          }
+        ],
+        "required": [],
+        "excluded": [
+          "#._referral"
+        ]
+      }
+    }
+  }
+}

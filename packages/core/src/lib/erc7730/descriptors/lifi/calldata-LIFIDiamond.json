@@ -1,0 +1,523 @@
+{
+  "context": {
+    "contract": {
+      "deployments": [
+        {
+          "chainId": 1,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 137,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 42161,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 10,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 56,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 43114,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 100,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 250,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 324,
+          "address": "0x341e94069f53234fE6DabeF707aD424830525715"
+        },
+        {
+          "chainId": 8453,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 59144,
+          "address": "0xDE1E598b81620773454588B85D6b5D4eEC32573e"
+        },
+        {
+          "chainId": 5000,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 534352,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 42220,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 1284,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 1285,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 1313161554,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 1088,
+          "address": "0x24ca98fB6972F5eE05f0dB00595c7f68D9FaFd68"
+        },
+        {
+          "chainId": 25,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 1666600000,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 122,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 288,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 106,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 9001,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 42170,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 167004,
+          "address": "0x3A9A5dBa8FE1C4Da98187cE4755701BCA182f63b"
+        },
+        {
+          "chainId": 204,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 81457,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 252,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        },
+        {
+          "chainId": 34443,
+          "address": "0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "owner": "LI.FI Service GmbH",
+    "info": {
+      "legalName": "LI.FI",
+      "url": "https://li.fi"
+    },
+    "constants": {
+      "addressAsEth": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+      "addressAsNull": "0x0000000000000000000000000000000000000000"
+    }
+  },
+  "display": {
+    "definitions": {
+      "fromAmount": {
+        "label": "Amount info",
+        "format": "tokenAmount",
+        "params": {
+          "nativeCurrencyAddress": [
+            "$.metadata.constants.addressAsEth",
+            "$.metadata.constants.addressAsNull"
+          ]
+        }
+      },
+      "_minAmountOut": {
+        "label": "Minimum Amount to receive",
+        "format": "tokenAmount",
+        "params": {
+          "nativeCurrencyAddress": [
+            "$.metadata.constants.addressAsEth",
+            "$.metadata.constants.addressAsNull"
+          ]
+        }
+      }
+    },
+    "formats": {
+      "0x5fd9ae2e": {
+        "$id": "swapTokensMultipleV3ERC20ToERC20",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "_swapData.[0].fromAmount",
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[0].sendingAssetId"
+            }
+          },
+          {
+            "path": "_minAmountOut",
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[-1].receivingAssetId"
+            }
+          },
+          {
+            "path": "_receiver",
+            "label": "Recipient",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.[0].fromAmount",
+          "_swapData.[-1].receivingAssetId",
+          "_minAmountOut",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.[].callData",
+          "_swapData.[].callTo",
+          "_swapData.[].approveTo",
+          "_swapData.[].requiresDeposit"
+        ]
+      },
+      "0x2c57e884": {
+        "$id": "swapTokensMultipleV3ERC20ToNative",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "_swapData.[0].fromAmount",
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[0].sendingAssetId"
+            }
+          },
+          {
+            "label": "Minimum Amount to receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "_minAmountOut"
+          },
+          {
+            "path": "_receiver",
+            "label": "Receiver",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.[0].fromAmount",
+          "_swapData.[-1].receivingAssetId",
+          "_minAmountOut",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.[].callData",
+          "_swapData.[].requiresDeposit",
+          "_swapData.[].approveTo",
+          "_swapData.[].callTo"
+        ]
+      },
+      "0x736eac0b": {
+        "$id": "swapTokensMultipleV3NativeToERC20",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "@.value",
+            "label": "Amount to send",
+            "format": "amount"
+          },
+          {
+            "path": "_minAmountOut",
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[-1].receivingAssetId"
+            }
+          },
+          {
+            "path": "_receiver",
+            "label": "Recipient",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.[0].fromAmount",
+          "_swapData.[-1].receivingAssetId",
+          "_minAmountOut",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.[0].callData",
+          "_swapData.[0].requiresDeposit",
+          "_swapData.[0].callTo",
+          "_swapData.[0].approveTo"
+        ]
+      },
+      "0x4666fc80": {
+        "$id": "swapTokensSingleV3ERC20ToERC20",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "_swapData.fromAmount",
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.sendingAssetId"
+            }
+          },
+          {
+            "path": "_minAmountOut",
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.receivingAssetId"
+            }
+          },
+          {
+            "path": "_receiver",
+            "label": "Recipient",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.fromAmount",
+          "_minAmountOut",
+          "_receiver",
+          "_swapData.receivingAssetId"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.callData",
+          "_swapData.requiresDeposit"
+        ]
+      },
+      "0x733214a3": {
+        "$id": "swapTokensSingleV3ERC20ToNative",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "_swapData.fromAmount",
+            "label": "Amount to Send",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.sendingAssetId"
+            }
+          },
+          {
+            "label": "Minimum Amount to receive",
+            "format": "tokenAmount",
+            "params": {
+              "nativeCurrencyAddress": [
+                "$.metadata.constants.addressAsEth",
+                "$.metadata.constants.addressAsNull"
+              ]
+            },
+            "path": "_minAmountOut"
+          },
+          {
+            "path": "_receiver",
+            "label": "Receiver",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.fromAmount",
+          "_minAmountOut",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.callData",
+          "_swapData.callTo",
+          "_swapData.approveTo",
+          "_swapData.requiresDeposit"
+        ]
+      },
+      "0xaf7060fd": {
+        "$id": "swapTokensSingleV3NativeToERC20",
+        "intent": "Swap",
+        "fields": [
+          {
+            "path": "@.value",
+            "label": "Amount to send",
+            "format": "amount"
+          },
+          {
+            "path": "_minAmountOut",
+            "label": "Minimum to Receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.receivingAssetId"
+            }
+          },
+          {
+            "path": "_receiver",
+            "label": "Recipient",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.fromAmount",
+          "_minAmountOut",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.callData",
+          "_swapData.requiresDeposit",
+          "_swapData.approveTo"
+        ]
+      },
+      "0x4630a0d8": {
+        "$id": "swapTokensGeneric",
+        "intent": "Swap",
+        "fields": [
+          {
+            "label": "Amount info",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[0].sendingAssetId"
+            },
+            "path": "_swapData.[0].fromAmount"
+          },
+          {
+            "label": "Minimum Amount to receive",
+            "format": "tokenAmount",
+            "params": {
+              "tokenPath": "_swapData.[-1].receivingAssetId"
+            },
+            "path": "_minAmount"
+          },
+          {
+            "path": "_receiver",
+            "label": "Recipient",
+            "format": "addressName",
+            "params": {
+              "types": [
+                "eoa",
+                "contract"
+              ],
+              "sources": [
+                "local",
+                "ens"
+              ]
+            }
+          }
+        ],
+        "required": [
+          "_swapData.[0].fromAmount",
+          "_minAmount",
+          "_receiver"
+        ],
+        "excluded": [
+          "_transactionId",
+          "_integrator",
+          "_referrer",
+          "_swapData.[].callData",
+          "_swapData.[].callTo",
+          "_swapData.[].approveTo",
+          "_swapData.[].requiresDeposit"
+        ]
+      }
+    }
+  }
+}

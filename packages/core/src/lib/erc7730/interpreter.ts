@@ -5,11 +5,13 @@
  * human-readable interpretations.
  */
 
-import { formatUnits } from "viem";
+import { decodeFunctionData, formatUnits, parseAbiItem } from "viem";
+import type { Abi } from "viem";
 import type { Interpretation } from "../interpret/types";
-import type { DescriptorIndex } from "./index";
-import { lookupFormatByMethodName } from "./index";
+import type { DescriptorIndex, IndexEntry } from "./index";
+import { lookupFormat, lookupFormatByMethodName } from "./index";
 import type { FieldDefinition, ERC7730Descriptor } from "./types";
+import { lookupToken } from "./tokens";
 
 // ── Field value extraction ──────────────────────────────────────────
 
@@ -39,23 +41,24 @@ function extractValue(
   txFrom?: string,
   txTo?: string
 ): string | null {
-  // Calldata parameter: #.paramName
+  // Calldata parameter: #.paramName or #.paramName.nestedField
   if (path.startsWith("#.")) {
-    const paramName = path.substring(2);
-    const param = dataDecoded.parameters?.find((p) => p.name === paramName);
+    const fullPath = path.substring(2);
+    const parts = fullPath.split(".");
+    const rootName = parts[0];
+    const param = dataDecoded.parameters?.find((p) => p.name === rootName);
     if (!param) return null;
 
-    // Handle struct parameters (e.g., #.params.tokenIn)
-    if (paramName.includes(".") && typeof param.value === "object" && param.value !== null) {
-      const parts = paramName.split(".");
-      let value: any = param.value;
-      for (const part of parts.slice(1)) {
-        value = value?.[part];
-      }
-      return value ? String(value) : null;
+    if (parts.length === 1) {
+      return String(param.value);
     }
 
-    return String(param.value);
+    // Traverse into nested struct (e.g., #.params.tokenIn)
+    let value: any = param.value;
+    for (const part of parts.slice(1)) {
+      value = value?.[part];
+    }
+    return value != null ? String(value) : null;
   }
 
   // Transaction value: @.value
@@ -73,10 +76,116 @@ function extractValue(
     return txTo ?? null;
   }
 
+  // Bare path (e.g. "makerOrder.takingAmount", "_value", "amount") — used by ERC-7730 descriptors.
+  // These reference calldata parameters by their ERC-7730 name, not by #. prefix.
+  if (!path.startsWith("$")) {
+    const parts = path.split(".");
+    const paramName = parts[0];
+    const param = dataDecoded.parameters?.find((p) => p.name === paramName);
+    if (!param) return null;
+
+    if (parts.length === 1) {
+      return String(param.value);
+    }
+
+    // Traverse into nested struct
+    let value: any = param.value;
+    for (const part of parts.slice(1)) {
+      value = value?.[part];
+    }
+    return value != null ? String(value) : null;
+  }
+
   return null;
 }
 
+// ── Raw calldata decoding ──────────────────────────────────────────
+
+/**
+ * Decode raw calldata using the ERC-7730 format key as ABI.
+ *
+ * Converts the decoded args into a DataDecoded structure that extractValue
+ * can work with, preserving the parameter names from the signature.
+ */
+function decodeRawCalldata(
+  txData: string,
+  entry: IndexEntry,
+): DataDecoded | null {
+  try {
+    const formatKey = entry.formatKey;
+    // parseAbiItem needs "function " prefix
+    const abiSig = formatKey.startsWith("function ")
+      ? formatKey
+      : `function ${formatKey}`;
+    const abiItem = parseAbiItem(abiSig);
+
+    if (abiItem.type !== "function") return null;
+
+    const decoded = decodeFunctionData({
+      abi: [abiItem] as Abi,
+      data: txData as `0x${string}`,
+    });
+
+    // Convert decoded args into DataDecoded parameters
+    const parameters: DataDecoded["parameters"] = [];
+
+    if (decoded.args && abiItem.inputs) {
+      for (let i = 0; i < abiItem.inputs.length; i++) {
+        const input = abiItem.inputs[i];
+        const arg = decoded.args[i];
+
+        parameters.push({
+          name: input.name ?? `arg${i}`,
+          type: input.type,
+          value: convertBigInts(arg),
+        });
+      }
+    }
+
+    return {
+      method: decoded.functionName,
+      parameters,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Recursively convert BigInt values to strings for display.
+ */
+function convertBigInts(value: unknown): unknown {
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map(convertBigInts);
+  }
+  if (value && typeof value === "object") {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      result[k] = convertBigInts(v);
+    }
+    return result;
+  }
+  return value;
+}
+
 // ── Field formatting ────────────────────────────────────────────────
+
+/**
+ * Try to convert a decimal uint256 string to a 0x hex address.
+ * Returns the value unchanged if it's already a hex address.
+ */
+function toAddress(value: string): string {
+  if (value.startsWith("0x")) return value;
+  try {
+    const hex = BigInt(value).toString(16).padStart(40, "0");
+    return `0x${hex.slice(-40)}`;
+  } catch {
+    return value;
+  }
+}
 
 /**
  * Format a raw value according to its field definition.
@@ -84,7 +193,10 @@ function extractValue(
 function formatValue(
   value: string,
   field: FieldDefinition,
-  descriptor: ERC7730Descriptor
+  descriptor: ERC7730Descriptor,
+  dataDecoded?: DataDecoded,
+  chainId?: number,
+  nativeTokenSymbol = "ETH",
 ): string {
   const format = field.format ?? "raw";
 
@@ -93,29 +205,64 @@ function formatValue(
       return value;
 
     case "addressName":
-      // For now, just return the address. In the future, this could
-      // look up names from the contract registry or address book.
-      return value;
+      // Convert uint256-encoded addresses to hex format
+      return toAddress(value);
 
     case "amount":
-      // Native currency (ETH) — 18 decimals
+      // Native currency amount — 18 decimals.
       try {
         const formatted = formatUnits(BigInt(value), 18);
-        return `${formatted} ETH`;
+        return `${formatted} ${nativeTokenSymbol}`;
       } catch {
         return value;
       }
 
     case "tokenAmount": {
-      // Token amount — need decimals from metadata.token or tokenPath
-      const decimals = descriptor.metadata.token?.decimals ?? 18;
-      const symbol = descriptor.metadata.token?.ticker ?? "";
-      try {
-        const formatted = formatUnits(BigInt(value), decimals);
-        return symbol ? `${formatted} ${symbol}` : formatted;
-      } catch {
-        return value;
+      // Use metadata.token if available (static decimals/symbol)
+      if (descriptor.metadata.token) {
+        const { decimals, ticker: symbol } = descriptor.metadata.token;
+        try {
+          const formatted = formatUnits(BigInt(value), decimals);
+          return symbol ? `${formatted} ${symbol}` : formatted;
+        } catch {
+          return value;
+        }
       }
+
+      // No static token metadata — resolve tokenPath/token and look up token list
+      const tokenPath = (field.params?.tokenPath as string) ?? field.tokenPath;
+      const tokenRef = field.params?.token as string | undefined;
+
+      let tokenAddressRaw: string | null = null;
+      if (tokenRef?.startsWith("$.metadata.constants.")) {
+        const constantKey = tokenRef.slice("$.metadata.constants.".length);
+        const constantValue = descriptor.metadata.constants?.[constantKey];
+        tokenAddressRaw = typeof constantValue === "string" ? constantValue : null;
+      } else if (tokenPath && dataDecoded) {
+        tokenAddressRaw = extractValue(tokenPath, dataDecoded);
+      } else if (tokenRef && dataDecoded) {
+        tokenAddressRaw = extractValue(tokenRef, dataDecoded);
+      }
+
+      if (tokenAddressRaw) {
+        const tokenAddress = toAddress(tokenAddressRaw);
+        // Try well-known token list for decimals and symbol
+        if (chainId) {
+          const tokenMeta = lookupToken(chainId, tokenAddress);
+          if (tokenMeta) {
+            try {
+              const formatted = formatUnits(BigInt(value), tokenMeta.decimals);
+              return `${formatted} ${tokenMeta.symbol}`;
+            } catch {
+              // fall through
+            }
+          }
+        }
+        return `${value} (token: ${tokenAddress})`;
+      }
+
+      // Fallback: raw value without assuming 18 decimals
+      return value;
     }
 
     case "date":
@@ -201,67 +348,125 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
     dataDecoded: unknown,
     txTo: string,
     _txOperation: number,
+    txData?: string | null,
+    txChainId?: number,
     txValue?: string,
-    txFrom?: string
+    txFrom?: string,
+    chains?: Record<string, { nativeTokenSymbol?: string }>,
   ): Interpretation | null {
-    // Type guard for dataDecoded
+    // If caller provides a specific chainId, try it first; otherwise try all
+    const chainsToTry = txChainId ? [txChainId, ...chainIds.filter(c => c !== txChainId)] : chainIds;
+    const nativeTokenSymbol = txChainId
+      ? (chains?.[String(txChainId)]?.nativeTokenSymbol ?? "ETH")
+      : "ETH";
+
+    // Try decoded method lookup first
     if (
-      !dataDecoded ||
-      typeof dataDecoded !== "object" ||
-      !("method" in dataDecoded)
+      dataDecoded &&
+      typeof dataDecoded === "object" &&
+      "method" in dataDecoded
     ) {
-      return null;
-    }
+      const decoded = dataDecoded as DataDecoded;
 
-    const decoded = dataDecoded as DataDecoded;
+      for (const chainId of chainsToTry) {
+        // Try by method name first (most descriptors use human-readable signatures)
+        let entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
 
-    // Try to find a match on any chain in the index
-    for (const chainId of chainIds) {
-      const entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
-      if (entry) {
-        // Extract and format all fields
-        const fields: ERC7730Details["fields"] = [];
-
-        for (const fieldDef of entry.formatEntry.fields) {
-          if (!fieldDef.path) continue;
-
-          const rawValue = extractValue(
-            fieldDef.path,
-            decoded,
-            txValue,
-            txFrom,
-            txTo
-          );
-
-          if (rawValue === null) {
-            // Field not found — skip it
-            continue;
-          }
-
-          const formattedValue = formatValue(
-            rawValue,
-            fieldDef,
-            entry.descriptor
-          );
-
-          fields.push({
-            label: fieldDef.label,
-            value: formattedValue,
-            format: fieldDef.format ?? "raw",
-          });
+        // Fall back to selector lookup — some descriptors (e.g. Uniswap V3 Router)
+        // use raw 4-byte selectors as format keys, so method name lookup won't match.
+        if (!entry && txData && txData.length >= 10) {
+          const selector = txData.slice(0, 10).toLowerCase();
+          entry = lookupFormat(index, chainId, txTo, selector);
         }
 
-        return {
-          id: "erc7730",
-          protocol: entry.descriptor.metadata.owner,
-          action: entry.formatEntry.intent,
-          severity: "info",
-          summary: entry.formatEntry.intent,
-          details: { fields },
-        };
+        if (entry) {
+          return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom, nativeTokenSymbol);
+        }
+      }
+    }
+
+    // Fallback: no dataDecoded — extract 4-byte selector from raw calldata and decode it
+    if (txData && txData.length >= 10) {
+      const selector = txData.slice(0, 10).toLowerCase();
+
+      for (const chainId of chainsToTry) {
+        const entry = lookupFormat(index, chainId, txTo, selector);
+        if (entry) {
+          // Try to decode raw calldata using the ERC-7730 signature
+          const decoded = decodeRawCalldata(txData, entry);
+          if (decoded) {
+            return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom, nativeTokenSymbol);
+          }
+
+          // Decoding failed — return interpretation with intent only
+          const intent = entry.formatEntry.intent ?? "Transaction";
+          return {
+            id: "erc7730",
+            protocol: entry.descriptor.metadata.owner,
+            action: intent,
+            severity: "info",
+            summary: intent,
+            details: { fields: [] },
+          };
+        }
       }
     }
 
     return null;
+  };
+}
+
+/**
+ * Build an interpretation result from a matched index entry and decoded data.
+ */
+function buildInterpretation(
+  entry: import("./index").IndexEntry,
+  decoded: DataDecoded,
+  txTo: string,
+  chainId?: number,
+  txValue?: string,
+  txFrom?: string,
+  nativeTokenSymbol = "ETH",
+): Interpretation {
+  const fields: ERC7730Details["fields"] = [];
+
+  for (const fieldDef of entry.formatEntry.fields) {
+    if (!fieldDef.path) continue;
+
+    const rawValue = extractValue(
+      fieldDef.path,
+      decoded,
+      txValue,
+      txFrom,
+      txTo
+    );
+
+    if (rawValue === null) continue;
+
+    const formattedValue = formatValue(
+      rawValue,
+      fieldDef,
+      entry.descriptor,
+      decoded,
+      chainId,
+      nativeTokenSymbol,
+    );
+
+    fields.push({
+      label: fieldDef.label ?? fieldDef.path ?? "Unknown",
+      value: formattedValue,
+      format: fieldDef.format ?? "raw",
+    });
+  }
+
+  const intent = entry.formatEntry.intent ?? decoded.method;
+
+  return {
+    id: "erc7730",
+    protocol: entry.descriptor.metadata.owner,
+    action: intent,
+    severity: "info",
+    summary: intent,
+    details: { fields },
   };
 }

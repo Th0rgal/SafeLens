@@ -7,8 +7,9 @@ import type { SettingsConfig } from "../../settings/types";
 const VOID_SETTINGS: SettingsConfig = {
   version: "1.0",
   chains: {},
-  addressBook: [],
-  contractRegistry: [],
+  addressRegistry: [],
+  erc7730Descriptors: [],
+  disabledInterpreters: [],
 };
 
 describe("verifyEvidencePackage", () => {

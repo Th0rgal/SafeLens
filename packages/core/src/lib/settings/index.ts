@@ -1,8 +1,7 @@
 export type {
   SettingsConfig,
   ChainConfig,
-  AddressBookEntry,
-  ContractRegistryEntry,
+  AddressRegistryEntry,
 } from "./types";
 export { settingsConfigSchema } from "./types";
 export { DEFAULT_SETTINGS_CONFIG } from "./defaults";

@@ -53,10 +53,11 @@ export type FieldFormat =
   | "date"
   | "unit"
   | "enum"
-  | "percentage";
+  | "percentage"
+  | "calldata";
 
 export interface FieldDefinition {
-  label: string;
+  label?: string;
   path?: string; // JSONPath expression
   format?: FieldFormat;
   /** For tokenAmount: path to token address or decimals */
@@ -70,11 +71,15 @@ export interface FieldDefinition {
   /** Parameters for the field (used in nested structures) */
   params?: {
     [key: string]: unknown;
-  };
+  } | null;
+  /** Nested sub-fields for structured data (e.g. Morpho marketParams) */
+  fields?: unknown[];
+  /** Static value */
+  value?: unknown;
 }
 
 export interface FormatEntry {
-  intent: string; // Human-readable action
+  intent?: string; // Human-readable action
   fields: FieldDefinition[];
 }
 
