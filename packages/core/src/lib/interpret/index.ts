@@ -24,8 +24,11 @@ import { getGlobalIndex } from "../erc7730/global-index";
 // Each interpreter is tried in order; the first non-null result wins.
 // Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
 
-// Lazy ERC-7730 interpreter — calls getGlobalIndex() on each invocation
-// so that setGlobalDescriptors() changes take effect without re-importing.
+// Lazy ERC-7730 interpreter — caches the inner interpreter and rebuilds
+// only when the global index identity changes (after setGlobalDescriptors).
+let cachedIndex: ReturnType<typeof getGlobalIndex> | null = null;
+let cachedInterpreter: ReturnType<typeof createERC7730Interpreter> | null = null;
+
 const erc7730Interpreter: Interpreter = (
   dataDecoded,
   txTo,
@@ -35,8 +38,13 @@ const erc7730Interpreter: Interpreter = (
   txValue,
   txFrom,
   chains,
-) =>
-  createERC7730Interpreter(getGlobalIndex())(
+) => {
+  const index = getGlobalIndex();
+  if (index !== cachedIndex) {
+    cachedIndex = index;
+    cachedInterpreter = createERC7730Interpreter(index);
+  }
+  return cachedInterpreter!(
     dataDecoded,
     txTo,
     txOperation,
@@ -46,6 +54,7 @@ const erc7730Interpreter: Interpreter = (
     txFrom,
     chains,
   );
+};
 
 const INTERPRETERS: Interpreter[] = [
   interpretCowSwapTwap,

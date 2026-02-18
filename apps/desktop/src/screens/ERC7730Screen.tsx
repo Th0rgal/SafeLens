@@ -5,17 +5,8 @@ import { useToast } from "@/components/ui/toast";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { parseDescriptor, type ERC7730Descriptor, type Deployment } from "@safelens/core";
 
-const CHAIN_NAMES: Record<number, string> = {
-  1: "Ethereum",
-  10: "Optimism",
-  100: "Gnosis",
-  137: "Polygon",
-  42161: "Arbitrum",
-  8453: "Base",
-};
-
-function chainLabel(chainId: number) {
-  return CHAIN_NAMES[chainId] ?? `Chain ${chainId}`;
+function chainLabel(chainId: number, chains?: Record<string, { name: string }>) {
+  return chains?.[String(chainId)]?.name ?? `Chain ${chainId}`;
 }
 
 function getDeployments(d: ERC7730Descriptor) {
@@ -353,7 +344,7 @@ export default function ERC7730Screen() {
                                     key={chainId}
                                     className="flex items-center gap-2 rounded-md bg-white/[0.05] px-2.5 py-1.5 text-xs"
                                   >
-                                    <span className="shrink-0 text-muted">on {chainLabel(chainId)}</span>
+                                    <span className="shrink-0 text-muted">on {chainLabel(chainId, config?.chains)}</span>
                                     <div className="flex flex-wrap gap-x-3">
                                       {addresses.map((addr) => (
                                         <CopyableAddress key={addr} address={addr} onCopy={handleCopy} />

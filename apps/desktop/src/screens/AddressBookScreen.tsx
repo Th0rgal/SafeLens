@@ -14,6 +14,7 @@ export default function AddressBookScreen() {
   const [entries, setEntries] = useState<AddressRegistryEntry[]>([]);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [chainIdDrafts, setChainIdDrafts] = useState<Record<number, string>>({});
   const [newAddress, setNewAddress] = useState("");
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("Custom");
@@ -246,8 +247,18 @@ export default function AddressBookScreen() {
                             <span className="pt-2 text-xs text-muted">Chains</span>
                             <div>
                               <Input
-                                value={chainIdsText(entry)}
-                                onChange={(e) => updateEntry(i, { chainIds: parseChainIds(e.target.value) })}
+                                value={chainIdDrafts[i] ?? chainIdsText(entry)}
+                                onChange={(e) => setChainIdDrafts((prev) => ({ ...prev, [i]: e.target.value }))}
+                                onBlur={() => {
+                                  const raw = chainIdDrafts[i];
+                                  if (raw === undefined) return;
+                                  updateEntry(i, { chainIds: parseChainIds(raw) });
+                                  setChainIdDrafts((prev) => {
+                                    const next = { ...prev };
+                                    delete next[i];
+                                    return next;
+                                  });
+                                }}
                                 placeholder="Chain IDs (optional)"
                                 className="text-xs"
                               />

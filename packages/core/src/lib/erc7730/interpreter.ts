@@ -41,23 +41,24 @@ function extractValue(
   txFrom?: string,
   txTo?: string
 ): string | null {
-  // Calldata parameter: #.paramName
+  // Calldata parameter: #.paramName or #.paramName.nestedField
   if (path.startsWith("#.")) {
-    const paramName = path.substring(2);
-    const param = dataDecoded.parameters?.find((p) => p.name === paramName);
+    const fullPath = path.substring(2);
+    const parts = fullPath.split(".");
+    const rootName = parts[0];
+    const param = dataDecoded.parameters?.find((p) => p.name === rootName);
     if (!param) return null;
 
-    // Handle struct parameters (e.g., #.params.tokenIn)
-    if (paramName.includes(".") && typeof param.value === "object" && param.value !== null) {
-      const parts = paramName.split(".");
-      let value: any = param.value;
-      for (const part of parts.slice(1)) {
-        value = value?.[part];
-      }
-      return value ? String(value) : null;
+    if (parts.length === 1) {
+      return String(param.value);
     }
 
-    return String(param.value);
+    // Traverse into nested struct (e.g., #.params.tokenIn)
+    let value: any = param.value;
+    for (const part of parts.slice(1)) {
+      value = value?.[part];
+    }
+    return value != null ? String(value) : null;
   }
 
   // Transaction value: @.value
