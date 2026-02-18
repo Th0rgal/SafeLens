@@ -10,6 +10,10 @@ function getSettingsFilePath(): string {
   return `${SETTINGS_SUBDIR}/${SETTINGS_FILE}`;
 }
 
+function getLegacySettingsFilePath(): string {
+  return SETTINGS_FILE;
+}
+
 function isTauriRuntime(): boolean {
   // Available in Tauri webview; absent in plain browser (e.g. `vite` dev server).
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -24,8 +28,10 @@ export function createTauriSettingsStore(): SettingsStore {
       }
       const filePath = getSettingsFilePath();
       const fileExists = await exists(filePath, SETTINGS_DIR);
-      if (!fileExists) return null;
-      const raw = await readTextFile(filePath, SETTINGS_DIR);
+      const legacyFilePath = getLegacySettingsFilePath();
+      const legacyFileExists = !fileExists && await exists(legacyFilePath, SETTINGS_DIR);
+      if (!fileExists && !legacyFileExists) return null;
+      const raw = await readTextFile(fileExists ? filePath : legacyFilePath, SETTINGS_DIR);
       return raw.trim().length > 0 ? raw : null;
     },
     async write(payload: string) {
@@ -52,8 +58,13 @@ export function createTauriSettingsStore(): SettingsStore {
       }
       const filePath = getSettingsFilePath();
       const fileExists = await exists(filePath, SETTINGS_DIR);
-      if (!fileExists) return;
-      await writeTextFile(filePath, "", SETTINGS_DIR);
+      const legacyFilePath = getLegacySettingsFilePath();
+      const legacyFileExists = !fileExists && await exists(legacyFilePath, SETTINGS_DIR);
+      if (fileExists) {
+        await writeTextFile(filePath, "", SETTINGS_DIR);
+      } else if (legacyFileExists) {
+        await writeTextFile(legacyFilePath, "", SETTINGS_DIR);
+      }
     },
   };
 }

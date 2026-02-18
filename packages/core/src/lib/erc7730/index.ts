@@ -58,6 +58,22 @@ export function canonicalizeSignature(sig: string): string {
   // token before "," or ")" is just a variable name to discard.
   let afterTupleClose = false;
 
+  const flushPendingToken = (endIndex: number) => {
+    if (tokenStart === -1 || lastType) return;
+    const token = paramsStr.substring(tokenStart, endIndex);
+    if (!token) return;
+
+    if (afterTupleClose) {
+      // Preserve tuple array suffixes like `[]`/`[2]`, but still drop tuple variable names.
+      if (token.startsWith("[")) {
+        result += token;
+      }
+      return;
+    }
+
+    lastType = token;
+  };
+
   while (i < paramsStr.length) {
     const ch = paramsStr[i];
 
@@ -71,10 +87,7 @@ export function canonicalizeSignature(sig: string): string {
       tokenStart = -1;
       afterTupleClose = false;
     } else if (ch === ")") {
-      // Flush pending token as type (if not after a tuple close)
-      if (tokenStart !== -1 && !lastType && !afterTupleClose) {
-        lastType = paramsStr.substring(tokenStart, i);
-      }
+      flushPendingToken(i);
       tokenStart = -1;
       if (lastType) {
         result += lastType;
@@ -83,10 +96,7 @@ export function canonicalizeSignature(sig: string): string {
       result += ch;
       afterTupleClose = true;
     } else if (ch === ",") {
-      // Flush pending token as type (if not after a tuple close)
-      if (tokenStart !== -1 && !lastType && !afterTupleClose) {
-        lastType = paramsStr.substring(tokenStart, i);
-      }
+      flushPendingToken(i);
       tokenStart = -1;
       if (lastType) {
         result += lastType;
@@ -97,9 +107,7 @@ export function canonicalizeSignature(sig: string): string {
     } else if (ch === " ") {
       // Space separates type from name — keep the first token (type)
       if (tokenStart !== -1) {
-        if (!lastType && !afterTupleClose) {
-          lastType = paramsStr.substring(tokenStart, i);
-        }
+        flushPendingToken(i);
         tokenStart = -1;
       }
     } else {

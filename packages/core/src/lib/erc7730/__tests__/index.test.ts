@@ -37,6 +37,11 @@ describe("canonicalizeSignature", () => {
       canonicalizeSignature("foo((uint256 a, (address b, uint256 c) inner) outer)")
     ).toBe("foo((uint256,(address,uint256)))");
   });
+
+  it("preserves tuple array suffixes while stripping variable names", () => {
+    expect(canonicalizeSignature("foo((uint256 a)[] orders)")).toBe("foo((uint256)[])");
+    expect(canonicalizeSignature("foo((uint256 a)[2] orders)")).toBe("foo((uint256)[2])");
+  });
 });
 
 describe("computeSelector", () => {

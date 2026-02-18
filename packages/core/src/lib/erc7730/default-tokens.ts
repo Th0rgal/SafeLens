@@ -57,18 +57,32 @@ function mergeToken(
 
 export function buildBuiltinTokenMap(descriptors: ERC7730Descriptor[]): Map<string, BuiltinTokenMetadata> {
   const tokens = new Map<string, BuiltinTokenMetadata>();
+  const knownTokenAddressesByChain = new Set<string>();
 
+  // Pass 1: collect explicit token descriptor deployments.
   for (const descriptor of descriptors) {
     const deployments = getDeployments(descriptor);
     const descriptorSymbol = descriptor.metadata.token?.ticker || descriptor.metadata.token?.name;
     const descriptorDecimals = descriptor.metadata.token?.decimals;
+    if (!descriptorSymbol || typeof descriptorDecimals !== "number") continue;
 
-    // Token descriptors where deployment address is the token contract itself.
-    if (descriptorSymbol && typeof descriptorDecimals === "number") {
-      for (const deployment of deployments) {
-        mergeToken(tokens, deployment.chainId, deployment.address, descriptorSymbol, descriptorDecimals);
-      }
+    for (const deployment of deployments) {
+      mergeToken(tokens, deployment.chainId, deployment.address, descriptorSymbol, descriptorDecimals);
+      knownTokenAddressesByChain.add(`${deployment.chainId}:${deployment.address.toLowerCase()}`);
     }
+  }
+
+  for (const token of TOKEN_OVERRIDES) {
+    mergeToken(tokens, token.chainId, token.address, token.symbol, token.decimals);
+    knownTokenAddressesByChain.add(`${token.chainId}:${token.address.toLowerCase()}`);
+  }
+
+  // Pass 2: infer tokens from protocol constants, but only where the token
+  // address is known on that chain from explicit token descriptors/overrides.
+  for (const descriptor of descriptors) {
+    const deployments = getDeployments(descriptor);
+    const descriptorSymbol = descriptor.metadata.token?.ticker || descriptor.metadata.token?.name;
+    const descriptorDecimals = descriptor.metadata.token?.decimals;
 
     // Protocol descriptors that point to token addresses via metadata.constants.
     const constants = descriptor.metadata.constants;
@@ -89,13 +103,11 @@ export function buildBuiltinTokenMap(descriptors: ERC7730Descriptor[]): Map<stri
       if (typeof decimals !== "number") continue;
 
       for (const deployment of deployments) {
+        const knownKey = `${deployment.chainId}:${value.toLowerCase()}`;
+        if (!knownTokenAddressesByChain.has(knownKey) && deployments.length > 1) continue;
         mergeToken(tokens, deployment.chainId, value, symbol, decimals);
       }
     }
-  }
-
-  for (const token of TOKEN_OVERRIDES) {
-    mergeToken(tokens, token.chainId, token.address, token.symbol, token.decimals);
   }
 
   return tokens;
