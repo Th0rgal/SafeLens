@@ -65,6 +65,27 @@ describe("resolveAddress", () => {
 
     expect(resolveAddress("0x9fC3dc011b461664c835F2527fffb1169b3C213e", config, 8453)).toBe("Global Treasury");
   });
+
+  it("returns null when chainId is provided but only other-chain entries exist", () => {
+    const config = makeConfig({
+      addressBook: [
+        { address: "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83", name: "USDC on Ethereum", chainIds: [1] },
+      ],
+    });
+
+    expect(resolveAddress("0xddafbb505ad214d7b80b1f830fccc89b60fb7a83", config, 100)).toBeNull();
+  });
+
+  it("matches address-only without chainId (backward compat)", () => {
+    const config = makeConfig({
+      addressBook: [
+        { address: "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83", name: "USDC on Gnosis", chainIds: [100] },
+      ],
+    });
+
+    // Without chainId, matches first entry regardless of its chainIds
+    expect(resolveAddress("0xddafbb505ad214d7b80b1f830fccc89b60fb7a83", config)).toBe("USDC on Gnosis");
+  });
 });
 
 describe("resolveContract", () => {

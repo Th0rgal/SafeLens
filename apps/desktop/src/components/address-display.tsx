@@ -8,16 +8,18 @@ import { resolveAddress, resolveContract } from "@safelens/core";
 
 interface AddressDisplayProps {
   address: string;
-  chainId?: number;
   className?: string;
+  /** Chain ID for chain-aware resolution and default when saving. */
+  chainId?: number;
 }
 
-export function AddressDisplay({ address, chainId, className }: AddressDisplayProps) {
+export function AddressDisplay({ address, className, chainId }: AddressDisplayProps) {
   const { config, saveConfig } = useSettingsConfig();
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [selectedChainId, setSelectedChainId] = useState<number | undefined>(chainId);
   const ref = useRef<HTMLSpanElement>(null);
   const popupRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -75,20 +77,29 @@ export function AddressDisplay({ address, chainId, className }: AddressDisplayPr
     try {
       await saveConfig({
         ...config,
-        addressBook: [...config.addressBook, { address, name: nameInput.trim() }],
+        addressBook: [
+          ...config.addressBook,
+          {
+            address,
+            name: nameInput.trim(),
+            ...(selectedChainId !== undefined && { chainIds: [selectedChainId] }),
+          },
+        ],
       });
     } catch {
       // Store write may fail in dev mode — state update still applied by provider
     }
     setAdding(false);
     setNameInput("");
+    setSelectedChainId(chainId);
     setOpen(false);
-  }, [config, saveConfig, address, nameInput]);
+  }, [config, saveConfig, address, nameInput, selectedChainId, chainId]);
 
   const handleCancelAdd = useCallback(() => {
     setAdding(false);
     setNameInput("");
-  }, []);
+    setSelectedChainId(chainId);
+  }, [chainId]);
 
   // Focus input when adding mode activates
   useEffect(() => {
@@ -105,11 +116,12 @@ export function AddressDisplay({ address, chainId, className }: AddressDisplayPr
         setOpen(false);
         setAdding(false);
         setNameInput("");
+        setSelectedChainId(chainId);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [open, chainId]);
 
   // Close on Escape
   useEffect(() => {
@@ -119,11 +131,12 @@ export function AddressDisplay({ address, chainId, className }: AddressDisplayPr
         setOpen(false);
         setAdding(false);
         setNameInput("");
+        setSelectedChainId(chainId);
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [open]);
+  }, [open, chainId]);
 
   return (
     <span ref={ref} className={cn("relative inline-flex items-center", className)}>
@@ -174,7 +187,22 @@ export function AddressDisplay({ address, chainId, className }: AddressDisplayPr
             </button>
           )}
           {!isResolved && adding && (
-            <span className="flex items-center gap-1.5">
+            <span className="flex flex-col gap-1.5">
+              <select
+                value={selectedChainId ?? "all"}
+                onChange={(e) =>
+                  setSelectedChainId(e.target.value === "all" ? undefined : Number(e.target.value))
+                }
+                className="w-full rounded border border-border/15 bg-surface-2/40 px-1.5 py-0.5 text-[11px] text-fg outline-none focus:border-accent/40"
+              >
+                <option value="all">All chains</option>
+                {config &&
+                  Object.entries(config.chains).map(([id, chain]) => (
+                    <option key={id} value={id}>
+                      {chain.name} ({id})
+                    </option>
+                  ))}
+              </select>
               <input
                 ref={inputRef}
                 type="text"
@@ -185,23 +213,25 @@ export function AddressDisplay({ address, chainId, className }: AddressDisplayPr
                   if (e.key === "Escape") handleCancelAdd();
                 }}
                 placeholder="Name"
-                className="w-28 rounded border border-border/15 bg-surface-2/40 px-1.5 py-0.5 text-[11px] text-fg outline-none focus:border-accent/40"
+                className="w-full rounded border border-border/15 bg-surface-2/40 px-1.5 py-0.5 text-[11px] text-fg outline-none focus:border-accent/40"
               />
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={!nameInput.trim()}
-                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={handleCancelAdd}
-                className="rounded px-1.5 py-0.5 text-[10px] font-medium text-muted hover:text-fg transition-colors"
-              >
-                Cancel
-              </button>
+              <span className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={!nameInput.trim()}
+                  className="flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelAdd}
+                  className="flex-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-muted hover:text-fg transition-colors"
+                >
+                  Cancel
+                </button>
+              </span>
             </span>
           )}
         </span>

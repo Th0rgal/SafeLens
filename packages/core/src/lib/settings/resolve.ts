@@ -25,6 +25,13 @@ function resolveScopedName<T extends { address: string; name: string; chainIds?:
   return global ?? null;
 }
 
+/**
+ * Resolve an address to a human-readable name from the address book.
+ *
+ * When `chainId` is provided, prefers an exact chain match, then falls back
+ * to "all chains" entries (those without chainIds). Without `chainId`,
+ * matches on address only (backward compatible).
+ */
 export function resolveAddress(
   address: string,
   config: SettingsConfig,
@@ -34,6 +41,11 @@ export function resolveAddress(
   return entry?.name ?? null;
 }
 
+/**
+ * Resolve a contract address to a name (and optional ABI) from the registry.
+ *
+ * Same chain-matching strategy as resolveAddress.
+ */
 export function resolveContract(
   address: string,
   config: SettingsConfig,
