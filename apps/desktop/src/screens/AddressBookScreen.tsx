@@ -13,13 +13,22 @@ export default function AddressBookScreen() {
 
   const [entries, setEntries] = useState<AddressRegistryEntry[]>([]);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [newAddress, setNewAddress] = useState("");
   const [newName, setNewName] = useState("");
+  const [newGroup, setNewGroup] = useState("Custom");
 
   useEffect(() => {
     if (savedConfig) {
       setEntries(savedConfig.addressRegistry);
       setExpanded({});
+      const nextGroups: Record<string, boolean> = {};
+      for (const entry of savedConfig.addressRegistry) {
+        const groupName = entry.group?.trim() || "Custom";
+        nextGroups[groupName] = true;
+      }
+      nextGroups.Custom = nextGroups.Custom ?? true;
+      setExpandedGroups(nextGroups);
     }
   }, [savedConfig]);
 
@@ -70,9 +79,15 @@ export default function AddressBookScreen() {
 
   const handleAdd = () => {
     if (!newAddress || !newName) return;
-    setEntries((prev) => [...prev, { address: newAddress, name: newName, kind: "eoa" }]);
+    setEntries((prev) => [...prev, {
+      address: newAddress,
+      name: newName,
+      kind: "eoa",
+      group: newGroup.trim() || "Custom",
+    }]);
     setNewAddress("");
     setNewName("");
+    setExpandedGroups((prev) => ({ ...prev, [newGroup.trim() || "Custom"]: true }));
   };
 
   const handleSave = async () => {
@@ -88,6 +103,25 @@ export default function AddressBookScreen() {
   const handleDiscard = () => {
     setEntries(savedConfig.addressRegistry);
     setExpanded({});
+    const nextGroups: Record<string, boolean> = {};
+    for (const entry of savedConfig.addressRegistry) {
+      const groupName = entry.group?.trim() || "Custom";
+      nextGroups[groupName] = true;
+    }
+    nextGroups.Custom = nextGroups.Custom ?? true;
+    setExpandedGroups(nextGroups);
+  };
+
+  const groupedEntries = entries.reduce<Record<string, Array<{ entry: AddressRegistryEntry; index: number }>>>((acc, entry, index) => {
+    const groupName = entry.group?.trim() || "Custom";
+    if (!acc[groupName]) acc[groupName] = [];
+    acc[groupName].push({ entry, index });
+    return acc;
+  }, {});
+  const orderedGroups = Object.keys(groupedEntries).sort((a, b) => a.localeCompare(b));
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
   };
 
   return (
@@ -120,67 +154,94 @@ export default function AddressBookScreen() {
           <CardTitle>Registry</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {entries.map((entry, i) => (
-            <div key={i} className="rounded-md border border-border/15 glass-subtle px-3 py-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(i)}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-surface-2/40"
-                >
-                  {expanded[i] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                </button>
-                <Input
-                  value={entry.address}
-                  onChange={(e) => updateEntry(i, { address: e.target.value })}
-                  className="flex-1 text-xs font-mono"
-                />
-                <Input
-                  value={entry.name}
-                  onChange={(e) => updateEntry(i, { name: e.target.value })}
-                  className="w-40 text-xs"
-                />
-                <Button variant="ghost" size="icon" onClick={() => removeEntry(i)} className="h-9 w-9 shrink-0">
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+          {orderedGroups.map((groupName) => (
+            <div key={groupName} className="rounded-md border border-border/15 glass-subtle">
+              <button
+                type="button"
+                onClick={() => toggleGroup(groupName)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left"
+              >
+                {expandedGroups[groupName] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                <span className="text-sm font-medium">{groupName}</span>
+                <span className="text-xs text-muted">({groupedEntries[groupName].length})</span>
+              </button>
 
-              {expanded[i] && (
-                <div className="mt-2 space-y-2 border-t border-border/15 pt-2">
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-                    <span className="text-xs text-muted">Type</span>
-                    <select
-                      value={entry.kind}
-                      onChange={(e) => updateEntry(i, { kind: e.target.value as "eoa" | "contract" })}
-                      className="h-8 rounded border border-border/15 bg-surface-2/40 px-2 text-xs text-fg"
-                    >
-                      <option value="eoa">EOA</option>
-                      <option value="contract">Contract</option>
-                    </select>
-                  </div>
+              {expandedGroups[groupName] && (
+                <div className="space-y-2 border-t border-border/15 px-2 py-2">
+                  {groupedEntries[groupName].map(({ entry, index: i }) => (
+                    <div key={i} className="rounded-md border border-border/15 bg-surface-2/20 px-2 py-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(i)}
+                          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded hover:bg-surface-2/40"
+                        >
+                          {expanded[i] ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+                        <Input
+                          value={entry.address}
+                          onChange={(e) => updateEntry(i, { address: e.target.value })}
+                          className="flex-1 text-xs font-mono"
+                        />
+                        <Input
+                          value={entry.name}
+                          onChange={(e) => updateEntry(i, { name: e.target.value })}
+                          className="w-40 text-xs"
+                        />
+                        <Button variant="ghost" size="icon" onClick={() => removeEntry(i)} className="h-9 w-9 shrink-0">
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
 
-                  <div className="grid grid-cols-[120px_1fr] items-center gap-2">
-                    <span className="text-xs text-muted">Note</span>
-                    <Input
-                      value={entry.note ?? ""}
-                      onChange={(e) => updateEntry(i, { note: e.target.value || undefined })}
-                      placeholder="Optional note"
-                      className="text-xs"
-                    />
-                  </div>
+                      {expanded[i] && (
+                        <div className="mt-2 space-y-2 border-t border-border/15 pt-2">
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                            <span className="text-xs text-muted">Directory</span>
+                            <Input
+                              value={entry.group ?? "Custom"}
+                              onChange={(e) => updateEntry(i, { group: e.target.value || "Custom" })}
+                              className="text-xs"
+                            />
+                          </div>
 
-                  <div className="grid grid-cols-[120px_1fr] items-start gap-2">
-                    <span className="pt-2 text-xs text-muted">Chains</span>
-                    <div>
-                      <Input
-                        value={chainIdsText(entry)}
-                        onChange={(e) => updateEntry(i, { chainIds: parseChainIds(e.target.value) })}
-                        placeholder="Chain IDs (optional)"
-                        className="text-xs"
-                      />
-                      <p className="mt-1 text-[10px] text-muted">{chainNamesText(entry.chainIds)}</p>
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                            <span className="text-xs text-muted">Type</span>
+                            <select
+                              value={entry.kind}
+                              onChange={(e) => updateEntry(i, { kind: e.target.value as "eoa" | "contract" })}
+                              className="h-8 rounded border border-border/15 bg-surface-2/40 px-2 text-xs text-fg"
+                            >
+                              <option value="eoa">EOA</option>
+                              <option value="contract">Contract</option>
+                            </select>
+                          </div>
+
+                          <div className="grid grid-cols-[120px_1fr] items-center gap-2">
+                            <span className="text-xs text-muted">Note</span>
+                            <Input
+                              value={entry.note ?? ""}
+                              onChange={(e) => updateEntry(i, { note: e.target.value || undefined })}
+                              placeholder="Optional note"
+                              className="text-xs"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-[120px_1fr] items-start gap-2">
+                            <span className="pt-2 text-xs text-muted">Chains</span>
+                            <div>
+                              <Input
+                                value={chainIdsText(entry)}
+                                onChange={(e) => updateEntry(i, { chainIds: parseChainIds(e.target.value) })}
+                                placeholder="Chain IDs (optional)"
+                                className="text-xs"
+                              />
+                              <p className="mt-1 text-[10px] text-muted">{chainNamesText(entry.chainIds)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -189,6 +250,7 @@ export default function AddressBookScreen() {
           <div className="flex items-center gap-2 border-t border-border/15 pt-2">
             <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
             <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
+            <Input value={newGroup} onChange={(e) => setNewGroup(e.target.value)} placeholder="Directory" className="w-40 text-xs" />
             <Button variant="ghost" size="icon" onClick={handleAdd} disabled={!newAddress || !newName} className="h-9 w-9 shrink-0">
               <Plus className="h-3.5 w-3.5" />
             </Button>

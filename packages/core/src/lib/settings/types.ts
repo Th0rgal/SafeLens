@@ -9,8 +9,11 @@ export const addressRegistryEntrySchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   name: z.string().min(1),
   kind: z.enum(["eoa", "contract"]).default("contract"),
+  group: z.string().min(1).optional(),
   chainIds: z.array(z.number()).optional(),
   abi: z.any().optional(),
+  tokenSymbol: z.string().min(1).optional(),
+  tokenDecimals: z.number().int().min(0).max(255).optional(),
   note: z.string().optional(),
   sourceUrl: z.string().url().optional(),
 });

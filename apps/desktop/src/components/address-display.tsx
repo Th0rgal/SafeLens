@@ -80,6 +80,7 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
             address,
             name: nameInput.trim(),
             kind: "eoa",
+            group: "Custom",
             ...(selectedChainId !== undefined && { chainIds: [selectedChainId] }),
           },
         ],

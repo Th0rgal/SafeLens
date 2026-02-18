@@ -1,5 +1,6 @@
 import type { Deployment, ERC7730Descriptor } from "../erc7730/types";
 import { bundledDescriptors } from "../erc7730/descriptors/index";
+import { buildBuiltinTokenMap } from "../erc7730/default-tokens";
 import type { SettingsConfig, ChainConfig, AddressRegistryEntry } from "./types";
 
 export const CLEAR_SIGNING_REGISTRY_COMMIT = "eeaceef158f27730157d97e649d4b5671f293426";
@@ -54,7 +55,7 @@ function buildChains(descriptors: ERC7730Descriptor[]): Record<string, ChainConf
   );
 }
 
-function buildAddressRegistry(descriptors: ERC7730Descriptor[]): AddressRegistryEntry[] {
+function buildBuiltinProtocolEntries(descriptors: ERC7730Descriptor[]): AddressRegistryEntry[] {
   const entries = new Map<string, {
     address: string;
     name: string;
@@ -63,7 +64,7 @@ function buildAddressRegistry(descriptors: ERC7730Descriptor[]): AddressRegistry
   }>();
 
   for (const descriptor of descriptors) {
-    const name = descriptor.metadata.token?.ticker ?? descriptor.metadata.owner;
+    const name = descriptor.metadata.owner;
     if (!name) continue;
 
     for (const deployment of getDeployments(descriptor)) {
@@ -88,8 +89,53 @@ function buildAddressRegistry(descriptors: ERC7730Descriptor[]): AddressRegistry
       address: entry.address,
       name: entry.name,
       kind: "contract" as const,
+      group: "Builtin Protocols",
       chainIds: Array.from(entry.chainIds).sort((a, b) => a - b),
       note: `Source: Ledger ERC-7730 clear-signing registry (${Array.from(entry.owners).sort().join(", ")}) @ ${CLEAR_SIGNING_REGISTRY_COMMIT}`,
+      sourceUrl: CLEAR_SIGNING_REGISTRY_URL,
+    }))
+    .sort((a, b) =>
+      a.name.localeCompare(b.name) || a.address.toLowerCase().localeCompare(b.address.toLowerCase())
+    );
+}
+
+function buildBuiltinTokenEntries(descriptors: ERC7730Descriptor[]): AddressRegistryEntry[] {
+  const grouped = new Map<string, {
+    address: string;
+    symbol: string;
+    decimals: number;
+    chainIds: Set<number>;
+  }>();
+
+  for (const [key, token] of buildBuiltinTokenMap(descriptors).entries()) {
+    const [chainIdRaw, address] = key.split(":");
+    const chainId = Number.parseInt(chainIdRaw, 10);
+    if (!Number.isFinite(chainId)) continue;
+
+    const tokenKey = `${address}:${token.symbol}:${token.decimals}`;
+    const existing = grouped.get(tokenKey);
+    if (existing) {
+      existing.chainIds.add(chainId);
+    } else {
+      grouped.set(tokenKey, {
+        address,
+        symbol: token.symbol,
+        decimals: token.decimals,
+        chainIds: new Set([chainId]),
+      });
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((entry) => ({
+      address: entry.address,
+      name: entry.symbol,
+      kind: "contract" as const,
+      group: "Builtin Tokens",
+      chainIds: Array.from(entry.chainIds).sort((a, b) => a - b),
+      tokenSymbol: entry.symbol,
+      tokenDecimals: entry.decimals,
+      note: `Source: Ledger ERC-7730 clear-signing registry + built-in token overrides @ ${CLEAR_SIGNING_REGISTRY_COMMIT}`,
       sourceUrl: CLEAR_SIGNING_REGISTRY_URL,
     }))
     .sort((a, b) =>
@@ -110,5 +156,8 @@ export const DEFAULT_SETTINGS_CONFIG: SettingsConfig = {
   erc7730Descriptors: bundledDescriptors as SettingsConfig["erc7730Descriptors"],
   disabledInterpreters: [],
   chains: buildChains(registryDescriptors),
-  addressRegistry: buildAddressRegistry(registryDescriptors),
+  addressRegistry: [
+    ...buildBuiltinProtocolEntries(registryDescriptors),
+    ...buildBuiltinTokenEntries(registryDescriptors),
+  ],
 };

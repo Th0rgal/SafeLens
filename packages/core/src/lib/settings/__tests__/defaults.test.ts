@@ -37,6 +37,7 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
 
     for (const entry of DEFAULT_SETTINGS_CONFIG.addressRegistry) {
       expect(entry.kind).toBe("contract");
+      expect(entry.group === "Builtin Protocols" || entry.group === "Builtin Tokens").toBe(true);
       expect(entry.chainIds && entry.chainIds.length > 0).toBe(true);
       expect(entry.note).toContain("Ledger ERC-7730 clear-signing registry");
       expect(entry.note).toContain(CLEAR_SIGNING_REGISTRY_COMMIT);
@@ -46,7 +47,7 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
 
   it("resolves entries chain-correctly in default data", () => {
     const mainnetUsdt = DEFAULT_SETTINGS_CONFIG.addressRegistry.find(
-      (e) => e.address.toLowerCase() === "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      (e) => e.group === "Builtin Tokens" && e.address.toLowerCase() === "0xdac17f958d2ee523a2206206994597c13d831ec7"
     );
     expect(mainnetUsdt).toBeDefined();
     expect(mainnetUsdt?.chainIds).toContain(1);

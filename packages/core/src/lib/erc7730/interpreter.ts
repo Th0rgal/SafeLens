@@ -227,27 +227,36 @@ function formatValue(
         }
       }
 
-      // No static token metadata — resolve tokenPath and look up token list
-      const tokenPath =
-        (field.params?.tokenPath as string) ?? field.tokenPath;
-      if (tokenPath && dataDecoded) {
-        const tokenAddressRaw = extractValue(tokenPath, dataDecoded);
-        if (tokenAddressRaw) {
-          const tokenAddress = toAddress(tokenAddressRaw);
-          // Try well-known token list for decimals and symbol
-          if (chainId) {
-            const tokenMeta = lookupToken(chainId, tokenAddress);
-            if (tokenMeta) {
-              try {
-                const formatted = formatUnits(BigInt(value), tokenMeta.decimals);
-                return `${formatted} ${tokenMeta.symbol}`;
-              } catch {
-                // fall through
-              }
+      // No static token metadata — resolve tokenPath/token and look up token list
+      const tokenPath = (field.params?.tokenPath as string) ?? field.tokenPath;
+      const tokenRef = field.params?.token as string | undefined;
+
+      let tokenAddressRaw: string | null = null;
+      if (tokenRef?.startsWith("$.metadata.constants.")) {
+        const constantKey = tokenRef.slice("$.metadata.constants.".length);
+        const constantValue = descriptor.metadata.constants?.[constantKey];
+        tokenAddressRaw = typeof constantValue === "string" ? constantValue : null;
+      } else if (tokenPath && dataDecoded) {
+        tokenAddressRaw = extractValue(tokenPath, dataDecoded);
+      } else if (tokenRef && dataDecoded) {
+        tokenAddressRaw = extractValue(tokenRef, dataDecoded);
+      }
+
+      if (tokenAddressRaw) {
+        const tokenAddress = toAddress(tokenAddressRaw);
+        // Try well-known token list for decimals and symbol
+        if (chainId) {
+          const tokenMeta = lookupToken(chainId, tokenAddress);
+          if (tokenMeta) {
+            try {
+              const formatted = formatUnits(BigInt(value), tokenMeta.decimals);
+              return `${formatted} ${tokenMeta.symbol}`;
+            } catch {
+              // fall through
             }
           }
-          return `${value} (token: ${tokenAddress})`;
         }
+        return `${value} (token: ${tokenAddress})`;
       }
 
       // Fallback: raw value without assuming 18 decimals

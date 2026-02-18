@@ -421,6 +421,62 @@ describe("createERC7730Interpreter", () => {
     expect(result.details.fields[0].value).toBe("0.998945 USDT");
   });
 
+  it("resolves token metadata from params.token metadata constants", () => {
+    const descriptor: ERC7730Descriptor = {
+      context: {
+        contract: {
+          deployments: [{ chainId: 100, address: "0x1111111111111111111111111111111111111111" }],
+        },
+      },
+      metadata: {
+        owner: "Example Protocol",
+        constants: {
+          underlyingToken: "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83",
+        },
+      },
+      display: {
+        formats: {
+          "deposit(uint256 assets)": {
+            intent: "Deposit",
+            fields: [
+              {
+                path: "assets",
+                label: "Amount",
+                format: "tokenAmount",
+                params: {
+                  token: "$.metadata.constants.underlyingToken",
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const index = buildIndex([descriptor]);
+    const interpret = createERC7730Interpreter(index);
+    const abiItem = parseAbiItem("function deposit(uint256 assets)");
+    const txData = encodeFunctionData({
+      abi: [abiItem],
+      functionName: "deposit",
+      args: [998945n],
+    });
+
+    const result = interpret(
+      null,
+      "0x1111111111111111111111111111111111111111",
+      0,
+      txData,
+      100,
+    );
+
+    expect(result).not.toBeNull();
+    if (!result || result.id !== "erc7730") {
+      throw new Error("Expected an ERC-7730 interpretation");
+    }
+    expect(result.details.fields[0].value).toBe("0.998945 USDC");
+  });
+
   it("resolves bare single-segment field paths like _value and _to", () => {
     const descriptor: ERC7730Descriptor = {
       context: {
