@@ -22,6 +22,7 @@ export default function AddressBookScreen() {
   const [newGroupName, setNewGroupName] = useState("");
   const [entryGroupModes, setEntryGroupModes] = useState<Record<number, "existing" | "new">>({});
   const [entryNewGroupNames, setEntryNewGroupNames] = useState<Record<number, string>>({});
+  const isValidAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value.trim());
 
   useEffect(() => {
     const groups = new Set(entries.map((entry) => entry.group?.trim() || "Custom"));
@@ -131,6 +132,10 @@ export default function AddressBookScreen() {
 
   const handleAdd = () => {
     if (!newAddress || !newName) return;
+    if (!isValidAddress(newAddress)) {
+      toastWarning("Invalid address", "Address must be a 20-byte hex value (0x + 40 hex chars).");
+      return;
+    }
     const selectedGroup = newGroupMode === "new" ? newGroupName.trim() : newGroup.trim();
     if (newGroupMode === "new" && !selectedGroup) return;
     setEntries((prev) => [...prev, {
@@ -148,12 +153,27 @@ export default function AddressBookScreen() {
   };
 
   const handleSave = async () => {
+    const invalidIndex = entries.findIndex(
+      (entry) => !isValidAddress(entry.address) || entry.name.trim().length === 0
+    );
+    if (invalidIndex >= 0) {
+      const itemNumber = invalidIndex + 1;
+      const badEntry = entries[invalidIndex];
+      if (!isValidAddress(badEntry.address)) {
+        toastWarning("Invalid registry entry", `Entry #${itemNumber} has an invalid address.`);
+      } else {
+        toastWarning("Invalid registry entry", `Entry #${itemNumber} has an empty name.`);
+      }
+      return;
+    }
+
     const updated: SettingsConfig = { ...savedConfig, addressRegistry: entries };
     try {
       await saveConfig(updated);
       toastSuccess("Registry saved", "Your address registry has been updated.");
-    } catch {
-      toastWarning("Save failed", "Could not persist settings to disk.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not persist settings to disk.";
+      toastWarning("Save failed", message);
     }
   };
 
@@ -253,7 +273,7 @@ export default function AddressBookScreen() {
               variant="ghost"
               size="icon"
               onClick={handleAdd}
-              disabled={!newAddress || !newName || (newGroupMode === "new" && !newGroupName.trim())}
+              disabled={!newAddress || !newName || !isValidAddress(newAddress) || (newGroupMode === "new" && !newGroupName.trim())}
               className="h-9 w-9 shrink-0"
             >
               <Plus className="h-3.5 w-3.5" />
