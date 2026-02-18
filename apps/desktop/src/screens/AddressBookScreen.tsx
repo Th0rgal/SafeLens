@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import type { SettingsConfig, AddressRegistryEntry } from "@safelens/core";
+import { settingsConfigSchema, type SettingsConfig, type AddressRegistryEntry } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 
 export default function AddressBookScreen() {
@@ -38,7 +38,8 @@ export default function AddressBookScreen() {
 
     // If add-form points to a removed folder, fall back to Custom.
     if (newGroupMode === "existing" && !groups.has(newGroup)) {
-      setNewGroup("Custom");
+      const firstGroup = Array.from(groups).sort((a, b) => a.localeCompare(b))[0] ?? "";
+      setNewGroup(firstGroup);
     }
   }, [entries, newGroupMode, newGroup]);
 
@@ -56,7 +57,10 @@ export default function AddressBookScreen() {
       setChainIdDrafts({});
       setEntryGroupModes({});
       setEntryNewGroupNames({});
-      setNewGroup("Custom");
+      const initialGroups = Array.from(
+        new Set(savedConfig.addressRegistry.map((entry) => entry.group?.trim() || "Custom"))
+      ).sort((a, b) => a.localeCompare(b));
+      setNewGroup(initialGroups[0] ?? "");
       setNewGroupMode("existing");
       setNewGroupName("");
     }
@@ -73,6 +77,21 @@ export default function AddressBookScreen() {
       .filter((num) => Number.isFinite(num) && num > 0);
     if (parsed.length === 0) return undefined;
     return Array.from(new Set(parsed));
+  };
+
+  const normalizeEntriesForSave = (): AddressRegistryEntry[] => {
+    return entries.map((entry, index) => {
+      const draft = chainIdDrafts[index];
+      const parsedDraft = draft === undefined ? entry.chainIds : parseChainIds(draft);
+      return {
+        ...entry,
+        address: entry.address.trim(),
+        name: entry.name.trim(),
+        group: entry.group?.trim() || undefined,
+        note: entry.note?.trim() || undefined,
+        chainIds: parsedDraft && parsedDraft.length > 0 ? parsedDraft : undefined,
+      };
+    });
   };
 
   const chainIdsText = (entry: AddressRegistryEntry): string => {
@@ -153,12 +172,13 @@ export default function AddressBookScreen() {
   };
 
   const handleSave = async () => {
-    const invalidIndex = entries.findIndex(
+    const normalizedEntries = normalizeEntriesForSave();
+    const invalidIndex = normalizedEntries.findIndex(
       (entry) => !isValidAddress(entry.address) || entry.name.trim().length === 0
     );
     if (invalidIndex >= 0) {
       const itemNumber = invalidIndex + 1;
-      const badEntry = entries[invalidIndex];
+      const badEntry = normalizedEntries[invalidIndex];
       if (!isValidAddress(badEntry.address)) {
         toastWarning("Invalid registry entry", `Entry #${itemNumber} has an invalid address.`);
       } else {
@@ -167,9 +187,18 @@ export default function AddressBookScreen() {
       return;
     }
 
-    const updated: SettingsConfig = { ...savedConfig, addressRegistry: entries };
+    const updated: SettingsConfig = { ...savedConfig, addressRegistry: normalizedEntries };
+    const parsed = settingsConfigSchema.safeParse(updated);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const path = issue?.path.join(".") || "settings";
+      toastWarning("Save failed", `Validation error at ${path}: ${issue?.message ?? "invalid config"}`);
+      return;
+    }
     try {
       await saveConfig(updated);
+      setEntries(normalizedEntries);
+      setChainIdDrafts({});
       toastSuccess("Registry saved", "Your address registry has been updated.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not persist settings to disk.";
@@ -203,8 +232,9 @@ export default function AddressBookScreen() {
   }, {});
   const orderedGroups = Object.keys(groupedEntries).sort((a, b) => a.localeCompare(b));
   const availableGroups = Array.from(
-    new Set(entries.map((entry) => entry.group?.trim() || "Custom").concat("Custom"))
+    new Set(entries.map((entry) => entry.group?.trim() || "Custom"))
   ).sort((a, b) => a.localeCompare(b));
+  const selectedExistingGroup = availableGroups.includes(newGroup) ? newGroup : (availableGroups[0] ?? "");
 
   const toggleGroup = (groupName: string) => {
     setExpandedGroups((prev) => ({ ...prev, [groupName]: !prev[groupName] }));
@@ -244,7 +274,7 @@ export default function AddressBookScreen() {
             <Input value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x..." className="flex-1 text-xs" />
             <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Name" className="w-40 text-xs" />
             <select
-              value={newGroupMode === "new" ? "__new__" : (availableGroups.includes(newGroup) ? newGroup : "Custom")}
+              value={newGroupMode === "new" ? "__new__" : (selectedExistingGroup || "__new__")}
               onChange={(e) => {
                 if (e.target.value === "__new__") {
                   setNewGroupMode("new");
