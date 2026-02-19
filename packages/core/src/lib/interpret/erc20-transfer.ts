@@ -45,7 +45,7 @@ function resolveToken(address: string): TokenInfo {
 
 function formatTokenAmount(raw: string, decimals: number): string {
   const value = BigInt(raw);
-  const divisor = BigInt(10 ** decimals);
+  const divisor = BigInt(10) ** BigInt(decimals);
   const whole = value / divisor;
   const remainder = value % divisor;
   const fractional = remainder.toString().padStart(decimals, "0").slice(0, 4);
