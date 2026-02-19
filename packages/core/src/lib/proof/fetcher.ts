@@ -82,7 +82,12 @@ export async function fetchOnchainPolicyProof(
 
   const blockTag = options.blockTag ?? "latest";
 
-  // Get the block to pin the state root
+  // Get the block to pin the state root for verification.
+  // We record the block metadata but use the blockTag (not a concrete
+  // block number) for all subsequent RPC calls. This avoids "old data
+  // not available due to pruning" errors on public RPCs that only serve
+  // the latest state but reject eth_getProof with an explicit historic
+  // block number.
   const block = await client.getBlock({ blockTag });
   if (block.number == null) {
     throw new Error("Block number is null (pending block). Use a finalized block tag.");
@@ -99,16 +104,16 @@ export async function fetchOnchainPolicyProof(
     guardRaw,
     fallbackRaw,
   ] = await Promise.all([
-    readStorage(client, safeAddress, slotToKey(SLOT_OWNER_COUNT), block.number),
-    readStorage(client, safeAddress, slotToKey(SLOT_THRESHOLD), block.number),
-    readStorage(client, safeAddress, slotToKey(SLOT_NONCE), block.number),
-    readStorage(client, safeAddress, slotToKey(SLOT_SINGLETON), block.number),
-    readStorage(client, safeAddress, GUARD_STORAGE_SLOT, block.number),
+    readStorage(client, safeAddress, slotToKey(SLOT_OWNER_COUNT), blockTag),
+    readStorage(client, safeAddress, slotToKey(SLOT_THRESHOLD), blockTag),
+    readStorage(client, safeAddress, slotToKey(SLOT_NONCE), blockTag),
+    readStorage(client, safeAddress, slotToKey(SLOT_SINGLETON), blockTag),
+    readStorage(client, safeAddress, GUARD_STORAGE_SLOT, blockTag),
     readStorage(
       client,
       safeAddress,
       FALLBACK_HANDLER_STORAGE_SLOT,
-      block.number
+      blockTag
     ),
   ]);
 
@@ -125,7 +130,7 @@ export async function fetchOnchainPolicyProof(
     safeAddress,
     ownerSlot,
     ownerCount,
-    block.number
+    blockTag
   );
 
   // Walk the modules linked list
@@ -134,7 +139,7 @@ export async function fetchOnchainPolicyProof(
     safeAddress,
     moduleSlot,
     50, // max modules (safety limit)
-    block.number
+    blockTag
   );
 
   // Build the complete list of storage keys for eth_getProof
@@ -151,11 +156,11 @@ export async function fetchOnchainPolicyProof(
     ...modules.map((m) => moduleSlot(m)),
   ];
 
-  // Fetch the full proof
+  // Fetch the full proof using blockTag to avoid pruning errors
   const proof = await client.getProof({
     address: safeAddress,
     storageKeys,
-    blockNumber: block.number,
+    blockTag,
   });
 
   // Build the result
@@ -196,12 +201,12 @@ async function readStorage(
   client: PublicClient,
   address: Address,
   slot: Hex,
-  blockNumber: bigint
+  blockTag: "latest" | "finalized" | "safe"
 ): Promise<Hex> {
   const result = await client.getStorageAt({
     address,
     slot,
-    blockNumber,
+    blockTag,
   });
   return (result ?? "0x0") as Hex;
 }
@@ -215,14 +220,14 @@ async function walkLinkedList(
   safeAddress: Address,
   slotFn: (addr: Address) => Hex,
   maxItems: number,
-  blockNumber: bigint
+  blockTag: "latest" | "finalized" | "safe"
 ): Promise<Address[]> {
   const items: Address[] = [];
   let current: Address = SENTINEL;
 
   for (let i = 0; i < maxItems + 1; i++) {
     const slot = slotFn(current);
-    const raw = await readStorage(client, safeAddress, slot, blockNumber);
+    const raw = await readStorage(client, safeAddress, slot, blockTag);
     const next = storageToAddress(raw);
 
     // End of list: points back to sentinel or is zero
