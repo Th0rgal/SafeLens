@@ -373,6 +373,46 @@ describe("verifyMptProof — inline node handling", () => {
   });
 });
 
+describe("verifyMptProof — empty proof security", () => {
+  it("rejects empty proof for zero value when storage trie is non-empty", () => {
+    // An attacker could supply proof:[] to falsely claim a slot is zero
+    // when the trie root is non-empty. This must be rejected because a
+    // non-empty trie requires proof-of-non-inclusion nodes.
+    const nonEmptyRoot =
+      "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" as Hex;
+    const rawKey = pad("0x04", { size: 32 });
+    const zeroValue = pad("0x00", { size: 32 });
+
+    const result = verifyMptProof(nonEmptyRoot, rawKey, zeroValue, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("non-empty");
+  });
+
+  it("accepts empty proof for zero value when trie root is the empty trie root", () => {
+    // keccak256(RLP("")) = keccak256(0x80)
+    const EMPTY_TRIE_ROOT = keccak256("0x80");
+    const rawKey = pad("0x04", { size: 32 });
+    const zeroValue = pad("0x00", { size: 32 });
+
+    const result = verifyMptProof(EMPTY_TRIE_ROOT, rawKey, zeroValue, []);
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it("rejects empty proof for non-zero value even with empty trie root", () => {
+    const EMPTY_TRIE_ROOT = keccak256("0x80");
+    const rawKey = pad("0x04", { size: 32 });
+    const nonZeroValue = pad("0x01", { size: 32 });
+
+    const result = verifyMptProof(EMPTY_TRIE_ROOT, rawKey, nonZeroValue, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain("non-zero");
+  });
+});
+
 // ── Test helpers ─────────────────────────────────────────────────
 
 function hexToNibbles(hex: Hex): number[] {

@@ -159,6 +159,36 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
 
     expect(result.policyProof).toBeUndefined();
   });
+
+  it("fails when confirmationsRequired does not match proof-verified threshold", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    // Tamper confirmationsRequired to 1 (real threshold is 3)
+    evidence.confirmationsRequired = 1;
+
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      onchainPolicyProof: makeOnchainProof(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    // The proof's MPT checks pass, but the cross-validation fails
+    expect(result.policyProof).toBeDefined();
+    expect(result.policyProof!.valid).toBe(false);
+    const mismatchCheck = result.policyProof!.checks.find(
+      (c) => c.id === "threshold-vs-confirmations"
+    );
+    expect(mismatchCheck).toBeDefined();
+    expect(mismatchCheck!.passed).toBe(false);
+    expect(mismatchCheck!.detail).toContain("1");
+    expect(mismatchCheck!.detail).toContain("3");
+    // Trust should NOT be upgraded to proof-verified
+    const proofSource = result.sources.find(
+      (s) => s.id === "onchain-policy-proof"
+    );
+    expect(proofSource?.trust).not.toBe("proof-verified");
+  });
 });
 
 // ── Simulation helpers ──────────────────────────────────────────────

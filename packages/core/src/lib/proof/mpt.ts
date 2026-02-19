@@ -152,11 +152,23 @@ export function verifyMptProof(
   const errors: string[] = [];
 
   if (proof.length === 0) {
-    // Empty proof means the value should be the default (zero)
-    if (isZeroValue(expectedValue)) {
+    // An empty proof is only valid for a zero value when the trie is
+    // completely empty (rootHash equals the empty trie root).  A non-empty
+    // trie always provides proof nodes — even for absent keys (proof of
+    // non-inclusion).  Without this check an attacker could supply
+    // proof:[] to falsely claim any slot is zero.
+    const EMPTY_TRIE_ROOT: Hex =
+      "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+    if (isZeroValue(expectedValue) && rootHash.toLowerCase() === EMPTY_TRIE_ROOT) {
       return { valid: true, errors: [] };
     }
-    errors.push("Empty proof but expected non-zero value");
+    if (isZeroValue(expectedValue)) {
+      errors.push(
+        "Empty proof for zero value but storage trie is non-empty — proof of non-inclusion required"
+      );
+    } else {
+      errors.push("Empty proof but expected non-zero value");
+    }
     return { valid: false, errors };
   }
 

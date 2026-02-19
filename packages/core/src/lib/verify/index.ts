@@ -120,6 +120,36 @@ export async function verifyEvidencePackage(
     );
   }
 
+  // Cross-validate confirmationsRequired against proof-verified threshold.
+  // If the policy proof is valid, its decodedPolicy.threshold is
+  // cryptographically proven.  A mismatch with the evidence-level
+  // confirmationsRequired means the evidence lies about how many
+  // signatures are needed.
+  let thresholdMismatch = false;
+  if (
+    policyProof?.valid &&
+    evidence.onchainPolicyProof?.decodedPolicy?.threshold != null
+  ) {
+    const provenThreshold =
+      evidence.onchainPolicyProof.decodedPolicy.threshold;
+    if (evidence.confirmationsRequired !== provenThreshold) {
+      thresholdMismatch = true;
+      policyProof.checks.push({
+        id: "threshold-vs-confirmations",
+        label: "confirmationsRequired matches proven threshold",
+        passed: false,
+        detail: `Evidence claims ${evidence.confirmationsRequired} confirmations required but on-chain threshold is ${provenThreshold}`,
+      });
+      policyProof.errors.push(
+        `confirmationsRequired (${evidence.confirmationsRequired}) does not match proven threshold (${provenThreshold})`
+      );
+      // The proof is still structurally valid, but this is a data
+      // integrity issue — mark the overall proof as invalid so the
+      // trust level does not upgrade to "proof-verified".
+      policyProof.valid = false;
+    }
+  }
+
   // Verify simulation if present
   let simulationVerification: SimulationVerificationResult | undefined;
   if (evidence.simulation) {
