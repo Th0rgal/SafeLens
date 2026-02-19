@@ -104,6 +104,32 @@ function rlpItemToHex(item: RlpItem): Hex {
   return toRlp(item as readonly Hex[]) as Hex;
 }
 
+// ── Helpers ───────────────────────────────────────────────────────
+
+function isZeroValue(value: Hex): boolean {
+  return (
+    value === "0x" ||
+    value ===
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+  );
+}
+
+/**
+ * Decode an inline (embedded) trie child.
+ *
+ * Per the Yellow Paper Appendix D, when a child node's RLP encoding
+ * is shorter than 32 bytes it is stored inline rather than as a hash
+ * reference.  We re-encode the item to RLP, then decode it as a node.
+ */
+function decodeInlineChild(child: RlpItem): RlpItem[] {
+  if (Array.isArray(child)) {
+    // Already a decoded list — it IS the node items
+    return child as RlpItem[];
+  }
+  // Raw hex string — decode it as an RLP node
+  return rlpDecodeNode(child as Hex);
+}
+
 // ── MPT proof verification ─────────────────────────────────────────
 
 /**
@@ -127,11 +153,7 @@ export function verifyMptProof(
 
   if (proof.length === 0) {
     // Empty proof means the value should be the default (zero)
-    if (
-      expectedValue === "0x" ||
-      expectedValue ===
-        "0x0000000000000000000000000000000000000000000000000000000000000000"
-    ) {
+    if (isZeroValue(expectedValue)) {
       return { valid: true, errors: [] };
     }
     errors.push("Empty proof but expected non-zero value");
@@ -143,37 +165,50 @@ export function verifyMptProof(
   const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
   let pathOffset = 0;
 
-  // Walk the proof nodes
+  // Walk the proof nodes.  `nextNode` is either null (= consume next
+  // proof element by hash) or an already-decoded inline node.
   let currentHash = rootHash;
+  let proofIdx = 0;
+  let nextNode: RlpItem[] | null = null;
 
-  for (let i = 0; i < proof.length; i++) {
-    const nodeRlp = proof[i];
+  const MAX_ITERATIONS = proof.length + 64; // inline nodes don't consume proof entries
+  for (let guard = 0; guard < MAX_ITERATIONS; guard++) {
+    let node: RlpItem[];
 
-    // Verify this node hashes to the expected hash
-    const nodeHash = keccak256(nodeRlp);
-    // For the root node, or if the node is >= 32 bytes, it should be referenced by hash
-    // Short nodes (< 32 bytes RLP) can be inlined, but for proof arrays they should match
-    if (i === 0) {
-      if (nodeHash !== rootHash) {
+    if (nextNode !== null) {
+      // Process an inline node — no hash check needed since the
+      // parent node that contained it was already hash-verified.
+      node = nextNode;
+      nextNode = null;
+    } else {
+      if (proofIdx >= proof.length) {
+        errors.push("Proof exhausted before reaching leaf");
+        return { valid: false, errors };
+      }
+      const nodeRlp = proof[proofIdx];
+      const nodeHash = keccak256(nodeRlp);
+
+      if (proofIdx === 0) {
+        if (nodeHash !== rootHash) {
+          errors.push(
+            `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
+          );
+          return { valid: false, errors };
+        }
+      } else if (nodeHash !== currentHash) {
         errors.push(
-          `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
+          `Node ${proofIdx} hash mismatch: expected ${currentHash}, got ${nodeHash}`
         );
         return { valid: false, errors };
       }
-    } else if (nodeHash !== currentHash) {
-      // This handles the case where a node is referenced by hash
-      errors.push(
-        `Node ${i} hash mismatch: expected ${currentHash}, got ${nodeHash}`
-      );
-      return { valid: false, errors };
-    }
 
-    const node = rlpDecodeNode(nodeRlp);
+      node = rlpDecodeNode(nodeRlp);
+      proofIdx++;
+    }
 
     if (node.length === 17) {
       // Branch node: 16 children + value
       if (pathOffset >= pathNibbles.length) {
-        // We've consumed all path nibbles — the value is in the branch node itself
         const value = rlpItemToHex(node[16]);
         return verifyValue(value, expectedValue, errors);
       }
@@ -185,54 +220,37 @@ export function verifyMptProof(
       const childHex = rlpItemToHex(child);
 
       if (childHex === "0x" || childHex === "0x80") {
-        // Empty child — key doesn't exist in trie
-        if (
-          expectedValue === "0x" ||
-          expectedValue ===
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-        ) {
+        if (isZeroValue(expectedValue)) {
           return { valid: true, errors: [] };
         }
         errors.push("Path leads to empty branch but expected non-zero value");
         return { valid: false, errors };
       }
 
-      // If the child is a hash (32 bytes), follow it to the next proof node
       const childBytes = rlpItemToBytes(child);
       if (childBytes.length === 32) {
         currentHash = bytesToHex(childBytes) as Hex;
       } else {
-        // Inlined node — shouldn't happen in a proof array, but handle it
-        errors.push("Unexpected inlined node in branch");
-        return { valid: false, errors };
+        // Inlined node: child RLP < 32 bytes, embedded directly in the parent.
+        // Decode and process it on the next iteration without consuming a proof entry.
+        nextNode = decodeInlineChild(child);
       }
     } else if (node.length === 2) {
-      // Extension or leaf node
       const encodedPath = rlpItemToBytes(node[0]);
       const [nodePath, isLeaf] = decodeHpPath(encodedPath);
-
-      // Verify path prefix matches
       const remainingPath = pathNibbles.slice(pathOffset);
+
       if (isLeaf) {
-        // Leaf node: rest of path must match exactly
         if (!nibbleArraysEqual(nodePath, remainingPath)) {
-          // Path doesn't match — key doesn't exist
-          if (
-            expectedValue === "0x" ||
-            expectedValue ===
-              "0x0000000000000000000000000000000000000000000000000000000000000000"
-          ) {
+          if (isZeroValue(expectedValue)) {
             return { valid: true, errors: [] };
           }
           errors.push("Leaf path mismatch — key not found in trie");
           return { valid: false, errors };
         }
-
-        // Value is node[1]
         const value = rlpItemToHex(node[1]);
         return verifyValue(value, expectedValue, errors);
       } else {
-        // Extension node: path prefix must match
         if (
           remainingPath.length < nodePath.length ||
           !nibbleArraysEqual(
@@ -240,12 +258,7 @@ export function verifyMptProof(
             remainingPath.slice(0, nodePath.length)
           )
         ) {
-          // Path diverges
-          if (
-            expectedValue === "0x" ||
-            expectedValue ===
-              "0x0000000000000000000000000000000000000000000000000000000000000000"
-          ) {
+          if (isZeroValue(expectedValue)) {
             return { valid: true, errors: [] };
           }
           errors.push("Extension path mismatch — key not found in trie");
@@ -254,14 +267,12 @@ export function verifyMptProof(
 
         pathOffset += nodePath.length;
 
-        // Follow the child reference
         const child = node[1];
         const childBytes = rlpItemToBytes(child);
         if (childBytes.length === 32) {
           currentHash = bytesToHex(childBytes) as Hex;
         } else {
-          errors.push("Unexpected inlined node in extension");
-          return { valid: false, errors };
+          nextNode = decodeInlineChild(child);
         }
       }
     } else {
@@ -403,26 +414,41 @@ function verifyMptProofRaw(
   const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
   let pathOffset = 0;
   let currentHash = rootHash;
+  let proofIdx = 0;
+  let nextNode: RlpItem[] | null = null;
 
-  for (let i = 0; i < proof.length; i++) {
-    const nodeRlp = proof[i];
-    const nodeHash = keccak256(nodeRlp);
+  const MAX_ITERATIONS = proof.length + 64;
+  for (let guard = 0; guard < MAX_ITERATIONS; guard++) {
+    let node: RlpItem[];
 
-    if (i === 0) {
-      if (nodeHash !== rootHash) {
+    if (nextNode !== null) {
+      node = nextNode;
+      nextNode = null;
+    } else {
+      if (proofIdx >= proof.length) {
+        errors.push("Account proof exhausted before reaching leaf");
+        return { valid: false, errors };
+      }
+      const nodeRlp = proof[proofIdx];
+      const nodeHash = keccak256(nodeRlp);
+
+      if (proofIdx === 0) {
+        if (nodeHash !== rootHash) {
+          errors.push(
+            `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
+          );
+          return { valid: false, errors };
+        }
+      } else if (nodeHash !== currentHash) {
         errors.push(
-          `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
+          `Node ${proofIdx} hash mismatch: expected ${currentHash}, got ${nodeHash}`
         );
         return { valid: false, errors };
       }
-    } else if (nodeHash !== currentHash) {
-      errors.push(
-        `Node ${i} hash mismatch: expected ${currentHash}, got ${nodeHash}`
-      );
-      return { valid: false, errors };
-    }
 
-    const node = rlpDecodeNode(nodeRlp);
+      node = rlpDecodeNode(nodeRlp);
+      proofIdx++;
+    }
 
     if (node.length === 17) {
       if (pathOffset >= pathNibbles.length) {
@@ -449,13 +475,11 @@ function verifyMptProofRaw(
       if (childBytes.length === 32) {
         currentHash = bytesToHex(childBytes) as Hex;
       } else {
-        errors.push("Unexpected inlined node in branch");
-        return { valid: false, errors };
+        nextNode = decodeInlineChild(child);
       }
     } else if (node.length === 2) {
       const encodedPath = rlpItemToBytes(node[0]);
       const [nodePath, isLeaf] = decodeHpPath(encodedPath);
-
       const remainingPath = pathNibbles.slice(pathOffset);
 
       if (isLeaf) {
@@ -489,8 +513,7 @@ function verifyMptProofRaw(
         if (childBytes.length === 32) {
           currentHash = bytesToHex(childBytes) as Hex;
         } else {
-          errors.push("Unexpected inlined node in extension");
-          return { valid: false, errors };
+          nextNode = decodeInlineChild(child);
         }
       }
     } else {
