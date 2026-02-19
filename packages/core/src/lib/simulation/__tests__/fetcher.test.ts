@@ -33,6 +33,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      0n,
       gas,
       gasPrice,
       blockNumber,
@@ -42,6 +43,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(req.account).toBe(from);
     expect(req.to).toBe(to);
     expect(req.data).toBe(data);
+    expect(req.value).toBe(0n);
     expect(req.gas).toBe(gas);
     expect(req.gasPrice).toBe(gasPrice);
     expect(req.blockNumber).toBe(blockNumber);
@@ -71,6 +73,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[0].callObject.from).toBe(from);
     expect(attempts[0].callObject.to).toBe(to);
     expect(attempts[0].callObject.data).toBe(data);
+    expect(attempts[0].callObject.value).toBe("0x0");
     expect(attempts[0].callObject.gas).toBe("0x1c9c380");
     expect(attempts[0].callObject.gasPrice).toBe("0x12a05f200");
     expect(attempts[0].blockHex).toBe("0x175b81b");
@@ -84,6 +87,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      0n,
       gas,
       0n,
       blockNumber,
@@ -110,6 +114,7 @@ describe("simulation fetcher RPC payloads", () => {
     );
 
     expect(attempts[0].callObject.gas).toBe("0x1c9c380");
+    expect(attempts[0].callObject.value).toBe("0x0");
     expect(attempts[0].callObject.gasPrice).toBe("0x0");
   });
 
