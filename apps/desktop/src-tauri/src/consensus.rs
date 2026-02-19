@@ -8,14 +8,17 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy::primitives::{b256, fixed_bytes, B256};
 use helios_consensus_core::{
-    apply_bootstrap, apply_finality_update, apply_update, expected_current_slot,
-    verify_bootstrap, verify_finality_update, verify_update,
-    consensus_spec::MainnetConsensusSpec,
+    apply_bootstrap, apply_finality_update, apply_update, verify_bootstrap,
+    verify_finality_update, verify_update,
+    consensus_spec::{ConsensusSpec, MainnetConsensusSpec},
     types::{
         Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update,
     },
 };
 use serde::{Deserialize, Serialize};
+use typenum::{
+    U1, U2, U8, U16, U64, U128, U512, U2048, U4096, U8192, U131072,
+};
 
 /// Input from the frontend: the consensus proof section of an evidence package.
 #[derive(Debug, Deserialize)]
@@ -64,6 +67,7 @@ pub struct ConsensusCheck {
 struct NetworkConfig {
     genesis_root: B256,
     genesis_time: u64,
+    seconds_per_slot: u64,
     forks: Forks,
 }
 
@@ -71,6 +75,7 @@ fn mainnet_config() -> NetworkConfig {
     NetworkConfig {
         genesis_root: b256!("4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"),
         genesis_time: 1606824023,
+        seconds_per_slot: 12,
         forks: Forks {
             genesis: Fork { epoch: 0, fork_version: fixed_bytes!("00000000") },
             altair: Fork { epoch: 74240, fork_version: fixed_bytes!("01000000") },
@@ -87,6 +92,7 @@ fn sepolia_config() -> NetworkConfig {
     NetworkConfig {
         genesis_root: b256!("d8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
         genesis_time: 1655733600,
+        seconds_per_slot: 12,
         forks: Forks {
             genesis: Fork { epoch: 0, fork_version: fixed_bytes!("90000069") },
             altair: Fork { epoch: 50, fork_version: fixed_bytes!("90000070") },
@@ -99,15 +105,61 @@ fn sepolia_config() -> NetworkConfig {
     }
 }
 
+fn gnosis_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("f5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"),
+        genesis_time: 1638993340,
+        seconds_per_slot: 5,
+        forks: Forks {
+            genesis: Fork { epoch: 0, fork_version: fixed_bytes!("00000064") },
+            altair: Fork { epoch: 512, fork_version: fixed_bytes!("01000064") },
+            bellatrix: Fork { epoch: 385536, fork_version: fixed_bytes!("02000064") },
+            capella: Fork { epoch: 648704, fork_version: fixed_bytes!("03000064") },
+            deneb: Fork { epoch: 889856, fork_version: fixed_bytes!("04000064") },
+            electra: Fork { epoch: 1337856, fork_version: fixed_bytes!("05000064") },
+            fulu: Fork {
+                epoch: u64::MAX,
+                fork_version: fixed_bytes!("06000064"),
+            },
+        },
+    }
+}
+
 fn get_network_config(network: &str) -> Result<NetworkConfig, String> {
     match network {
         "mainnet" => Ok(mainnet_config()),
         "sepolia" => Ok(sepolia_config()),
+        "gnosis" => Ok(gnosis_config()),
         _ => Err(format!(
-            "Unsupported network for consensus verification: {}. Only mainnet and sepolia are currently supported.",
+            "Unsupported network for consensus verification: {}. Only mainnet, sepolia, and gnosis are currently supported.",
             network
         )),
     }
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct GnosisConsensusSpec;
+
+impl ConsensusSpec for GnosisConsensusSpec {
+    type MaxProposerSlashings = U16;
+    type MaxAttesterSlashings = U2;
+    type MaxAttesterSlashingsElectra = U1;
+    type MaxAttestations = U128;
+    type MaxAttestationsElectra = U8;
+    type MaxValidatorsPerSlot = U131072;
+    type MaxCommitteesPerSlot = U64;
+    type MaxDeposits = U16;
+    type MaxVoluntaryExits = U16;
+    type MaxBlsToExecutionChanged = U16;
+    type MaxBlobKzgCommitments = U4096;
+    type MaxWithdrawals = U16;
+    type MaxValidatorsPerCommittee = U2048;
+    type SlotsPerEpoch = U16;
+    type EpochsPerSyncCommitteePeriod = U512;
+    type SyncCommitteeSize = U512;
+    type MaxWithdrawalRequests = U16;
+    type MaxDepositRequests = U8192;
+    type MaxConsolidationRequests = U2;
 }
 
 /// Verify a consensus proof from an evidence package.
@@ -119,6 +171,15 @@ fn get_network_config(network: &str) -> Result<NetworkConfig, String> {
 /// 4. Extract the EVM state root from the finalized execution payload
 /// 5. Compare it against the claimed state root
 pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
+    if input.network == "gnosis" {
+        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(input);
+    }
+    verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input)
+}
+
+fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
+    input: ConsensusProofInput,
+) -> ConsensusVerificationResult {
     let mut checks = Vec::new();
     let mut error = None;
 
@@ -139,7 +200,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     };
 
     // Parse bootstrap
-    let bootstrap: Bootstrap<MainnetConsensusSpec> = match serde_json::from_str(&input.bootstrap) {
+    let bootstrap: Bootstrap<S> = match serde_json::from_str(&input.bootstrap) {
         Ok(b) => b,
         Err(e) => {
             return fail_result(format!("Failed to parse bootstrap: {}", e));
@@ -147,7 +208,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     };
 
     // Verify bootstrap
-    match verify_bootstrap::<MainnetConsensusSpec>(&bootstrap, checkpoint, &config.forks) {
+    match verify_bootstrap::<S>(&bootstrap, checkpoint, &config.forks) {
         Ok(()) => {
             checks.push(ConsensusCheck {
                 id: "bootstrap".into(),
@@ -190,13 +251,16 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     });
 
     // Compute expected current slot
-    let now = SystemTime::now();
-    let current_slot = expected_current_slot(now, config.genesis_time);
+    let current_slot = expected_current_slot_for_network(
+        SystemTime::now(),
+        config.genesis_time,
+        config.seconds_per_slot,
+    );
 
     // Parse and verify updates
     let mut update_count = 0;
     for (i, update_json) in input.updates.iter().enumerate() {
-        let update: Update<MainnetConsensusSpec> = match serde_json::from_str(update_json) {
+        let update: Update<S> = match serde_json::from_str(update_json) {
             Ok(u) => u,
             Err(e) => {
                 error = Some(format!("Failed to parse update {}: {}", i, e));
@@ -210,7 +274,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
             }
         };
 
-        match verify_update::<MainnetConsensusSpec>(
+        match verify_update::<S>(
             &update,
             current_slot,
             &store,
@@ -259,7 +323,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     }
 
     // Parse and verify finality update
-    let finality_update: FinalityUpdate<MainnetConsensusSpec> =
+    let finality_update: FinalityUpdate<S> =
         match serde_json::from_str(&input.finality_update) {
             Ok(f) => f,
             Err(e) => {
@@ -268,11 +332,11 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
         };
 
     // Count sync committee participants
-    let participants = helios_consensus_core::get_bits::<MainnetConsensusSpec>(
+    let participants = helios_consensus_core::get_bits::<S>(
         &finality_update.sync_aggregate().sync_committee_bits,
     );
 
-    match verify_finality_update::<MainnetConsensusSpec>(
+    match verify_finality_update::<S>(
         &finality_update,
         current_slot,
         &store,
@@ -403,9 +467,22 @@ fn parse_b256(s: &str) -> Result<B256, String> {
     Ok(B256::from(arr))
 }
 
+fn expected_current_slot_for_network(
+    now: SystemTime,
+    genesis_time: u64,
+    seconds_per_slot: u64,
+) -> u64 {
+    let now = now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let since_genesis = now.saturating_sub(genesis_time);
+    since_genesis / seconds_per_slot
+}
+
 #[cfg(test)]
 mod tests {
-    use super::parse_b256;
+    use super::{
+        expected_current_slot_for_network, get_network_config, parse_b256,
+    };
+    use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
     fn parse_b256_accepts_prefixed_hex() {
@@ -423,5 +500,20 @@ mod tests {
     fn parse_b256_rejects_invalid_length() {
         let err = parse_b256("0x1234").expect_err("invalid length must fail");
         assert!(err.contains("expected 32 bytes"));
+    }
+
+    #[test]
+    fn supports_gnosis_network_config() {
+        let config = get_network_config("gnosis").expect("gnosis must be supported");
+        assert_eq!(config.genesis_time, 1638993340);
+        assert_eq!(config.seconds_per_slot, 5);
+        assert_eq!(config.forks.altair.epoch, 512);
+    }
+
+    #[test]
+    fn slot_calculation_respects_seconds_per_slot() {
+        let now = UNIX_EPOCH + Duration::from_secs(100);
+        assert_eq!(expected_current_slot_for_network(now, 0, 5), 20);
+        assert_eq!(expected_current_slot_for_network(now, 0, 12), 8);
     }
 }
