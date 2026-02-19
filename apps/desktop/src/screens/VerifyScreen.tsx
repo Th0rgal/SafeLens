@@ -16,7 +16,7 @@ import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails } from "@safelens/core";
+import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -46,6 +46,7 @@ export default function VerifyScreen() {
   const [proposer, setProposer] = useState<string | null>(null);
   const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
   const [hashDetails, setHashDetails] = useState<SafeTxHashDetails | undefined>(undefined);
+  const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -57,12 +58,14 @@ export default function VerifyScreen() {
       setSigResults({});
       setProposer(null);
       setTargetWarnings([]);
+      setPolicyProof(undefined);
       return;
     }
 
     setSigResults({});
     setProposer(null);
     setTargetWarnings([]);
+    setPolicyProof(undefined);
 
     let cancelled = false;
 
@@ -76,6 +79,7 @@ export default function VerifyScreen() {
       setSigResults(report.signatures.byOwner);
       setProposer(report.proposer);
       setTargetWarnings(report.targetWarnings);
+      setPolicyProof(report.policyProof);
     }
 
     verifyAll();
@@ -340,6 +344,51 @@ export default function VerifyScreen() {
               </div>
             </CardContent>
           </Card>
+
+          {policyProof && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CardTitle>On-Chain Policy Proof</CardTitle>
+                  <TrustBadge level={policyProof.valid ? "proof-verified" : "api-sourced"} />
+                </div>
+                <CardDescription>
+                  {policyProof.valid
+                    ? "All policy fields cryptographically verified against state root"
+                    : `Proof verification failed: ${policyProof.errors.length} error(s)`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5">
+                  {policyProof.checks.map((check) => (
+                    <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                      <span className="text-sm font-medium">{check.label}</span>
+                      <div className="flex items-center gap-2">
+                        {check.passed ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                            <ShieldCheck className="h-3 w-3" />
+                            Pass
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                            <AlertTriangle className="h-3 w-3" />
+                            Fail
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {policyProof.errors.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    {policyProof.errors.map((err, i) => (
+                      <div key={i} className="text-xs text-red-400">{err}</div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>

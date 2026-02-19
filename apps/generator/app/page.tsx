@@ -45,15 +45,26 @@ export default function AnalyzePage() {
   const [pendingTxs, setPendingTxs] = useState<PendingTx[] | null>(null);
   const [safeAddress, setSafeAddress] = useState<string | null>(null);
 
+  const [proofWarning, setProofWarning] = useState<string | null>(null);
+
   /** Optionally enrich a package with an on-chain policy proof. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
     const trimmedRpc = rpcUrl.trim();
     if (!trimmedRpc) return pkg;
-    return enrichWithOnchainProof(pkg, { rpcUrl: trimmedRpc });
+    try {
+      return await enrichWithOnchainProof(pkg, { rpcUrl: trimmedRpc });
+    } catch (err) {
+      console.warn("Failed to fetch on-chain policy proof:", err);
+      setProofWarning(
+        `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
+      );
+      return pkg;
+    }
   };
 
   const handleAnalyze = async () => {
     setError(null);
+    setProofWarning(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -112,6 +123,7 @@ export default function AnalyzePage() {
     setLoading(true);
     setPendingTxs(null);
     setError(null);
+    setProofWarning(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);
@@ -289,6 +301,13 @@ export default function AnalyzePage() {
             ))}
           </CardContent>
         </Card>
+      )}
+
+      {proofWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Policy Proof Warning</AlertTitle>
+          <AlertDescription>{proofWarning}</AlertDescription>
+        </Alert>
       )}
 
       {evidence && (

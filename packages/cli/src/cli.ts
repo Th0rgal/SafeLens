@@ -99,6 +99,7 @@ function createVerifyPayload(
     warnings: report.targetWarnings,
     signatures: report.signatures,
     sources: report.sources,
+    policyProof: report.policyProof,
   };
 }
 
@@ -319,7 +320,14 @@ async function runAnalyze(args: string[]) {
 
   // Fetch on-chain policy proof if RPC URL is provided
   if (rpcUrl) {
-    evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
+    try {
+      evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
+    } catch (err) {
+      console.error(
+        `Warning: Failed to fetch on-chain policy proof: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without policy proof.\n");
+    }
   }
 
   const settings = await loadSettingsForVerify(args);
