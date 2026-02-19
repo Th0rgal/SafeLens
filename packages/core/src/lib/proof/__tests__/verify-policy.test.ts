@@ -261,6 +261,25 @@ describe("verifyPolicyProof end-to-end with real mainnet data", () => {
     expect(result.valid).toBe(false);
     const accountCheck = result.checks.find((c) => c.id === "account-proof");
     expect(accountCheck?.passed).toBe(false);
+    // Should catch the mismatch in the defense-in-depth address check
+    expect(accountCheck?.detail).toContain("does not match");
+  });
+
+  it("detects tampered proof address (embedded address differs from expected)", () => {
+    const proof = makeProof();
+    // Tamper the embedded address while keeping safeAddress correct
+    proof.accountProof.address =
+      "0x0000000000000000000000000000000000000BAD" as Address;
+
+    const result = verifyPolicyProof(
+      proof,
+      fixtureJson.safeAddress as Address
+    );
+
+    expect(result.valid).toBe(false);
+    const accountCheck = result.checks.find((c) => c.id === "account-proof");
+    expect(accountCheck?.passed).toBe(false);
+    expect(accountCheck?.detail).toContain("does not match");
   });
 
   it("validates owners linked list completeness", () => {

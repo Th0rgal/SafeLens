@@ -312,9 +312,29 @@ describe("verifySimulation", () => {
     expect(check?.passed).toBe(false);
     expect(check?.detail).toContain("revert");
     expect(check?.detail).toContain("tampering");
-    expect(result.errors).toContain(
-      "Return data contains a revert payload but success=true"
+    expect(
+      result.errors.some((e) => e.includes("revert") && e.includes("tampering"))
+    ).toBe(true);
+  });
+
+  it("fails consistency check when success=true but returnData encodes false", () => {
+    // execTransaction returns abi.encode(false) = 32 bytes of zeros
+    const falseBool =
+      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    const result = verifySimulation(
+      makeValidSimulation({
+        success: true,
+        returnData: falseBool as `0x${string}`,
+      })
     );
+    expect(result.valid).toBe(false);
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeDefined();
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("false");
+    expect(check?.detail).toContain("tampering");
   });
 
   it("passes consistency check when success=true and long returnData is not a revert", () => {

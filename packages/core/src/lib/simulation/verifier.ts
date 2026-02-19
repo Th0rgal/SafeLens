@@ -152,26 +152,47 @@ export function verifySimulation(
     // Standard revert selector: Error(string) = 0x08c379a2
     const REVERT_SELECTOR = "0x08c379a2";
 
-    const returnDataConsistent =
-      rd === EXEC_TX_TRUE || // normal success
-      rd.length < 66; // short return data — can't decode, skip check
-
-    if (!returnDataConsistent) {
-      // returnData is long enough to decode but doesn't match success=true
+    // Short return data — can't meaningfully decode, skip check
+    if (rd.length >= 66) {
+      // Safe's execTransaction returns abi.encode(bool): 32 bytes.
+      // 0x0000...0001 = true (success), 0x0000...0000 = false (inner revert).
+      const EXEC_TX_FALSE =
+        "0x0000000000000000000000000000000000000000000000000000000000000000";
       const isRevertPayload = rd.startsWith(REVERT_SELECTOR);
-      const consistencyPassed = !isRevertPayload;
-      checks.push({
-        id: "return-data-consistency",
-        label: "Return data consistency",
-        passed: consistencyPassed,
-        detail: consistencyPassed
-          ? "Return data is consistent with success flag"
-          : "Return data contains a revert payload but success=true — possible tampering",
-      });
+      const isFalseBool = rd === EXEC_TX_FALSE;
+
+      let consistencyPassed: boolean;
+      let detail: string;
+
+      if (rd === EXEC_TX_TRUE) {
+        // Perfect match — no check needed, skip entirely
+        consistencyPassed = true;
+        detail = "Return data is consistent with success flag";
+      } else if (isFalseBool) {
+        consistencyPassed = false;
+        detail =
+          "Return data encodes false but success=true — possible tampering";
+      } else if (isRevertPayload) {
+        consistencyPassed = false;
+        detail =
+          "Return data contains a revert payload but success=true — possible tampering";
+      } else {
+        consistencyPassed = true;
+        detail = "Return data is consistent with success flag";
+      }
+
+      // Only emit the check when there's something interesting to report
+      // (either a failure or a non-trivial pass on unusual return data)
+      if (!consistencyPassed || rd !== EXEC_TX_TRUE) {
+        checks.push({
+          id: "return-data-consistency",
+          label: "Return data consistency",
+          passed: consistencyPassed,
+          detail,
+        });
+      }
       if (!consistencyPassed) {
-        errors.push(
-          "Return data contains a revert payload but success=true"
-        );
+        errors.push(detail);
       }
     }
   }

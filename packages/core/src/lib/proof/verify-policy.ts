@@ -99,6 +99,24 @@ export function verifyPolicyProof(
   const errors: string[] = [];
   const checks: PolicyProofCheck[] = [];
 
+  // 0. Defense-in-depth: verify the proof's embedded address matches the
+  // expected Safe address. The MPT path is derived from safeAddress, so a
+  // mismatch wouldn't break cryptographic verification, but catching it
+  // early gives a clearer error message and prevents confusion.
+  if (
+    proof.accountProof.address.toLowerCase() !== safeAddress.toLowerCase()
+  ) {
+    const detail = `Proof address ${proof.accountProof.address} does not match expected Safe ${safeAddress}`;
+    errors.push(detail);
+    checks.push({
+      id: "account-proof",
+      label: "Account proof against state root",
+      passed: false,
+      detail,
+    });
+    return { valid: false, checks, errors };
+  }
+
   const accountInput: AccountProofInput = {
     address: safeAddress,
     balance: proof.accountProof.balance,
