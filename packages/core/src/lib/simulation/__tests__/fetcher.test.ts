@@ -118,6 +118,39 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[0].callObject.gasPrice).toBe("0x0");
   });
 
+  it("passes simulator balance override through all trace-call shapes", () => {
+    const simulator = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266" as Address;
+    const overrideObject = {
+      [to]: {
+        stateDiff: {
+          [stateOverride[0].stateDiff[0].slot]: stateOverride[0].stateDiff[0].value,
+        },
+      },
+      [simulator]: {
+        balance: "0x56bc75e2d63100000",
+      },
+    };
+
+    const attempts = buildTraceCallAttempts(
+      from,
+      to,
+      data,
+      gas,
+      gasPrice,
+      blockNumber,
+      overrideObject
+    );
+
+    expect(attempts).toHaveLength(3);
+    expect((attempts[0].traceConfig as { stateOverrides?: typeof overrideObject }).stateOverrides).toEqual(
+      overrideObject
+    );
+    expect((attempts[1].traceConfig as { stateOverride?: typeof overrideObject }).stateOverride).toEqual(
+      overrideObject
+    );
+    expect(attempts[2].stateOverrideArg).toEqual(overrideObject);
+  });
+
   it("drops logs emitted by reverted frames", () => {
     const keepTopic =
       "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
