@@ -3,7 +3,7 @@ import { verifyEvidencePackage } from "..";
 import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
-import type { OnchainPolicyProof } from "../../types";
+import type { OnchainPolicyProof, Simulation } from "../../types";
 import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
 
@@ -134,5 +134,110 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     const result = await verifyEvidencePackage(evidence);
 
     expect(result.policyProof).toBeUndefined();
+  });
+});
+
+// ── Simulation helpers ──────────────────────────────────────────────
+
+function makeValidSimulation(): Simulation {
+  return {
+    success: true,
+    returnData: "0x0000000000000000000000000000000000000000000000000000000000000001",
+    gasUsed: "151553",
+    logs: [],
+    blockNumber: 21000000,
+    trust: "rpc-sourced",
+  };
+}
+
+// ── Integration: verifyEvidencePackage with simulation ──────────────
+
+describe("verifyEvidencePackage with simulation", () => {
+  it("returns simulationVerification when evidence contains simulation", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      simulation: makeValidSimulation(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    expect(result.simulationVerification).toBeDefined();
+    expect(result.simulationVerification!.valid).toBe(true);
+    expect(result.simulationVerification!.errors).toHaveLength(0);
+    expect(result.simulationVerification!.checks.length).toBeGreaterThan(0);
+    // The simulation source should be enabled
+    expect(result.sources.find((s) => s.id === "simulation")?.status).toBe("enabled");
+  });
+
+  it("returns simulationVerification=undefined when evidence has no simulation", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const result = await verifyEvidencePackage(evidence);
+
+    expect(result.simulationVerification).toBeUndefined();
+    expect(result.sources.find((s) => s.id === "simulation")?.status).toBe("disabled");
+  });
+});
+
+// ── Integration: combined onchainPolicyProof + simulation ───────────
+
+describe("verifyEvidencePackage with onchainPolicyProof + simulation", () => {
+  it("returns both policyProof and simulationVerification when both are present", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation: makeValidSimulation(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    // Both sections are present
+    expect(result.policyProof).toBeDefined();
+    expect(result.simulationVerification).toBeDefined();
+
+    // Both are valid
+    expect(result.policyProof!.valid).toBe(true);
+    expect(result.simulationVerification!.valid).toBe(true);
+
+    // Sources reflect both being enabled
+    const proofSource = result.sources.find((s) => s.id === "onchain-policy-proof");
+    const simSource = result.sources.find((s) => s.id === "simulation");
+    expect(proofSource?.status).toBe("enabled");
+    expect(simSource?.status).toBe("enabled");
+
+    // Proof trust should be upgraded to proof-verified after local verification
+    expect(proofSource?.trust).toBe("proof-verified");
+    // Simulation trust stays rpc-sourced
+    expect(simSource?.trust).toBe("rpc-sourced");
+  });
+
+  it("handles valid proof + reverted simulation correctly", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const revertedSim = makeValidSimulation();
+    revertedSim.success = false;
+    revertedSim.returnData = null;
+    revertedSim.gasUsed = "0";
+
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation: revertedSim,
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    // Proof passes
+    expect(result.policyProof!.valid).toBe(true);
+
+    // Simulation is structurally valid (no errors) but execution-result check fails
+    expect(result.simulationVerification).toBeDefined();
+    expect(result.simulationVerification!.valid).toBe(true); // structural validity
+    const execCheck = result.simulationVerification!.checks.find((c) => c.id === "execution-result");
+    expect(execCheck?.passed).toBe(false);
+    expect(execCheck?.detail).toContain("reverted");
   });
 });

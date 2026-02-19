@@ -74,16 +74,21 @@ export default function VerifyScreen() {
 
     async function verifyAll() {
       if (!currentEvidence) return;
-      const report = await verifyEvidencePackage(currentEvidence, {
-        settings: config ?? null,
-      });
+      try {
+        const report = await verifyEvidencePackage(currentEvidence, {
+          settings: config ?? null,
+        });
 
-      if (cancelled) return;
-      setSigResults(report.signatures.byOwner);
-      setProposer(report.proposer);
-      setTargetWarnings(report.targetWarnings);
-      setPolicyProof(report.policyProof);
-      setSimulationVerification(report.simulationVerification);
+        if (cancelled) return;
+        setSigResults(report.signatures.byOwner);
+        setProposer(report.proposer);
+        setTargetWarnings(report.targetWarnings);
+        setPolicyProof(report.policyProof);
+        setSimulationVerification(report.simulationVerification);
+      } catch (err) {
+        if (cancelled) return;
+        setErrors([err instanceof Error ? err.message : "Verification failed unexpectedly"]);
+      }
     }
 
     verifyAll();
@@ -136,7 +141,7 @@ export default function VerifyScreen() {
   const signaturesTrustLevel: TrustLevel =
     signatureResults.length === 0
       ? "api-sourced"
-      : signatureResults.some((result) => result.status === "unsupported")
+      : signatureResults.some((r) => r.status === "invalid" || r.status === "unsupported")
         ? "api-sourced"
         : "self-verified";
 

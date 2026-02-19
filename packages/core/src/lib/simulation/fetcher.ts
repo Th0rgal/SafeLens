@@ -41,7 +41,9 @@ import {
   SLOT_THRESHOLD,
   SLOT_NONCE,
   GUARD_STORAGE_SLOT,
+  FALLBACK_HANDLER_STORAGE_SLOT,
   ownerSlot,
+  moduleSlot,
   slotToKey,
 } from "../proof/safe-layout";
 import type { Simulation, TrustClassification } from "../types";
@@ -198,6 +200,10 @@ export async function fetchSimulation(
     { slot: ownerSlot(simulatorAddress), value: pad(SENTINEL, { size: 32 }) },
     // guard = address(0) (disable guard checks)
     { slot: GUARD_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
+    // fallbackHandler = address(0) (prevent fallback interference)
+    { slot: FALLBACK_HANDLER_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
+    // modules[SENTINEL] = SENTINEL (close the modules linked list)
+    { slot: moduleSlot(SENTINEL), value: pad(SENTINEL, { size: 32 }) },
   ];
 
   const viemStateOverride = [{ address: safeAddress, stateDiff: safeStateDiff }];

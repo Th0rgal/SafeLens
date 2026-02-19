@@ -100,6 +100,7 @@ function createVerifyPayload(
     warnings: report.targetWarnings,
     signatures: report.signatures,
     sources: report.sources,
+    hashDetails: report.hashDetails,
     policyProof: report.policyProof,
     simulationVerification: report.simulationVerification,
   };
@@ -163,11 +164,11 @@ function printWarningsSection(warnings: Array<{ level: string; message: string }
   const warningLines: string[] = [];
 
   for (const warning of warnings) {
-    const levelBadge = warning.level === "critical"
-      ? colors.bgRed(" CRITICAL ")
-      : warning.level === "medium"
-        ? colors.bgYellow(" MEDIUM ")
-        : colors.bgBlue(" LOW ");
+    const levelBadge = warning.level === "danger"
+      ? colors.bgRed(" DANGER ")
+      : warning.level === "warning"
+        ? colors.bgYellow(" WARNING ")
+        : colors.bgBlue(" INFO ");
 
     warningLines.push(bullet(`${levelBadge} ${warning.message}`));
   }
