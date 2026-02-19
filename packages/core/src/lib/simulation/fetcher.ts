@@ -20,6 +20,7 @@ import {
   encodeFunctionData,
   decodeFunctionResult,
   parseAbi,
+  CallExecutionError,
   type Address,
   type Hex,
 } from "viem";
@@ -220,13 +221,18 @@ export async function fetchSimulation(
       returnData = result.data;
     }
   } catch (err) {
-    // If the call reverts, that's the simulation result (not an error).
-    // Note: RPC/network errors also land here — we conservatively treat
-    // them as "reverted" since we can't distinguish without parsing error codes.
-    success = false;
-    // Viem wraps reverts in CallExecutionError → cause chain.
-    // Revert data lives at err.cause.data (RpcRequestError.data), not err.data.
-    returnData = extractRevertData(err);
+    // Distinguish execution errors (real reverts) from network/RPC errors.
+    // CallExecutionError means the EVM executed the call and it reverted.
+    // Anything else (HttpRequestError, TimeoutError, etc.) is a transport
+    // failure that should propagate so callers can show a proper error.
+    if (err instanceof CallExecutionError) {
+      success = false;
+      // Viem wraps reverts in CallExecutionError → RpcRequestError.
+      // Revert data lives at err.cause.data, not err.data.
+      returnData = extractRevertData(err);
+    } else {
+      throw err;
+    }
   }
 
   // ── Step 5: Try debug_traceCall for logs + gasUsed (optional) ────
@@ -241,9 +247,24 @@ export async function fetchSimulation(
     viemStateOverride
   );
 
-  // Prefer gas from the trace (accurate even on reverts) over estimateGas
+  // Prefer gas from the trace (accurate even on reverts)
   if (traceResult.gasUsed) {
     gasUsed = traceResult.gasUsed;
+  } else if (success) {
+    // Fallback: estimateGas works for successful transactions when
+    // debug_traceCall is unavailable (common on public RPCs).
+    // It throws on reverted txs, so we only try it when eth_call succeeded.
+    try {
+      const gas = await client.estimateGas({
+        to: safeAddress,
+        data: calldata,
+        blockNumber: block.number,
+        stateOverride: viemStateOverride,
+      });
+      gasUsed = gas.toString();
+    } catch {
+      // estimateGas may also fail if the node doesn't support stateOverride
+    }
   }
 
   // ── Build result ────────────────────────────────────────────────

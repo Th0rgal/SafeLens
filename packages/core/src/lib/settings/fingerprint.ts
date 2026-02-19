@@ -1,3 +1,4 @@
+import { webcrypto } from "node:crypto";
 import type { SettingsConfig } from "./types";
 
 /**
@@ -25,7 +26,8 @@ export async function computeConfigFingerprint(
 ): Promise<string> {
   const canonical = JSON.stringify(config, sortedReplacer);
   const data = new TextEncoder().encode(canonical);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const subtle = globalThis.crypto?.subtle ?? webcrypto.subtle;
+  const hashBuffer = await subtle.digest("SHA-256", data);
   const hashArray = new Uint8Array(hashBuffer);
   return Array.from(hashArray)
     .map((b) => b.toString(16).padStart(2, "0"))
