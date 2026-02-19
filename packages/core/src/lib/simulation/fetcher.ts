@@ -361,54 +361,6 @@ interface TraceResult {
   gasUsed: string | null;
 }
 
-interface TraceLogEntry {
-  address: string;
-  topics: string[];
-  data: string;
-}
-
-interface CallFrame {
-  gasUsed?: string;
-  logs?: TraceLogEntry[];
-  calls?: CallFrame[];
-  error?: string;
-}
-
-/**
- * Collect only committed logs from a callTracer frame tree.
- *
- * Foundry/anvil parity: logs emitted by reverted frames are discarded from
- * transaction receipts. callTracer can still surface them in trace frames.
- * We therefore ignore logs for any frame that has an `error`.
- */
-export function collectCommittedLogsFromCallTrace(
-  frame: CallFrame
-): Simulation["logs"] {
-  if (frame.error) {
-    return [];
-  }
-
-  const collected: Simulation["logs"] = [];
-
-  if (frame.logs && Array.isArray(frame.logs)) {
-    for (const log of frame.logs) {
-      collected.push({
-        address: normalizeHex(log.address) as Address,
-        topics: log.topics.map((topic) => normalizeHex(topic)) as Hex[],
-        data: normalizeHex(log.data ?? "0x") as Hex,
-      });
-    }
-  }
-
-  if (frame.calls && Array.isArray(frame.calls)) {
-    for (const child of frame.calls) {
-      collected.push(...collectCommittedLogsFromCallTrace(child));
-    }
-  }
-
-  return collected;
-}
-
 async function tryTraceCall(
   client: ReturnType<typeof createPublicClient>,
   from: Address,
@@ -471,8 +423,37 @@ async function tryTraceCall(
       throw traceError;
     }
 
+    // callTracer with withLog:true nests logs inside call frames.
+    // Each frame has an optional `logs` array and an optional `calls`
+    // array of child frames. We recursively collect all logs.
+    // The top-level frame also has `gasUsed` (hex string).
+    interface CallFrame {
+      gasUsed?: string;
+      logs?: Array<{ address: string; topics: string[]; data: string }>;
+      calls?: CallFrame[];
+    }
+
+    function collectLogs(frame: CallFrame): Simulation["logs"] {
+      const collected: Simulation["logs"] = [];
+      if (frame.logs && Array.isArray(frame.logs)) {
+        for (const log of frame.logs) {
+          collected.push({
+            address: normalizeHex(log.address) as Address,
+            topics: log.topics.map((t) => normalizeHex(t)) as Hex[],
+            data: normalizeHex(log.data ?? "0x") as Hex,
+          });
+        }
+      }
+      if (frame.calls && Array.isArray(frame.calls)) {
+        for (const child of frame.calls) {
+          collected.push(...collectLogs(child));
+        }
+      }
+      return collected;
+    }
+
     const frame = result as unknown as CallFrame;
-    const logs = collectCommittedLogsFromCallTrace(frame);
+    const logs = collectLogs(frame);
 
     // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
     let gasUsed: string | null = null;

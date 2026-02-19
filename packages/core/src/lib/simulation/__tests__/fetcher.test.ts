@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildExecSimulationCallRequest,
   buildTraceCallAttempts,
-  collectCommittedLogsFromCallTrace,
 } from "../fetcher";
 import type { Address, Hex } from "viem";
 
@@ -102,66 +101,5 @@ describe("simulation fetcher RPC payloads", () => {
     );
 
     expect(attempts[0].callObject.gasPrice).toBeUndefined();
-  });
-
-  it("drops logs emitted by reverted frames", () => {
-    const keepTopic =
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-
-    const trace = {
-      logs: [
-        {
-          address: to,
-          topics: [keepTopic],
-          data: "0x",
-        },
-      ],
-      calls: [
-        {
-          error: "execution reverted",
-          logs: [
-            {
-              address: to,
-              topics: [keepTopic],
-              data: "0x",
-            },
-          ],
-        },
-      ],
-    };
-
-    const logs = collectCommittedLogsFromCallTrace(trace);
-    expect(logs).toHaveLength(1);
-    expect(logs[0].address).toBe(to);
-  });
-
-  it("returns no logs when top-level call reverts", () => {
-    const keepTopic =
-      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
-
-    const trace = {
-      error: "execution reverted",
-      logs: [
-        {
-          address: to,
-          topics: [keepTopic],
-          data: "0x",
-        },
-      ],
-      calls: [
-        {
-          logs: [
-            {
-              address: to,
-              topics: [keepTopic],
-              data: "0x",
-            },
-          ],
-        },
-      ],
-    };
-
-    const logs = collectCommittedLogsFromCallTrace(trace);
-    expect(logs).toEqual([]);
   });
 });
