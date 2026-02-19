@@ -138,6 +138,7 @@ export default function AnalyzePage() {
   const handleSelectTransaction = async (tx: PendingTx) => {
     setLoading(true);
     setPendingTxs(null);
+    setEvidence(null);
     setError(null);
     setProofWarning(null);
     setSimulationWarning(null);
@@ -383,6 +384,12 @@ export default function AnalyzePage() {
                   <div className="font-medium text-muted">Simulation</div>
                   <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
                     {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
+                    {!evidence.simulation.success && evidence.simulation.returnData && (
+                      <span className="text-gray-400"> — revert data: {evidence.simulation.returnData.slice(0, 42)}…</span>
+                    )}
+                    {evidence.simulation.logs.length > 0 && (
+                      <span className="text-gray-400"> — {evidence.simulation.logs.length} event log{evidence.simulation.logs.length !== 1 ? "s" : ""}</span>
+                    )}
                   </div>
                 </div>
               )}

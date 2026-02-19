@@ -300,7 +300,10 @@ function printVerificationText(
   }
 
   // ── Signatures ──────────────────────────────────────────────────────
-  const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
+  const signaturesTrustLevel =
+    summary.total === 0 || summary.invalid > 0 || summary.unsupported > 0
+      ? "api-sourced"
+      : "self-verified";
 
   console.log("");
   const signaturesRows: Array<[string, string]> = [
