@@ -3,6 +3,9 @@ import { verifyEvidencePackage } from "..";
 import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
+import type { OnchainPolicyProof } from "../../types";
+import type { Address, Hex } from "viem";
+import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
 
 const VOID_SETTINGS: SettingsConfig = {
   version: "1.0",
@@ -47,5 +50,89 @@ describe("verifyEvidencePackage", () => {
     const result = await verifyEvidencePackage(evidence);
 
     expect(result.targetWarnings).toHaveLength(0);
+  });
+});
+
+// ── Integration: verifyEvidencePackage with onchainPolicyProof ────
+
+function makeOnchainProof(): OnchainPolicyProof {
+  return {
+    blockNumber: proofFixture.blockNumber,
+    stateRoot: proofFixture.stateRoot as Hex,
+    accountProof: {
+      address: proofFixture.accountProof.address as Address,
+      balance: proofFixture.accountProof.balance,
+      codeHash: proofFixture.accountProof.codeHash as Hex,
+      nonce: proofFixture.accountProof.nonce,
+      storageHash: proofFixture.accountProof.storageHash as Hex,
+      accountProof: proofFixture.accountProof.accountProof as Hex[],
+      storageProof: proofFixture.accountProof.storageProof.map((sp) => ({
+        key: sp.key as Hex,
+        value: sp.value as Hex,
+        proof: sp.proof as Hex[],
+      })),
+    },
+    decodedPolicy: {
+      owners: proofFixture.decodedPolicy.owners as Address[],
+      threshold: proofFixture.decodedPolicy.threshold,
+      nonce: proofFixture.decodedPolicy.nonce,
+      modules: proofFixture.decodedPolicy.modules as Address[],
+      guard: proofFixture.decodedPolicy.guard as Address,
+      fallbackHandler: proofFixture.decodedPolicy.fallbackHandler as Address,
+      singleton: proofFixture.decodedPolicy.singleton as Address,
+    },
+    trust: "rpc-sourced",
+  };
+}
+
+describe("verifyEvidencePackage with onchainPolicyProof", () => {
+  it("returns policyProof result when evidence contains a valid proof", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      onchainPolicyProof: makeOnchainProof(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    // policyProof must be present and valid
+    expect(result.policyProof).toBeDefined();
+    expect(result.policyProof!.valid).toBe(true);
+    expect(result.policyProof!.errors).toHaveLength(0);
+    expect(result.policyProof!.checks.length).toBeGreaterThan(0);
+    // Every check should pass
+    for (const check of result.policyProof!.checks) {
+      expect(check.passed).toBe(true);
+    }
+    // The onchain-policy-proof source should be enabled
+    expect(result.sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("enabled");
+  });
+
+  it("returns policyProof.valid=false when proof is tampered", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const proof = makeOnchainProof();
+    // Tamper: claim a different threshold than what the proof proves
+    proof.decodedPolicy.threshold = 99;
+
+    const enriched = {
+      ...evidence,
+      version: "1.1" as const,
+      onchainPolicyProof: proof,
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+
+    expect(result.policyProof).toBeDefined();
+    expect(result.policyProof!.valid).toBe(false);
+    const thresholdCheck = result.policyProof!.checks.find((c) => c.id === "threshold");
+    expect(thresholdCheck?.passed).toBe(false);
+  });
+
+  it("returns policyProof=undefined when evidence has no proof", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const result = await verifyEvidencePackage(evidence);
+
+    expect(result.policyProof).toBeUndefined();
   });
 });

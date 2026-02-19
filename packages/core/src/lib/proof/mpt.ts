@@ -91,15 +91,17 @@ function rlpItemToBytes(item: RlpItem): Uint8Array {
   if (typeof item === "string") {
     return hexToBytes(item as Hex);
   }
-  // Nested list — encode it back to RLP to get the bytes
-  return hexToBytes(toRlp(item as any) as Hex);
+  // Nested list — encode it back to RLP to get the bytes.
+  // RlpItem[] is structurally equivalent to viem's RecursiveArray<Hex>
+  // but TypeScript can't unify separately-defined recursive types.
+  return hexToBytes(toRlp(item as readonly Hex[]) as Hex);
 }
 
 function rlpItemToHex(item: RlpItem): Hex {
   if (typeof item === "string") {
     return item as Hex;
   }
-  return toRlp(item as any) as Hex;
+  return toRlp(item as readonly Hex[]) as Hex;
 }
 
 // ── MPT proof verification ─────────────────────────────────────────
