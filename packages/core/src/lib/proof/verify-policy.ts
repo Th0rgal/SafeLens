@@ -10,7 +10,7 @@
  * 4. Validating the owners and modules linked lists are complete
  */
 
-import type { Address, Hex } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 import type { OnchainPolicyProof } from "../types";
 import {
   verifyAccountProof,
@@ -443,10 +443,13 @@ function verifyLinkedList(
   }
 
   if (claimedItems.length === 0) {
-    // Empty list: SENTINEL should point to SENTINEL
+    // Empty list: SENTINEL should point to SENTINEL (initialized) or
+    // ZERO_ADDRESS (uninitialized storage — slot was never written).
     const provenNext = storageValueToAddress(sentinelProof.value);
+    const normalized = normalizeAddress(provenNext);
     const match =
-      normalizeAddress(provenNext) === normalizeAddress(SENTINEL);
+      normalized === normalizeAddress(SENTINEL) ||
+      normalized === normalizeAddress(zeroAddress);
     checks.push({
       id: `${name}-linked-list`,
       label: `${name} linked list (empty)`,
