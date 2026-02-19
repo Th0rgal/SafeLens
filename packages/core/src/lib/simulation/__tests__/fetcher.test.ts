@@ -13,6 +13,7 @@ describe("simulation fetcher RPC payloads", () => {
   const data =
     "0x6a7612020000000000000000000000000000000000000000000000000000000000000000" as Hex;
   const blockNumber = 24492059n;
+  const gas = 30_000_000n;
   const gasPrice = 5_000_000_000n;
   const stateOverride = [
     {
@@ -32,6 +33,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gas,
       gasPrice,
       blockNumber,
       stateOverride
@@ -40,6 +42,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(req.account).toBe(from);
     expect(req.to).toBe(to);
     expect(req.data).toBe(data);
+    expect(req.gas).toBe(gas);
     expect(req.gasPrice).toBe(gasPrice);
     expect(req.blockNumber).toBe(blockNumber);
     expect(req.stateOverride).toEqual(stateOverride);
@@ -58,6 +61,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gas,
       gasPrice,
       blockNumber,
       overrideObject
@@ -67,6 +71,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[0].callObject.from).toBe(from);
     expect(attempts[0].callObject.to).toBe(to);
     expect(attempts[0].callObject.data).toBe(data);
+    expect(attempts[0].callObject.gas).toBe("0x1c9c380");
     expect(attempts[0].callObject.gasPrice).toBe("0x12a05f200");
     expect(attempts[0].blockHex).toBe("0x175b81b");
     expect(attempts[0].traceConfig).toHaveProperty("stateOverrides");
@@ -79,6 +84,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gas,
       0n,
       blockNumber,
       stateOverride
@@ -90,6 +96,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gas,
       0n,
       blockNumber,
       {
@@ -102,6 +109,7 @@ describe("simulation fetcher RPC payloads", () => {
       }
     );
 
+    expect(attempts[0].callObject.gas).toBe("0x1c9c380");
     expect(attempts[0].callObject.gasPrice).toBeUndefined();
   });
 

@@ -85,6 +85,7 @@ interface ExecSimulationCallRequest {
   account: Address;
   to: Address;
   data: Hex;
+  gas?: bigint;
   gasPrice?: bigint;
   blockNumber: bigint;
   stateOverride: Array<{
@@ -94,7 +95,7 @@ interface ExecSimulationCallRequest {
 }
 
 interface TraceCallAttempt {
-  callObject: { from: Address; to: Address; data: Hex; gasPrice?: Hex };
+  callObject: { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice?: Hex };
   blockHex: string;
   traceConfig: Record<string, unknown>;
   stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
@@ -218,11 +219,13 @@ export async function fetchSimulation(
   let success = false;
   let returnData: Hex | null = null;
   let gasUsed = "0";
+  const callGasLimit = deriveSimulationGasLimit(block.gasLimit);
   const txGasPrice = BigInt(transaction.gasPrice);
   const callRequest = buildExecSimulationCallRequest(
     simulatorAddress,
     safeAddress,
     calldata,
+    callGasLimit,
     txGasPrice,
     block.number,
     viemStateOverride
@@ -265,6 +268,7 @@ export async function fetchSimulation(
     simulatorAddress,
     safeAddress,
     calldata,
+    callGasLimit,
     txGasPrice,
     block.number,
     viemStateOverride
@@ -311,6 +315,7 @@ export function buildExecSimulationCallRequest(
   account: Address,
   to: Address,
   data: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Array<{
@@ -322,6 +327,7 @@ export function buildExecSimulationCallRequest(
     account,
     to,
     data,
+    gas,
     gasPrice: gasPrice > 0n ? gasPrice : undefined,
     blockNumber,
     stateOverride,
@@ -351,6 +357,17 @@ function extractRevertData(err: unknown): Hex | null {
     current = obj.cause;
   }
   return null;
+}
+
+/**
+ * Use an explicit gas limit to avoid provider-specific default caps and
+ * better match Foundry/anvil simulation behavior.
+ */
+function deriveSimulationGasLimit(blockGasLimit: bigint): bigint {
+  if (blockGasLimit <= 1n) {
+    return 1n;
+  }
+  return blockGasLimit - 1n;
 }
 
 // ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
@@ -423,6 +440,7 @@ async function tryTraceCall(
   from: Address,
   safeAddress: Address,
   calldata: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Array<{
@@ -448,6 +466,7 @@ async function tryTraceCall(
       from,
       safeAddress,
       calldata,
+      gas,
       gasPrice,
       blockNumber,
       stateOverrideObj
@@ -470,6 +489,7 @@ async function tryTraceCall(
       from,
       safeAddress,
       calldata,
+      gas,
       gasPrice,
       blockNumber,
       stateOverrideObj
@@ -497,7 +517,7 @@ async function executeTraceCallAttempts(
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: params as unknown as [
-          { from: Address; to: Address; data: Hex; gasPrice?: Hex },
+          { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice?: Hex },
           string,
           Record<string, unknown>,
           Record<string, unknown>?,
@@ -522,6 +542,7 @@ async function tryTraceStateDiffs(
   from: Address,
   to: Address,
   data: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>
@@ -530,6 +551,7 @@ async function tryTraceStateDiffs(
     from,
     to,
     data,
+    gas,
     gasPrice,
     blockNumber,
     stateOverride
@@ -551,6 +573,7 @@ export function buildTraceCallAttempts(
   from: Address,
   to: Address,
   data: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>
@@ -559,6 +582,7 @@ export function buildTraceCallAttempts(
     from,
     to,
     data,
+    gas,
     gasPrice,
     blockNumber,
     stateOverride,
@@ -570,6 +594,7 @@ function buildPrestateTraceCallAttempts(
   from: Address,
   to: Address,
   data: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>
@@ -578,6 +603,7 @@ function buildPrestateTraceCallAttempts(
     from,
     to,
     data,
+    gas,
     gasPrice,
     blockNumber,
     stateOverride,
@@ -589,6 +615,7 @@ function buildTraceCallAttemptsForConfig(
   from: Address,
   to: Address,
   data: Hex,
+  gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>,
@@ -599,6 +626,7 @@ function buildTraceCallAttemptsForConfig(
     from,
     to,
     data,
+    gas: toHex(gas),
     gasPrice: gasPrice > 0n ? toHex(gasPrice) : undefined,
   };
 
