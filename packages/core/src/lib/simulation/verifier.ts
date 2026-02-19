@@ -149,8 +149,8 @@ export function verifySimulation(
     const rd = simulation.returnData.toLowerCase();
     const EXEC_TX_TRUE =
       "0x0000000000000000000000000000000000000000000000000000000000000001";
-    // Standard revert selector: Error(string) = 0x08c379a2
-    const REVERT_SELECTOR = "0x08c379a2";
+    // Standard revert selector: Error(string) = 0x08c379a0
+    const REVERT_SELECTOR = "0x08c379a0";
 
     // Short return data — can't meaningfully decode, skip check
     if (rd.length >= 66) {

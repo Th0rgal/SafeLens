@@ -271,7 +271,7 @@ describe("verifySimulation", () => {
 
   it("skips consistency check when success=false (revert case)", () => {
     const result = verifySimulation(
-      makeValidSimulation({ success: false, returnData: "0x08c379a2" + "00".repeat(60) })
+      makeValidSimulation({ success: false, returnData: "0x08c379a0" + "00".repeat(60) })
     );
     // success=false → the cross-check doesn't run (only checks success=true)
     const check = result.checks.find(
@@ -292,9 +292,9 @@ describe("verifySimulation", () => {
   });
 
   it("fails consistency check when success=true but returnData has revert selector", () => {
-    // Error(string) selector = 0x08c379a2 followed by ABI-encoded revert reason
+    // Error(string) selector = 0x08c379a0 followed by ABI-encoded revert reason
     const revertPayload =
-      "0x08c379a2" +
+      "0x08c379a0" +
       "0000000000000000000000000000000000000000000000000000000000000020" +
       "0000000000000000000000000000000000000000000000000000000000000005" +
       "6572726f72000000000000000000000000000000000000000000000000000000";
