@@ -359,7 +359,7 @@ export default function VerifyScreen() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <CardTitle>On-Chain Policy Proof</CardTitle>
-                  <TrustBadge level={policyProof.valid ? "proof-verified" : "api-sourced"} />
+                  <TrustBadge level={policyProof.valid ? "proof-verified" : "rpc-sourced"} />
                 </div>
                 <CardDescription>
                   {policyProof.valid
