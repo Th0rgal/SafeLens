@@ -111,6 +111,8 @@ function createVerifyPayload(
 
 function formatTrustLevel(trust: string): string {
   switch (trust) {
+    case "consensus-verified":
+      return colors.green("🛡 consensus-verified");
     case "proof-verified":
       return colors.blue("🔒 proof-verified");
     case "self-verified":

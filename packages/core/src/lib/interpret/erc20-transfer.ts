@@ -7,50 +7,12 @@
  * - transferFrom(address from, address to, uint256 amount)
  */
 
-import type { ERC20TransferDetails, TokenInfo, Interpreter } from "./types";
-
-// ── Well-known tokens (Ethereum Mainnet) ─────────────────────────────
-
-const KNOWN_TOKENS: Record<string, { symbol: string; decimals: number }> = {
-  "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2": {
-    symbol: "WETH",
-    decimals: 18,
-  },
-  "0x6b175474e89094c44da98b954eedeac495271d0f": {
-    symbol: "DAI",
-    decimals: 18,
-  },
-  "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": {
-    symbol: "USDC",
-    decimals: 6,
-  },
-  "0xdac17f958d2ee523a2206206994597c13d831ec7": {
-    symbol: "USDT",
-    decimals: 6,
-  },
-};
+import type { ERC20TransferDetails, Interpreter } from "./types";
+import { resolveToken, formatTokenAmount } from "./token-utils";
 
 // Max uint256 — signals an "unlimited" approval
 const MAX_UINT256 =
   "115792089237316195423570985008687907853269984665640564039457584007913129639935";
-
-// ── Helpers ─────────────────────────────────────────────────────────────
-
-function resolveToken(address: string): TokenInfo {
-  const known = KNOWN_TOKENS[address.toLowerCase()];
-  return known
-    ? { address, symbol: known.symbol, decimals: known.decimals }
-    : { address };
-}
-
-function formatTokenAmount(raw: string, decimals: number): string {
-  const value = BigInt(raw);
-  const divisor = BigInt(10) ** BigInt(decimals);
-  const whole = value / divisor;
-  const remainder = value % divisor;
-  const fractional = remainder.toString().padStart(decimals, "0").slice(0, 4);
-  return `${whole}.${fractional}`;
-}
 
 // ── Interpreter ─────────────────────────────────────────────────────────
 

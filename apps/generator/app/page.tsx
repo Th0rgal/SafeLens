@@ -52,29 +52,29 @@ export default function AnalyzePage() {
   const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
   const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
 
-  /** Optionally enrich a package with on-chain policy proof + simulation. */
+  /** Optionally enrich a package with on-chain policy proof, simulation, and consensus proof. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
-    const trimmedRpc = rpcUrl.trim();
-    if (!trimmedRpc) return pkg;
-
     let enriched = pkg;
+    const trimmedRpc = rpcUrl.trim();
 
-    try {
-      enriched = await enrichWithOnchainProof(enriched, { rpcUrl: trimmedRpc });
-    } catch (err) {
-      console.warn("Failed to fetch on-chain policy proof:", err);
-      setProofWarning(
-        `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
-      );
-    }
+    if (trimmedRpc) {
+      try {
+        enriched = await enrichWithOnchainProof(enriched, { rpcUrl: trimmedRpc });
+      } catch (err) {
+        console.warn("Failed to fetch on-chain policy proof:", err);
+        setProofWarning(
+          `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
+        );
+      }
 
-    try {
-      enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
-    } catch (err) {
-      console.warn("Failed to simulate transaction:", err);
-      setSimulationWarning(
-        `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
-      );
+      try {
+        enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
+      } catch (err) {
+        console.warn("Failed to simulate transaction:", err);
+        setSimulationWarning(
+          `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
+        );
+      }
     }
 
     // Always attempt consensus proof (uses public beacon RPCs, no user RPC needed)
