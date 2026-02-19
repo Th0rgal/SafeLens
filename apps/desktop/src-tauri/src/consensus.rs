@@ -26,7 +26,9 @@ pub struct ConsensusProofInput {
     pub updates: Vec<String>,
     pub finality_update: String,
     pub network: String,
+    #[allow(dead_code)]
     pub state_root: String,
+    pub expected_state_root: String,
     #[allow(dead_code)]
     pub block_number: u64,
 }
@@ -323,10 +325,18 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     let verified_state_root = format!("{:#x}", execution.state_root());
     let verified_block_number = *execution.block_number();
 
-    // Compare against claimed state root
-    let claimed_state_root = input.state_root.to_lowercase();
+    // Compare against independently sourced expected state root
+    let expected_state_root = match parse_b256(&input.expected_state_root) {
+        Ok(root) => format!("{:#x}", root),
+        Err(e) => {
+            return fail_result(format!(
+                "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
+                e
+            ));
+        }
+    };
     let state_root_matches =
-        verified_state_root.to_lowercase() == claimed_state_root;
+        verified_state_root.eq_ignore_ascii_case(&expected_state_root);
 
     checks.push(ConsensusCheck {
         id: "state-root".into(),
@@ -340,14 +350,14 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
 
     checks.push(ConsensusCheck {
         id: "state-root-match".into(),
-        label: "State root matches policy proof".into(),
+        label: "State root matches independent policy root".into(),
         passed: state_root_matches,
         detail: if state_root_matches {
-            Some("The consensus-verified state root matches the one used in the policy proof.".into())
+            Some("The consensus-verified state root matches onchainPolicyProof.stateRoot.".into())
         } else {
             Some(format!(
-                "Mismatch: consensus says {} but policy proof claims {}.",
-                verified_state_root, claimed_state_root
+                "Mismatch: consensus says {} but onchainPolicyProof.stateRoot is {}.",
+                verified_state_root, expected_state_root
             ))
         },
     });
@@ -361,7 +371,10 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
         error: if state_root_matches {
             None
         } else {
-            Some("State root mismatch between consensus proof and policy proof.".into())
+            Some(format!(
+                "State root mismatch: Helios verified {} but onchainPolicyProof.stateRoot is {}.",
+                verified_state_root, expected_state_root
+            ))
         },
         checks,
     }
@@ -388,4 +401,27 @@ fn parse_b256(s: &str) -> Result<B256, String> {
     let mut arr = [0u8; 32];
     arr.copy_from_slice(&bytes);
     Ok(B256::from(arr))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_b256;
+
+    #[test]
+    fn parse_b256_accepts_prefixed_hex() {
+        let parsed = parse_b256(
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .expect("valid b256");
+        assert_eq!(
+            format!("{:#x}", parsed),
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+    }
+
+    #[test]
+    fn parse_b256_rejects_invalid_length() {
+        let err = parse_b256("0x1234").expect_err("invalid length must fail");
+        assert!(err.contains("expected 32 bytes"));
+    }
 }

@@ -21,6 +21,12 @@ import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
 
+type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
+  ? T extends object
+    ? T & { expectedStateRoot: string }
+    : never
+  : never;
+
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
@@ -102,10 +108,31 @@ export default function VerifyScreen() {
 
         // If consensus proof is present, verify via Tauri backend (BLS verification)
         if (currentEvidence.consensusProof) {
+          const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
+          if (!expectedStateRoot) {
+            if (!cancelled) {
+              setConsensusVerification({
+                valid: false,
+                verified_state_root: null,
+                verified_block_number: null,
+                state_root_matches: false,
+                sync_committee_participants: 0,
+                error: "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
+                checks: [],
+              });
+            }
+            return;
+          }
+
+          const consensusInput: ConsensusProofVerifyInput = {
+            ...currentEvidence.consensusProof,
+            expectedStateRoot,
+          };
+
           try {
             const consensusResult = await invoke<ConsensusVerificationResult>(
               "verify_consensus_proof",
-              { input: currentEvidence.consensusProof }
+              { input: consensusInput }
             );
             if (!cancelled) {
               setConsensusVerification(consensusResult);
