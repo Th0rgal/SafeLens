@@ -104,6 +104,26 @@ export interface SafePolicyChangeDetails {
   }>;
 }
 
+/** ERC-20 transfer details. */
+export interface ERC20TransferDetails {
+  /** The type of ERC-20 action detected. */
+  actionType: "transfer" | "approve" | "transferFrom";
+  /** The token contract address. */
+  token: TokenInfo;
+  /** Sender address (for transfer / transferFrom). */
+  from?: string;
+  /** Recipient address (for transfer / transferFrom). */
+  to?: string;
+  /** Spender address (for approve). */
+  spender?: string;
+  /** Raw amount (wei string). */
+  amount: string;
+  /** Human-readable formatted amount. */
+  amountFormatted: string;
+  /** Whether this is an unlimited approval (max uint256). */
+  isUnlimitedApproval?: boolean;
+}
+
 /** ERC-7730 generic interpretation details. */
 export interface ERC7730Details {
   fields: Array<{
@@ -124,6 +144,14 @@ export interface ERC7730Details {
 // UI component registry).
 
 export type Interpretation =
+  | {
+      id: "erc20-transfer";
+      protocol: "ERC-20";
+      action: "Transfer" | "Approve" | "TransferFrom";
+      severity: Severity;
+      summary: string;
+      details: ERC20TransferDetails;
+    }
   | {
       id: "cowswap-twap";
       protocol: "CoW Swap";

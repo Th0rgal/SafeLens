@@ -6,6 +6,7 @@
  * │                                                                 │
  * │  id              │ protocol  │ action        │ severity         │
  * │  ────────────────┼───────────┼───────────────┼─────────────     │
+ * │  erc20-transfer  │ ERC-20    │ Transfer/…    │ info/warning     │
  * │  cowswap-twap    │ CoW Swap  │ TWAP Order    │ info             │
  * │  safe-policy     │ Safe      │ Policy Change │ critical         │
  * │  erc7730         │ (dynamic) │ (dynamic)     │ info             │
@@ -15,6 +16,7 @@
  */
 
 import type { Interpretation, Interpreter } from "./types";
+import { interpretERC20Transfer } from "./erc20-transfer";
 import { interpretCowSwapTwap } from "./cowswap-twap";
 import { interpretSafePolicy } from "./safe-policy";
 import { createERC7730Interpreter } from "../erc7730/interpreter";
@@ -57,6 +59,7 @@ const erc7730Interpreter: Interpreter = (
 };
 
 const INTERPRETERS: Interpreter[] = [
+  interpretERC20Transfer,
   interpretCowSwapTwap,
   interpretSafePolicy,
   erc7730Interpreter,
@@ -102,6 +105,7 @@ export type {
   Severity,
   CowSwapTwapDetails,
   SafePolicyChangeDetails,
+  ERC20TransferDetails,
   ERC7730Details,
   TokenInfo,
 } from "./types";
