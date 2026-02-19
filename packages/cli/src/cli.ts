@@ -483,6 +483,7 @@ async function runSources() {
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     })
   );
   console.log("");
@@ -494,6 +495,7 @@ async function runSources() {
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     })
   );
 }

@@ -107,6 +107,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: false,
       hasOnchainPolicyProof: true,
       hasSimulation: false,
+      hasConsensusProof: false,
       onchainPolicyProofTrust: "proof-verified",
     });
 
