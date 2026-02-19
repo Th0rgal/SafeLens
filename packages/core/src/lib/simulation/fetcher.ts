@@ -85,7 +85,6 @@ interface ExecSimulationCallRequest {
   account: Address;
   to: Address;
   data: Hex;
-  value: bigint;
   gas?: bigint;
   gasPrice: bigint;
   blockNumber: bigint;
@@ -96,7 +95,7 @@ interface ExecSimulationCallRequest {
 }
 
 interface TraceCallAttempt {
-  callObject: { from: Address; to: Address; data: Hex; value: Hex; gas?: Hex; gasPrice: Hex };
+  callObject: { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex };
   blockHex: string;
   traceConfig: Record<string, unknown>;
   stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
@@ -226,7 +225,6 @@ export async function fetchSimulation(
     simulatorAddress,
     safeAddress,
     calldata,
-    0n,
     callGasLimit,
     txGasPrice,
     block.number,
@@ -317,7 +315,6 @@ export function buildExecSimulationCallRequest(
   account: Address,
   to: Address,
   data: Hex,
-  value: bigint,
   gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
@@ -330,7 +327,6 @@ export function buildExecSimulationCallRequest(
     account,
     to,
     data,
-    value,
     gas,
     gasPrice,
     blockNumber,
@@ -521,7 +517,7 @@ async function executeTraceCallAttempts(
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: params as unknown as [
-          { from: Address; to: Address; data: Hex; value: Hex; gas?: Hex; gasPrice: Hex },
+          { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex },
           string,
           Record<string, unknown>,
           Record<string, unknown>?,
@@ -630,8 +626,6 @@ function buildTraceCallAttemptsForConfig(
     from,
     to,
     data,
-    // execTransaction is called with no ETH attached from the outer EOA.
-    value: "0x0",
     gas: toHex(gas),
     // Keep tx.gasprice parity with Foundry/anvil, including explicit zero.
     gasPrice: toHex(gasPrice),
