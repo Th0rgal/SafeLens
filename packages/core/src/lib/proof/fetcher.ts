@@ -13,18 +13,9 @@ import {
   type Address,
   type Hex,
   type PublicClient,
-  type Chain,
 } from "viem";
-import {
-  mainnet,
-  sepolia,
-  polygon,
-  arbitrum,
-  optimism,
-  gnosis,
-  base,
-} from "viem/chains";
 import type { OnchainPolicyProof, TrustClassification } from "../types";
+import { CHAIN_BY_ID, DEFAULT_RPC_URLS } from "../chains";
 import {
   SENTINEL,
   SLOT_SINGLETON,
@@ -37,29 +28,6 @@ import {
   moduleSlot,
   slotToKey,
 } from "./safe-layout";
-
-// ── Chain lookup ─────────────────────────────────────────────────
-
-const CHAIN_BY_ID: Record<number, Chain> = {
-  1: mainnet,
-  11155111: sepolia,
-  137: polygon,
-  42161: arbitrum,
-  10: optimism,
-  100: gnosis,
-  8453: base,
-};
-
-/** Default public RPC endpoints per chain (rate-limited, best-effort). */
-const DEFAULT_RPC_URLS: Record<number, string> = {
-  1: "https://ethereum-rpc.publicnode.com",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  42161: "https://arbitrum-one-rpc.publicnode.com",
-  10: "https://optimism-rpc.publicnode.com",
-  100: "https://gnosis-rpc.publicnode.com",
-  8453: "https://base-rpc.publicnode.com",
-};
 
 // ── Helpers ──────────────────────────────────────────────────────
 

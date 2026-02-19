@@ -233,9 +233,10 @@ describe("verifyEvidencePackage with onchainPolicyProof + simulation", () => {
     // Proof passes
     expect(result.policyProof!.valid).toBe(true);
 
-    // Simulation is structurally valid (no errors) but execution-result check fails
+    // Simulation is structurally valid (no errors) but execution reverted
     expect(result.simulationVerification).toBeDefined();
     expect(result.simulationVerification!.valid).toBe(true); // structural validity
+    expect(result.simulationVerification!.executionReverted).toBe(true);
     const execCheck = result.simulationVerification!.checks.find((c) => c.id === "execution-result");
     expect(execCheck?.passed).toBe(false);
     expect(execCheck?.detail).toContain("reverted");

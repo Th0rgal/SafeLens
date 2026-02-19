@@ -3,8 +3,9 @@ import {
   type EvidencePackage,
   type EvidenceVerificationReport,
   type SettingsConfig,
-  parseSafeUrl,
+  parseSafeUrlFlexible,
   fetchSafeTransaction,
+  fetchPendingTransactions,
   createEvidencePackage,
   enrichWithOnchainProof,
   enrichWithSimulation,
@@ -291,9 +292,11 @@ function printVerificationText(
     }
 
     const simTrust = evidence.simulation?.trust ?? "rpc-sourced";
-    const simTitle = sv.valid
-      ? "⚡ Transaction Simulation " + trustBadge(simTrust)
-      : "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)");
+    const simTitle = !sv.valid
+      ? "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)")
+      : sv.executionReverted
+        ? "⚡ Transaction Simulation " + colors.bgRed(" REVERTED ") + " " + trustBadge(simTrust)
+        : "⚡ Transaction Simulation " + trustBadge(simTrust);
 
     console.log("");
     console.log(box(table(simRows, 22), simTitle));
@@ -339,9 +342,25 @@ async function runAnalyze(args: string[]) {
 
   const rpcUrl = getFlag(args, "--rpc-url");
 
-  const parsed = parseSafeUrl(url);
-  const tx = await fetchSafeTransaction(parsed.chainId, parsed.safeTxHash);
-  let evidence = createEvidencePackage(tx, parsed.chainId, url);
+  const parsed = parseSafeUrlFlexible(url);
+
+  if (parsed.type === "queue") {
+    // Queue URL — list pending transactions instead of analyzing one
+    const pending = await fetchPendingTransactions(parsed.data.chainId, parsed.data.safeAddress);
+    if (pending.length === 0) {
+      console.log("No pending transactions for this Safe.");
+      return;
+    }
+    console.log(`Found ${pending.length} pending transaction(s) for ${parsed.data.safeAddress}:\n`);
+    for (const ptx of pending) {
+      console.log(`  nonce ${ptx.nonce}  ${ptx.safeTxHash}  → ${ptx.to} (${ptx.isExecuted ? "executed" : "pending"})`);
+    }
+    console.log("\nTo analyze a specific transaction, use the full transaction URL with the &id= parameter.");
+    return;
+  }
+
+  const tx = await fetchSafeTransaction(parsed.data.chainId, parsed.data.safeTxHash);
+  let evidence = createEvidencePackage(tx, parsed.data.chainId, url);
 
   // Fetch on-chain policy proof if RPC URL is provided
   if (rpcUrl) {

@@ -18,6 +18,7 @@ describe("verifySimulation", () => {
   it("passes all checks for a valid successful simulation", () => {
     const result = verifySimulation(makeValidSimulation());
     expect(result.valid).toBe(true);
+    expect(result.executionReverted).toBe(false);
     expect(result.errors).toEqual([]);
     expect(result.checks.length).toBeGreaterThanOrEqual(6);
     expect(result.checks.every((c) => c.passed)).toBe(true);
@@ -28,6 +29,7 @@ describe("verifySimulation", () => {
       makeValidSimulation({ success: false, returnData: null, gasUsed: "0" })
     );
     expect(result.valid).toBe(true);
+    expect(result.executionReverted).toBe(true);
     expect(result.errors).toEqual([]);
     // Structurally valid, but execution-result check reflects the revert
     const execCheck = result.checks.find((c) => c.id === "execution-result");

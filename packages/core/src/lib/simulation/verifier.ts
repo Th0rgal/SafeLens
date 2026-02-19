@@ -18,6 +18,8 @@ export interface SimulationCheck {
 
 export interface SimulationVerificationResult {
   valid: boolean;
+  /** True when the simulated transaction reverted (distinct from structural validity). */
+  executionReverted: boolean;
   errors: string[];
   checks: SimulationCheck[];
 }
@@ -153,6 +155,7 @@ export function verifySimulation(
 
   return {
     valid: errors.length === 0,
+    executionReverted: !simulation.success,
     errors,
     checks,
   };

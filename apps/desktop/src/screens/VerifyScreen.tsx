@@ -407,9 +407,11 @@ export default function VerifyScreen() {
                   <TrustBadge level={evidence?.simulation?.trust ?? "rpc-sourced"} />
                 </div>
                 <CardDescription>
-                  {simulationVerification.valid
-                    ? "Simulation passed all structural checks"
-                    : `Simulation has ${simulationVerification.errors.length} issue(s)`}
+                  {!simulationVerification.valid
+                    ? `Simulation has ${simulationVerification.errors.length} issue(s)`
+                    : simulationVerification.executionReverted
+                      ? "Structurally valid, but the transaction REVERTED"
+                      : "Simulation passed all checks — transaction succeeded"}
                 </CardDescription>
               </CardHeader>
               <CardContent>

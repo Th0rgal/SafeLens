@@ -22,19 +22,10 @@ import {
   parseAbi,
   type Address,
   type Hex,
-  type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import {
-  mainnet,
-  sepolia,
-  polygon,
-  arbitrum,
-  optimism,
-  gnosis,
-  base,
-} from "viem/chains";
 import { computeSafeTxHash } from "../safe/hash";
+import { CHAIN_BY_ID, DEFAULT_RPC_URLS } from "../chains";
 import {
   SENTINEL,
   SLOT_OWNER_COUNT,
@@ -47,28 +38,6 @@ import {
   slotToKey,
 } from "../proof/safe-layout";
 import type { Simulation, TrustClassification } from "../types";
-
-// ── Chain lookup (shared with proof fetcher) ──────────────────────
-
-const CHAIN_BY_ID: Record<number, Chain> = {
-  1: mainnet,
-  11155111: sepolia,
-  137: polygon,
-  42161: arbitrum,
-  10: optimism,
-  100: gnosis,
-  8453: base,
-};
-
-const DEFAULT_RPC_URLS: Record<number, string> = {
-  1: "https://ethereum-rpc.publicnode.com",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  42161: "https://arbitrum-one-rpc.publicnode.com",
-  10: "https://optimism-rpc.publicnode.com",
-  100: "https://gnosis-rpc.publicnode.com",
-  8453: "https://base-rpc.publicnode.com",
-};
 
 // ── Fake owner for state-override simulation ──────────────────────
 
@@ -122,7 +91,8 @@ interface TransactionFields {
  * 2. Sign it with the simulation account.
  * 3. Build state overrides: plant simulation account as sole 1-of-1 owner.
  * 4. Call `execTransaction` via `eth_call` with those overrides.
- * 5. Return the simulation result (success, returnData, gasUsed, logs).
+ * 5. Try `debug_traceCall` for accurate gasUsed + event logs.
+ * 6. Return the simulation result (success, returnData, gasUsed, logs).
  */
 export async function fetchSimulation(
   safeAddress: Address,
@@ -259,25 +229,11 @@ export async function fetchSimulation(
     returnData = extractRevertData(err);
   }
 
-  // ── Step 5: Try to get gas estimate ─────────────────────────────
+  // ── Step 5: Try debug_traceCall for logs + gasUsed (optional) ────
+  // callTracer returns gasUsed on the top-level frame, which is accurate
+  // even for reverted transactions (unlike estimateGas which throws).
 
-  try {
-    const gas = await client.estimateGas({
-      to: safeAddress,
-      data: calldata,
-      blockNumber: block.number,
-      stateOverride: viemStateOverride,
-    });
-    gasUsed = gas.toString();
-  } catch {
-    // Gas estimation may fail if the call reverts, or if the node does
-    // not support stateOverride on estimateGas (common on public RPCs).
-    gasUsed = "0";
-  }
-
-  // ── Step 6: Try debug_traceCall for logs (optional) ─────────────
-
-  const logs = await tryFetchLogs(
+  const traceResult = await tryTraceCall(
     client,
     safeAddress,
     calldata,
@@ -285,13 +241,18 @@ export async function fetchSimulation(
     viemStateOverride
   );
 
+  // Prefer gas from the trace (accurate even on reverts) over estimateGas
+  if (traceResult.gasUsed) {
+    gasUsed = traceResult.gasUsed;
+  }
+
   // ── Build result ────────────────────────────────────────────────
 
   const simulation: Simulation = {
     success,
     returnData,
     gasUsed,
-    logs,
+    logs: traceResult.logs,
     blockNumber,
     trust: "rpc-sourced" as TrustClassification,
   };
@@ -324,9 +285,14 @@ function extractRevertData(err: unknown): Hex | null {
   return null;
 }
 
-// ── Optional: fetch logs via debug_traceCall ──────────────────────
+// ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
 
-async function tryFetchLogs(
+interface TraceResult {
+  logs: Simulation["logs"];
+  gasUsed: string | null;
+}
+
+async function tryTraceCall(
   client: ReturnType<typeof createPublicClient>,
   safeAddress: Address,
   calldata: Hex,
@@ -335,7 +301,7 @@ async function tryFetchLogs(
     address: Address;
     stateDiff: Array<{ slot: Hex; value: Hex }>;
   }>
-): Promise<Simulation["logs"]> {
+): Promise<TraceResult> {
   try {
     // Build state override in the raw JSON-RPC format for debug_traceCall
     const stateOverrideObj: Record<
@@ -373,7 +339,9 @@ async function tryFetchLogs(
     // callTracer with withLog:true nests logs inside call frames.
     // Each frame has an optional `logs` array and an optional `calls`
     // array of child frames. We recursively collect all logs.
+    // The top-level frame also has `gasUsed` (hex string).
     interface CallFrame {
+      gasUsed?: string;
       logs?: Array<{ address: string; topics: string[]; data: string }>;
       calls?: CallFrame[];
     }
@@ -397,9 +365,19 @@ async function tryFetchLogs(
       return collected;
     }
 
-    return collectLogs(result as unknown as CallFrame);
+    const frame = result as unknown as CallFrame;
+    const logs = collectLogs(frame);
+
+    // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
+    let gasUsed: string | null = null;
+    if (frame.gasUsed && typeof frame.gasUsed === "string") {
+      gasUsed = parseInt(frame.gasUsed, 16).toString();
+      if (isNaN(Number(gasUsed))) gasUsed = null;
+    }
+
+    return { logs, gasUsed };
   } catch {
     // debug_traceCall is not supported by all RPCs — silently fall back
-    return [];
+    return { logs: [], gasUsed: null };
   }
 }
