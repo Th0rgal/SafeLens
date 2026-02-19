@@ -5,6 +5,10 @@ import {
   fetchOnchainPolicyProof,
   type FetchOnchainProofOptions,
 } from "../proof";
+import {
+  fetchSimulation,
+  type FetchSimulationOptions,
+} from "../simulation";
 
 /**
  * Create an evidence package from a Safe transaction
@@ -70,6 +74,31 @@ export async function enrichWithOnchainProof(
     ...evidence,
     version: "1.1",
     onchainPolicyProof: proof,
+  };
+}
+
+/**
+ * Enrich an evidence package with a transaction simulation.
+ *
+ * Simulates `execTransaction` via `eth_call` with storage overrides
+ * (fake 1-of-1 owner) to reveal the transaction's success/revert status,
+ * return data, gas usage, and event logs. Bumps version to "1.1".
+ */
+export async function enrichWithSimulation(
+  evidence: EvidencePackage,
+  options: FetchSimulationOptions = {}
+): Promise<EvidencePackage> {
+  const simulation = await fetchSimulation(
+    evidence.safeAddress as Address,
+    evidence.chainId,
+    evidence.transaction,
+    options
+  );
+
+  return {
+    ...evidence,
+    version: "1.1",
+    simulation,
   };
 }
 

@@ -16,7 +16,7 @@ import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult } from "@safelens/core";
+import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult } from "@safelens/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -47,6 +47,7 @@ export default function VerifyScreen() {
   const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
   const [hashDetails, setHashDetails] = useState<SafeTxHashDetails | undefined>(undefined);
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
+  const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -59,6 +60,7 @@ export default function VerifyScreen() {
       setProposer(null);
       setTargetWarnings([]);
       setPolicyProof(undefined);
+      setSimulationVerification(undefined);
       return;
     }
 
@@ -66,6 +68,7 @@ export default function VerifyScreen() {
     setProposer(null);
     setTargetWarnings([]);
     setPolicyProof(undefined);
+    setSimulationVerification(undefined);
 
     let cancelled = false;
 
@@ -80,6 +83,7 @@ export default function VerifyScreen() {
       setProposer(report.proposer);
       setTargetWarnings(report.targetWarnings);
       setPolicyProof(report.policyProof);
+      setSimulationVerification(report.simulationVerification);
     }
 
     verifyAll();
@@ -382,6 +386,54 @@ export default function VerifyScreen() {
                 {policyProof.errors.length > 0 && (
                   <div className="mt-3 space-y-1">
                     {policyProof.errors.map((err, i) => (
+                      <div key={i} className="text-xs text-red-400">{err}</div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {simulationVerification && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Transaction Simulation</CardTitle>
+                  <TrustBadge level="rpc-sourced" />
+                </div>
+                <CardDescription>
+                  {simulationVerification.valid
+                    ? "Simulation passed all structural checks"
+                    : `Simulation has ${simulationVerification.errors.length} issue(s)`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5">
+                  {simulationVerification.checks.map((check) => (
+                    <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                      <span className="text-sm font-medium">{check.label}</span>
+                      <div className="flex items-center gap-2">
+                        {check.detail && (
+                          <span className="text-xs text-muted">{check.detail}</span>
+                        )}
+                        {check.passed ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                            <ShieldCheck className="h-3 w-3" />
+                            Pass
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                            <AlertTriangle className="h-3 w-3" />
+                            Fail
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {simulationVerification.errors.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    {simulationVerification.errors.map((err, i) => (
                       <div key={i} className="text-xs text-red-400">{err}</div>
                     ))}
                   </div>

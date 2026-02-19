@@ -7,6 +7,7 @@ import {
   fetchSafeTransaction,
   createEvidencePackage,
   enrichWithOnchainProof,
+  enrichWithSimulation,
   exportEvidencePackage,
   parseEvidencePackage,
   verifyEvidencePackage,
@@ -56,7 +57,7 @@ Usage:
   safelens settings show [--path <file>]
 
 Options:
-  --rpc-url <url>   Fetch on-chain policy proof via eth_getProof (enables proof-verified trust level)
+  --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
 
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
@@ -100,6 +101,7 @@ function createVerifyPayload(
     signatures: report.signatures,
     sources: report.sources,
     policyProof: report.policyProof,
+    simulationVerification: report.simulationVerification,
   };
 }
 
@@ -277,6 +279,24 @@ function printVerificationText(
     console.log(box(table(proofRows, 22), proofTitle));
   }
 
+  // ── Simulation ────────────────────────────────────────────────────
+  if (report.simulationVerification) {
+    const sv = report.simulationVerification;
+    const simRows: Array<[string, string]> = [];
+
+    for (const check of sv.checks) {
+      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
+      simRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
+    }
+
+    const simTitle = sv.valid
+      ? "⚡ Transaction Simulation " + trustBadge("rpc-sourced")
+      : "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)");
+
+    console.log("");
+    console.log(box(table(simRows, 22), simTitle));
+  }
+
   // ── Signatures ──────────────────────────────────────────────────────
   const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
 
@@ -327,6 +347,15 @@ async function runAnalyze(args: string[]) {
         `Warning: Failed to fetch on-chain policy proof: ${err instanceof Error ? err.message : err}`
       );
       console.error("Continuing without policy proof.\n");
+    }
+
+    try {
+      evidence = await enrichWithSimulation(evidence, { rpcUrl });
+    } catch (err) {
+      console.error(
+        `Warning: Failed to simulate transaction: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without simulation.\n");
     }
   }
 

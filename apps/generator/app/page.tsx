@@ -13,6 +13,7 @@ import {
   fetchPendingTransactions,
   createEvidencePackage,
   enrichWithOnchainProof,
+  enrichWithSimulation,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
@@ -47,19 +48,29 @@ export default function AnalyzePage() {
 
   const [proofWarning, setProofWarning] = useState<string | null>(null);
 
-  /** Optionally enrich a package with an on-chain policy proof. */
+  /** Optionally enrich a package with on-chain policy proof + simulation. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
     const trimmedRpc = rpcUrl.trim();
     if (!trimmedRpc) return pkg;
+
+    let enriched = pkg;
+
     try {
-      return await enrichWithOnchainProof(pkg, { rpcUrl: trimmedRpc });
+      enriched = await enrichWithOnchainProof(enriched, { rpcUrl: trimmedRpc });
     } catch (err) {
       console.warn("Failed to fetch on-chain policy proof:", err);
       setProofWarning(
         `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
       );
-      return pkg;
     }
+
+    try {
+      enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
+    } catch (err) {
+      console.warn("Failed to simulate transaction:", err);
+    }
+
+    return enriched;
   };
 
   const handleAnalyze = async () => {
@@ -351,6 +362,14 @@ export default function AnalyzePage() {
                   <div className="font-medium text-muted">Policy Proof</div>
                   <div className="text-xs text-blue-400">
                     Included (block {evidence.onchainPolicyProof.blockNumber}, {evidence.onchainPolicyProof.decodedPolicy.owners.length} owners, threshold {evidence.onchainPolicyProof.decodedPolicy.threshold})
+                  </div>
+                </div>
+              )}
+              {evidence.simulation && (
+                <div className="col-span-2">
+                  <div className="font-medium text-muted">Simulation</div>
+                  <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
+                    {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
                   </div>
                 </div>
               )}

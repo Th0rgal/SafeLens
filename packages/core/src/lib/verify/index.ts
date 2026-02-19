@@ -3,6 +3,7 @@ import type { EvidencePackage } from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
 import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof";
+import { verifySimulation, type SimulationVerificationResult } from "../simulation";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources } from "../trust";
@@ -32,6 +33,7 @@ export type EvidenceVerificationReport = {
   sources: ReturnType<typeof buildVerificationSources>;
   hashDetails?: SafeTxHashDetails;
   policyProof?: PolicyProofVerificationResult;
+  simulationVerification?: SimulationVerificationResult;
 };
 
 export interface VerifyEvidenceOptions {
@@ -108,6 +110,12 @@ export async function verifyEvidencePackage(
     );
   }
 
+  // Verify simulation if present
+  let simulationVerification: SimulationVerificationResult | undefined;
+  if (evidence.simulation) {
+    simulationVerification = verifySimulation(evidence.simulation);
+  }
+
   return {
     proposer,
     targetWarnings,
@@ -127,5 +135,6 @@ export async function verifyEvidencePackage(
     },
     hashDetails,
     policyProof,
+    simulationVerification,
   };
 }
