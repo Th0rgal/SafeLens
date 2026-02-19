@@ -60,7 +60,7 @@ export function createEvidencePackage(
 /**
  * Enrich an evidence package with an on-chain policy proof.
  *
- * Fetches `eth_getProof` for the Safe at the latest (or specified) block,
+ * Fetches `eth_getProof` for the Safe at a finalized (or specified) block,
  * walks the owner/module linked lists, and attaches the result as
  * `onchainPolicyProof`. Bumps version to "1.1".
  */
@@ -73,6 +73,10 @@ export async function enrichWithOnchainProof(
     evidence.chainId,
     options
   );
+
+  if (evidence.consensusProof) {
+    assertProofAlignment(proof.stateRoot, proof.blockNumber, evidence.consensusProof.stateRoot, evidence.consensusProof.blockNumber);
+  }
 
   return {
     ...evidence,
@@ -124,6 +128,15 @@ export async function enrichWithConsensusProof(
     options
   );
 
+  if (evidence.onchainPolicyProof) {
+    assertProofAlignment(
+      evidence.onchainPolicyProof.stateRoot,
+      evidence.onchainPolicyProof.blockNumber,
+      consensusProof.stateRoot,
+      consensusProof.blockNumber
+    );
+  }
+
   return {
     ...evidence,
     version: "1.2",
@@ -136,4 +149,23 @@ export async function enrichWithConsensusProof(
  */
 export function exportEvidencePackage(evidence: EvidencePackage): string {
   return JSON.stringify(evidence, null, 2);
+}
+
+function assertProofAlignment(
+  onchainStateRoot: string,
+  onchainBlockNumber: number,
+  consensusStateRoot: string,
+  consensusBlockNumber: number
+): void {
+  const rootMatches =
+    onchainStateRoot.toLowerCase() === consensusStateRoot.toLowerCase();
+  const blockMatches = onchainBlockNumber === consensusBlockNumber;
+
+  if (rootMatches && blockMatches) {
+    return;
+  }
+
+  throw new Error(
+    `Proof alignment mismatch: onchainPolicyProof(${onchainBlockNumber}, ${onchainStateRoot}) != consensusProof(${consensusBlockNumber}, ${consensusStateRoot}). Both artifacts must refer to the same finalized chain point.`
+  );
 }

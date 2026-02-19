@@ -150,6 +150,8 @@ export const consensusProofSchema = z.object({
   stateRoot: hashSchema,
   /** Block number of the finalized execution payload */
   blockNumber: z.number(),
+  /** Beacon slot of the finalized header in the finality update. */
+  finalizedSlot: z.number(),
 });
 
 export type ConsensusProof = z.infer<typeof consensusProofSchema>;

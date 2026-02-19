@@ -57,9 +57,23 @@ export default function AnalyzePage() {
     let enriched = pkg;
     const trimmedRpc = rpcUrl.trim();
 
+    // Fetch consensus proof first so policy proof can be pinned to the same
+    // finalized execution block.
+    try {
+      enriched = await enrichWithConsensusProof(enriched);
+    } catch (err) {
+      console.warn("Failed to fetch consensus proof:", err);
+      setConsensusWarning(
+        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+      );
+    }
+
     if (trimmedRpc) {
       try {
-        enriched = await enrichWithOnchainProof(enriched, { rpcUrl: trimmedRpc });
+        enriched = await enrichWithOnchainProof(enriched, {
+          rpcUrl: trimmedRpc,
+          blockNumber: enriched.consensusProof?.blockNumber,
+        });
       } catch (err) {
         console.warn("Failed to fetch on-chain policy proof:", err);
         setProofWarning(
@@ -75,16 +89,6 @@ export default function AnalyzePage() {
           `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
         );
       }
-    }
-
-    // Always attempt consensus proof (uses public beacon RPCs, no user RPC needed)
-    try {
-      enriched = await enrichWithConsensusProof(enriched);
-    } catch (err) {
-      console.warn("Failed to fetch consensus proof:", err);
-      setConsensusWarning(
-        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
-      );
     }
 
     return enriched;

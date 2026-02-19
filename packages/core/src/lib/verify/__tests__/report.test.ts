@@ -3,7 +3,7 @@ import { verifyEvidencePackage } from "..";
 import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
-import type { OnchainPolicyProof, Simulation } from "../../types";
+import type { ConsensusProof, OnchainPolicyProof, Simulation } from "../../types";
 import { VERIFICATION_SOURCE_IDS } from "../../trust/sources";
 import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
@@ -110,6 +110,22 @@ function makeOnchainProof(): OnchainPolicyProof {
   };
 }
 
+function makeConsensusProof(overrides: Partial<ConsensusProof> = {}): ConsensusProof {
+  return {
+    checkpoint:
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    bootstrap: "{\"header\":{\"beacon\":{\"slot\":\"0\"}}}",
+    updates: [],
+    finalityUpdate:
+      "{\"finalized_header\":{\"beacon\":{\"slot\":\"12345\"},\"execution\":{\"state_root\":\"0x0\",\"block_number\":\"0\"}}}",
+    network: "mainnet",
+    stateRoot: makeOnchainProof().stateRoot,
+    blockNumber: makeOnchainProof().blockNumber,
+    finalizedSlot: 12345,
+    ...overrides,
+  };
+}
+
 describe("verifyEvidencePackage with onchainPolicyProof", () => {
   it("returns policyProof result when evidence contains a valid proof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
@@ -189,6 +205,53 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
       (s) => s.id === "onchain-policy-proof"
     );
     expect(proofSource?.trust).not.toBe("proof-verified");
+  });
+
+  it("keeps policy proof valid when consensus proof aligns to same finalized root", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.policyProof).toBeDefined();
+    expect(result.policyProof!.valid).toBe(true);
+
+    const check = result.policyProof!.checks.find(
+      (c) => c.id === "consensus-proof-alignment"
+    );
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(true);
+  });
+
+  it("fails policy proof when consensus proof root/block mismatches", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof({
+        blockNumber: makeOnchainProof().blockNumber + 1,
+      }),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.policyProof).toBeDefined();
+    expect(result.policyProof!.valid).toBe(false);
+    expect(
+      result.policyProof!.errors.some((e) =>
+        e.includes("does not align with consensusProof")
+      )
+    ).toBe(true);
+
+    const check = result.policyProof!.checks.find(
+      (c) => c.id === "consensus-proof-alignment"
+    );
+    expect(check).toBeDefined();
+    expect(check!.passed).toBe(false);
   });
 });
 

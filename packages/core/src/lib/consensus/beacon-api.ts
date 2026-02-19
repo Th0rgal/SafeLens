@@ -189,6 +189,7 @@ export async function fetchConsensusProof(
     network: config.network,
     stateRoot: finalizedStateRoot as `0x${string}`,
     blockNumber: Number(finalizedBlockNumber),
+    finalizedSlot: Number(finalizedSlot),
   };
 
   return consensusProof;

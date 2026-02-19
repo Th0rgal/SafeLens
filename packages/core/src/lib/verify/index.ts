@@ -167,6 +167,33 @@ export async function verifyEvidencePackage(
     }
   }
 
+  // Cross-validate onchain and consensus proofs when both are present.
+  // These artifacts must refer to the same finalized execution payload.
+  if (policyProof && evidence.onchainPolicyProof && evidence.consensusProof) {
+    const onchain = evidence.onchainPolicyProof;
+    const consensus = evidence.consensusProof;
+    const rootMatches =
+      onchain.stateRoot.toLowerCase() === consensus.stateRoot.toLowerCase();
+    const blockMatches = onchain.blockNumber === consensus.blockNumber;
+    const aligned = rootMatches && blockMatches;
+
+    policyProof.checks.push({
+      id: "consensus-proof-alignment",
+      label: "onchainPolicyProof aligns with consensusProof finalized root",
+      passed: aligned,
+      detail: aligned
+        ? `Aligned at block ${onchain.blockNumber} (${onchain.stateRoot})`
+        : `onchainPolicyProof(${onchain.blockNumber}, ${onchain.stateRoot}) vs consensusProof(${consensus.blockNumber}, ${consensus.stateRoot})`,
+    });
+
+    if (!aligned) {
+      policyProof.errors.push(
+        "onchainPolicyProof does not align with consensusProof finalized root/block."
+      );
+      policyProof.valid = false;
+    }
+  }
+
   // Verify simulation if present
   let simulationVerification: SimulationVerificationResult | undefined;
   if (evidence.simulation) {

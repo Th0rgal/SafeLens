@@ -45,8 +45,10 @@ const ZERO_ADDRESS: Address = "0x0000000000000000000000000000000000000000";
 export interface FetchOnchainProofOptions {
   /** Custom RPC URL. Falls back to a public endpoint for the chain. */
   rpcUrl?: string;
-  /** Block tag or number. Defaults to "latest". */
+  /** Block tag. Ignored when blockNumber is provided. Defaults to "finalized". */
   blockTag?: "latest" | "finalized" | "safe";
+  /** Explicit block number to pin all reads and eth_getProof to a single block. */
+  blockNumber?: number;
 }
 
 /**
@@ -80,15 +82,23 @@ export async function fetchOnchainPolicyProof(
     transport: http(rpcUrl),
   });
 
-  const blockTag = options.blockTag ?? "latest";
+  if (
+    options.blockNumber != null &&
+    (!Number.isInteger(options.blockNumber) || options.blockNumber <= 0)
+  ) {
+    throw new Error(
+      `Invalid blockNumber ${String(options.blockNumber)}. Expected a positive integer.`
+    );
+  }
 
-  // Get the block to pin the state root for verification.
-  // We record the block metadata but use the blockTag (not a concrete
-  // block number) for all subsequent RPC calls. This avoids "old data
-  // not available due to pruning" errors on public RPCs that only serve
-  // the latest state but reject eth_getProof with an explicit historic
-  // block number.
-  const block = await client.getBlock({ blockTag });
+  const blockTag = options.blockTag ?? "finalized";
+  const blockRef =
+    options.blockNumber != null
+      ? ({ blockNumber: BigInt(options.blockNumber) } as const)
+      : ({ blockTag } as const);
+
+  // Get the exact block that will anchor all reads/proofs.
+  const block = await client.getBlock(blockRef);
   if (block.number == null) {
     throw new Error("Block number is null (pending block). Use a finalized block tag.");
   }
@@ -104,16 +114,16 @@ export async function fetchOnchainPolicyProof(
     guardRaw,
     fallbackRaw,
   ] = await Promise.all([
-    readStorage(client, safeAddress, slotToKey(SLOT_OWNER_COUNT), blockTag),
-    readStorage(client, safeAddress, slotToKey(SLOT_THRESHOLD), blockTag),
-    readStorage(client, safeAddress, slotToKey(SLOT_NONCE), blockTag),
-    readStorage(client, safeAddress, slotToKey(SLOT_SINGLETON), blockTag),
-    readStorage(client, safeAddress, GUARD_STORAGE_SLOT, blockTag),
+    readStorage(client, safeAddress, slotToKey(SLOT_OWNER_COUNT), blockRef),
+    readStorage(client, safeAddress, slotToKey(SLOT_THRESHOLD), blockRef),
+    readStorage(client, safeAddress, slotToKey(SLOT_NONCE), blockRef),
+    readStorage(client, safeAddress, slotToKey(SLOT_SINGLETON), blockRef),
+    readStorage(client, safeAddress, GUARD_STORAGE_SLOT, blockRef),
     readStorage(
       client,
       safeAddress,
       FALLBACK_HANDLER_STORAGE_SLOT,
-      blockTag
+      blockRef
     ),
   ]);
 
@@ -130,7 +140,7 @@ export async function fetchOnchainPolicyProof(
     safeAddress,
     ownerSlot,
     ownerCount,
-    blockTag
+    blockRef
   );
 
   // Walk the modules linked list
@@ -139,7 +149,7 @@ export async function fetchOnchainPolicyProof(
     safeAddress,
     moduleSlot,
     50, // max modules (safety limit)
-    blockTag
+    blockRef
   );
 
   // Build the complete list of storage keys for eth_getProof
@@ -156,11 +166,11 @@ export async function fetchOnchainPolicyProof(
     ...modules.map((m) => moduleSlot(m)),
   ];
 
-  // Fetch the full proof using blockTag to avoid pruning errors
+  // Fetch the full proof pinned to the same block reference.
   const proof = await client.getProof({
     address: safeAddress,
     storageKeys,
-    blockTag,
+    ...blockRef,
   });
 
   // Build the result
@@ -201,12 +211,14 @@ async function readStorage(
   client: PublicClient,
   address: Address,
   slot: Hex,
-  blockTag: "latest" | "finalized" | "safe"
+  blockRef:
+    | { blockTag: "latest" | "finalized" | "safe" }
+    | { blockNumber: bigint }
 ): Promise<Hex> {
   const result = await client.getStorageAt({
     address,
     slot,
-    blockTag,
+    ...blockRef,
   });
   return (result ?? "0x0") as Hex;
 }
@@ -220,14 +232,16 @@ async function walkLinkedList(
   safeAddress: Address,
   slotFn: (addr: Address) => Hex,
   maxItems: number,
-  blockTag: "latest" | "finalized" | "safe"
+  blockRef:
+    | { blockTag: "latest" | "finalized" | "safe" }
+    | { blockNumber: bigint }
 ): Promise<Address[]> {
   const items: Address[] = [];
   let current: Address = SENTINEL;
 
   for (let i = 0; i < maxItems + 1; i++) {
     const slot = slotFn(current);
-    const raw = await readStorage(client, safeAddress, slot, blockTag);
+    const raw = await readStorage(client, safeAddress, slot, blockRef);
     const next = storageToAddress(raw);
 
     // End of list: points back to sentinel or is zero
