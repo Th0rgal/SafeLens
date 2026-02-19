@@ -3,7 +3,9 @@ import {
   buildExecSimulationCallRequest,
   buildTraceCallAttempts,
   collectCommittedLogsFromCallTrace,
+  parseRpcQuantityToDecimalString,
   parseStateDiffsFromPrestateTrace,
+  toTraceStateOverrideObject,
 } from "../fetcher";
 import type { Address, Hex } from "viem";
 
@@ -151,6 +153,16 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[2].stateOverrideArg).toEqual(overrideObject);
   });
 
+  it("preserves explicit zero balance in trace state overrides", () => {
+    const simulator = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266" as Address;
+    const overrideObj = toTraceStateOverrideObject([
+      { address: to, stateDiff: stateOverride[0].stateDiff },
+      { address: simulator, balance: 0n },
+    ]);
+
+    expect(overrideObj[simulator]?.balance).toBe("0x0");
+  });
+
   it("drops logs emitted by reverted frames", () => {
     const keepTopic =
       "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
@@ -263,5 +275,12 @@ describe("simulation fetcher RPC payloads", () => {
     };
 
     expect(parseStateDiffsFromPrestateTrace(trace)).toBeUndefined();
+  });
+
+  it("parses trace gas quantity from hex or decimal", () => {
+    expect(parseRpcQuantityToDecimalString("0x5208")).toBe("21000");
+    expect(parseRpcQuantityToDecimalString("21000")).toBe("21000");
+    expect(parseRpcQuantityToDecimalString("0x")).toBeNull();
+    expect(parseRpcQuantityToDecimalString("not-a-number")).toBeNull();
   });
 });

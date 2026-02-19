@@ -356,6 +356,23 @@ function normalizeHex(value: string): string {
 }
 
 /**
+ * Parse JSON-RPC quantity-like values into a decimal string.
+ * Supports both canonical hex quantities (0x...) and decimal strings.
+ */
+export function parseRpcQuantityToDecimalString(value: string): string | null {
+  if (value.length === 0) return null;
+
+  if (value.startsWith("0x") || value.startsWith("0X")) {
+    const hex = value.slice(2);
+    if (hex.length === 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+    return BigInt(`0x${hex}`).toString();
+  }
+
+  if (!/^[0-9]+$/.test(value)) return null;
+  return BigInt(value).toString();
+}
+
+/**
  * Walk viem's error cause chain to extract revert data.
  * Viem wraps reverts as CallExecutionError → RpcRequestError.
  * The raw revert bytes live at the innermost cause's `.data` property.
@@ -414,6 +431,36 @@ interface CallFrame {
   error?: string;
 }
 
+export function toTraceStateOverrideObject(
+  stateOverride: Array<{
+    address: Address;
+    stateDiff?: Array<{ slot: Hex; value: Hex }>;
+    balance?: bigint;
+  }>
+): Record<string, { stateDiff?: Record<string, string>; balance?: string }> {
+  const stateOverrideObj: Record<
+    string,
+    { stateDiff?: Record<string, string>; balance?: string }
+  > = {};
+
+  for (const override of stateOverride) {
+    const rpcOverride: { stateDiff?: Record<string, string>; balance?: string } = {};
+    if (override.stateDiff && override.stateDiff.length > 0) {
+      const diffs: Record<string, string> = {};
+      for (const entry of override.stateDiff) {
+        diffs[entry.slot] = entry.value;
+      }
+      rpcOverride.stateDiff = diffs;
+    }
+    if (override.balance !== undefined) {
+      rpcOverride.balance = toHex(override.balance);
+    }
+    stateOverrideObj[override.address] = rpcOverride;
+  }
+
+  return stateOverrideObj;
+}
+
 /**
  * Collect only committed logs from a callTracer frame tree.
  *
@@ -465,24 +512,7 @@ async function tryTraceCall(
 ): Promise<TraceResult> {
   try {
     // Build state override in the raw JSON-RPC format for debug_traceCall
-    const stateOverrideObj: Record<
-      string,
-      { stateDiff?: Record<string, string>; balance?: string }
-    > = {};
-    for (const override of stateOverride) {
-      const rpcOverride: { stateDiff?: Record<string, string>; balance?: string } = {};
-      if (override.stateDiff && override.stateDiff.length > 0) {
-        const diffs: Record<string, string> = {};
-        for (const entry of override.stateDiff) {
-          diffs[entry.slot] = entry.value;
-        }
-        rpcOverride.stateDiff = diffs;
-      }
-      if (override.balance) {
-        rpcOverride.balance = toHex(override.balance);
-      }
-      stateOverrideObj[override.address] = rpcOverride;
-    }
+    const stateOverrideObj = toTraceStateOverrideObject(stateOverride);
 
     const attempts = buildTraceCallAttempts(
       from,
@@ -502,8 +532,7 @@ async function tryTraceCall(
     // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
     let gasUsed: string | null = null;
     if (frame.gasUsed && typeof frame.gasUsed === "string") {
-      gasUsed = parseInt(frame.gasUsed, 16).toString();
-      if (isNaN(Number(gasUsed))) gasUsed = null;
+      gasUsed = parseRpcQuantityToDecimalString(frame.gasUsed);
     }
 
     const stateDiffs = await tryTraceStateDiffs(
