@@ -65,7 +65,7 @@ export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, string> = {
 /** Default public beacon chain RPC endpoints. */
 export const DEFAULT_BEACON_RPC_URLS: Record<string, string> = {
   mainnet: "https://lodestar-mainnet.chainsafe.io",
-  gnosis: "https://beacon.gnosischain.com",
+  gnosis: "https://rpc.gnosischain.com/beacon",
   sepolia: "https://lodestar-sepolia.chainsafe.io",
 };
 

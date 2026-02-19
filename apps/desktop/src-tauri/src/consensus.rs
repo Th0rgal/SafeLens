@@ -71,6 +71,13 @@ struct NetworkConfig {
     forks: Forks,
 }
 
+#[derive(Clone, Copy)]
+enum ConsensusNetwork {
+    Mainnet,
+    Sepolia,
+    Gnosis,
+}
+
 fn mainnet_config() -> NetworkConfig {
     NetworkConfig {
         genesis_root: b256!("4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"),
@@ -106,6 +113,7 @@ fn sepolia_config() -> NetworkConfig {
 }
 
 fn gnosis_config() -> NetworkConfig {
+    // Source: https://github.com/gnosischain/configs/blob/main/mainnet/config.yaml
     NetworkConfig {
         genesis_root: b256!("f5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"),
         genesis_time: 1638993340,
@@ -125,15 +133,23 @@ fn gnosis_config() -> NetworkConfig {
     }
 }
 
-fn get_network_config(network: &str) -> Result<NetworkConfig, String> {
+fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
     match network {
-        "mainnet" => Ok(mainnet_config()),
-        "sepolia" => Ok(sepolia_config()),
-        "gnosis" => Ok(gnosis_config()),
+        "mainnet" => Ok(ConsensusNetwork::Mainnet),
+        "sepolia" => Ok(ConsensusNetwork::Sepolia),
+        "gnosis" | "xdai" => Ok(ConsensusNetwork::Gnosis),
         _ => Err(format!(
             "Unsupported network for consensus verification: {}. Only mainnet, sepolia, and gnosis are currently supported.",
             network
         )),
+    }
+}
+
+fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
+    match network {
+        ConsensusNetwork::Mainnet => mainnet_config(),
+        ConsensusNetwork::Sepolia => sepolia_config(),
+        ConsensusNetwork::Gnosis => gnosis_config(),
     }
 }
 
@@ -171,14 +187,23 @@ impl ConsensusSpec for GnosisConsensusSpec {
 /// 4. Extract the EVM state root from the finalized execution payload
 /// 5. Compare it against the claimed state root
 pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
-    if input.network == "gnosis" {
-        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(input);
+    let network = match parse_network(&input.network) {
+        Ok(network) => network,
+        Err(err) => return fail_result(err),
+    };
+
+    if matches!(network, ConsensusNetwork::Gnosis) {
+        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(
+            input,
+            network,
+        );
     }
-    verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input)
+    verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input, network)
 }
 
 fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     input: ConsensusProofInput,
+    network: ConsensusNetwork,
 ) -> ConsensusVerificationResult {
     let mut checks = Vec::new();
     let mut error = None;
@@ -192,12 +217,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     };
 
     // Get network config
-    let config = match get_network_config(&input.network) {
-        Ok(c) => c,
-        Err(e) => {
-            return fail_result(e);
-        }
-    };
+    let config = get_network_config(network);
 
     // Parse bootstrap
     let bootstrap: Bootstrap<S> = match serde_json::from_str(&input.bootstrap) {
@@ -481,6 +501,7 @@ fn expected_current_slot_for_network(
 mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256,
+        parse_network, ConsensusNetwork,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -504,10 +525,31 @@ mod tests {
 
     #[test]
     fn supports_gnosis_network_config() {
-        let config = get_network_config("gnosis").expect("gnosis must be supported");
+        let config = get_network_config(
+            parse_network("gnosis").expect("gnosis must be supported"),
+        );
         assert_eq!(config.genesis_time, 1638993340);
         assert_eq!(config.seconds_per_slot, 5);
         assert_eq!(config.forks.altair.epoch, 512);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0xf5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"
+        );
+    }
+
+    #[test]
+    fn supports_xdai_alias_for_gnosis() {
+        let network = parse_network("xdai").expect("xdai alias must resolve");
+        assert!(matches!(network, ConsensusNetwork::Gnosis));
+    }
+
+    #[test]
+    fn rejects_unsupported_networks() {
+        let err = parse_network("holesky").expect_err("holesky should fail in desktop verifier");
+        assert!(
+            err.contains("Unsupported network for consensus verification"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
