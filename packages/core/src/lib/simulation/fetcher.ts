@@ -83,6 +83,24 @@ interface TransactionFields {
   refundReceiver: string;
 }
 
+interface ExecSimulationCallRequest {
+  account: Address;
+  to: Address;
+  data: Hex;
+  blockNumber: bigint;
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>;
+}
+
+interface TraceCallAttempt {
+  callObject: { from: Address; to: Address; data: Hex };
+  blockHex: string;
+  traceConfig: Record<string, unknown>;
+  stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
+}
+
 // ── Main fetcher ──────────────────────────────────────────────────
 
 /**
@@ -201,14 +219,16 @@ export async function fetchSimulation(
   let success = false;
   let returnData: Hex | null = null;
   let gasUsed = "0";
+  const callRequest = buildExecSimulationCallRequest(
+    simulatorAddress,
+    safeAddress,
+    calldata,
+    block.number,
+    viemStateOverride
+  );
 
   try {
-    const result = await client.call({
-      to: safeAddress,
-      data: calldata,
-      blockNumber: block.number,
-      stateOverride: viemStateOverride,
-    });
+    const result = await client.call(callRequest);
 
     // Decode the bool return value from execTransaction
     if (result.data) {
@@ -241,6 +261,7 @@ export async function fetchSimulation(
 
   const traceResult = await tryTraceCall(
     client,
+    simulatorAddress,
     safeAddress,
     calldata,
     block.number,
@@ -256,10 +277,7 @@ export async function fetchSimulation(
     // It throws on reverted txs, so we only try it when eth_call succeeded.
     try {
       const gas = await client.estimateGas({
-        to: safeAddress,
-        data: calldata,
-        blockNumber: block.number,
-        stateOverride: viemStateOverride,
+        ...callRequest,
       });
       gasUsed = gas.toString();
     } catch {
@@ -279,6 +297,30 @@ export async function fetchSimulation(
   };
 
   return simulation;
+}
+
+/**
+ * Build a call request that mirrors a real EOA-submitted transaction:
+ * `account` is explicitly set so msg.sender/tx.origin parity matches
+ * Foundry and real execution more closely.
+ */
+export function buildExecSimulationCallRequest(
+  account: Address,
+  to: Address,
+  data: Hex,
+  blockNumber: bigint,
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>
+): ExecSimulationCallRequest {
+  return {
+    account,
+    to,
+    data,
+    blockNumber,
+    stateOverride,
+  };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -315,6 +357,7 @@ interface TraceResult {
 
 async function tryTraceCall(
   client: ReturnType<typeof createPublicClient>,
+  from: Address,
   safeAddress: Address,
   calldata: Hex,
   blockNumber: bigint,
@@ -337,25 +380,40 @@ async function tryTraceCall(
       stateOverrideObj[override.address] = { stateDiff: diffs };
     }
 
-    const result = await client.request({
-      method: "debug_traceCall" as "eth_call",
-      params: [
-        {
-          to: safeAddress,
-          data: calldata,
-        },
-        `0x${blockNumber.toString(16)}`,
-        {
-          tracer: "callTracer",
-          tracerConfig: { withLog: true },
-          stateOverrides: stateOverrideObj,
-        },
-      ] as unknown as [
-        { to: Address; data: Hex },
-        string,
-        Record<string, unknown>,
-      ],
-    });
+    const attempts = buildTraceCallAttempts(
+      from,
+      safeAddress,
+      calldata,
+      blockNumber,
+      stateOverrideObj
+    );
+
+    let result: unknown = null;
+    let traceError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        const params = attempt.stateOverrideArg
+          ? [attempt.callObject, attempt.blockHex, attempt.traceConfig, attempt.stateOverrideArg]
+          : [attempt.callObject, attempt.blockHex, attempt.traceConfig];
+        result = await client.request({
+          method: "debug_traceCall" as "eth_call",
+          params: params as unknown as [
+            { from: Address; to: Address; data: Hex },
+            string,
+            Record<string, unknown>,
+            Record<string, unknown>?,
+          ],
+        });
+        traceError = null;
+        break;
+      } catch (err) {
+        traceError = err;
+      }
+    }
+
+    if (traceError) {
+      throw traceError;
+    }
 
     // callTracer with withLog:true nests logs inside call frames.
     // Each frame has an optional `logs` array and an optional `calls`
@@ -401,4 +459,39 @@ async function tryTraceCall(
     // debug_traceCall is not supported by all RPCs — silently fall back
     return { logs: [], gasUsed: null };
   }
+}
+
+/**
+ * Build a compatibility matrix of debug_traceCall shapes used by
+ * different RPC backends (Geth/Erigon/hosted providers).
+ */
+export function buildTraceCallAttempts(
+  from: Address,
+  to: Address,
+  data: Hex,
+  blockNumber: bigint,
+  stateOverride: Record<string, { stateDiff: Record<string, string> }>
+): TraceCallAttempt[] {
+  const blockHex = `0x${blockNumber.toString(16)}`;
+  const callObject = { from, to, data };
+  const baseConfig = { tracer: "callTracer", tracerConfig: { withLog: true } };
+
+  return [
+    {
+      callObject,
+      blockHex,
+      traceConfig: { ...baseConfig, stateOverrides: stateOverride },
+    },
+    {
+      callObject,
+      blockHex,
+      traceConfig: { ...baseConfig, stateOverride },
+    },
+    {
+      callObject,
+      blockHex,
+      traceConfig: baseConfig,
+      stateOverrideArg: stateOverride,
+    },
+  ];
 }
