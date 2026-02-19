@@ -9,6 +9,10 @@ import {
   fetchSimulation,
   type FetchSimulationOptions,
 } from "../simulation";
+import {
+  fetchConsensusProof,
+  type FetchConsensusProofOptions,
+} from "../consensus";
 
 /**
  * Create an evidence package from a Safe transaction
@@ -99,6 +103,31 @@ export async function enrichWithSimulation(
     ...evidence,
     version: "1.1",
     simulation,
+  };
+}
+
+/**
+ * Enrich an evidence package with a consensus proof (Phase 4).
+ *
+ * Fetches light client data from a beacon chain RPC: bootstrap,
+ * sync committee updates, and a finality update. These allow the
+ * desktop verifier to cryptographically verify the state root against
+ * Ethereum consensus (BLS sync committee signatures) without trusting
+ * any RPC provider. Bumps version to "1.2".
+ */
+export async function enrichWithConsensusProof(
+  evidence: EvidencePackage,
+  options: FetchConsensusProofOptions = {}
+): Promise<EvidencePackage> {
+  const consensusProof = await fetchConsensusProof(
+    evidence.chainId,
+    options
+  );
+
+  return {
+    ...evidence,
+    version: "1.2",
+    consensusProof,
   };
 }
 

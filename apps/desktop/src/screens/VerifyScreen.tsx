@@ -16,7 +16,8 @@ import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult } from "@safelens/core";
+import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
+import { invoke } from "@tauri-apps/api/core";
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -48,6 +49,7 @@ export default function VerifyScreen() {
   const [hashDetails, setHashDetails] = useState<SafeTxHashDetails | undefined>(undefined);
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
+  const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -62,6 +64,7 @@ export default function VerifyScreen() {
       setErrors([]);
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
+      setConsensusVerification(undefined);
       return;
     }
 
@@ -71,6 +74,7 @@ export default function VerifyScreen() {
     setErrors([]);
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
+    setConsensusVerification(undefined);
 
     let cancelled = false;
 
@@ -88,6 +92,31 @@ export default function VerifyScreen() {
         setErrors([]);
         setPolicyProof(report.policyProof);
         setSimulationVerification(report.simulationVerification);
+
+        // If consensus proof is present, verify via Tauri backend (BLS verification)
+        if (currentEvidence.consensusProof) {
+          try {
+            const consensusResult = await invoke<ConsensusVerificationResult>(
+              "verify_consensus_proof",
+              { input: currentEvidence.consensusProof }
+            );
+            if (!cancelled) {
+              setConsensusVerification(consensusResult);
+            }
+          } catch (err) {
+            if (!cancelled) {
+              setConsensusVerification({
+                valid: false,
+                verified_state_root: null,
+                verified_block_number: null,
+                state_root_matches: false,
+                sync_committee_participants: 0,
+                error: err instanceof Error ? err.message : String(err),
+                checks: [],
+              });
+            }
+          }
+        }
       } catch (err) {
         if (cancelled) return;
         setErrors([err instanceof Error ? err.message : "Verification failed unexpectedly"]);
@@ -447,6 +476,59 @@ export default function VerifyScreen() {
                       <div key={i} className="text-xs text-red-400">{err}</div>
                     ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {(consensusVerification || evidence?.consensusProof) && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <CardTitle>Consensus Verification</CardTitle>
+                  <TrustBadge level={consensusVerification?.valid ? "consensus-verified" : "rpc-sourced"} />
+                </div>
+                <CardDescription>
+                  {!consensusVerification
+                    ? "Verifying consensus proof via BLS sync committee signatures..."
+                    : consensusVerification.valid
+                      ? `State root verified against Ethereum consensus (${consensusVerification.sync_committee_participants}/512 validators)`
+                      : consensusVerification.error ?? "Consensus verification failed"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {consensusVerification ? (
+                  <div className="space-y-1.5">
+                    {consensusVerification.checks.map((check) => (
+                      <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                        <span className="text-sm font-medium">{check.label}</span>
+                        <div className="flex items-center gap-2">
+                          {check.detail && (
+                            <span className="text-xs text-muted">{check.detail}</span>
+                          )}
+                          {check.passed ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                              <ShieldCheck className="h-3 w-3" />
+                              Pass
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                              <AlertTriangle className="h-3 w-3" />
+                              Fail
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {consensusVerification.verified_state_root && (
+                      <div className="mt-2 rounded-md border border-border/15 glass-subtle px-3 py-2">
+                        <div className="text-xs text-muted">Verified State Root</div>
+                        <div className="font-mono text-xs break-all">{consensusVerification.verified_state_root}</div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted animate-pulse">Running BLS verification...</div>
                 )}
               </CardContent>
             </Card>

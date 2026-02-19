@@ -62,6 +62,7 @@ export type SafeTransaction = z.infer<typeof safeTransactionSchema>;
 
 // Trust classification for evidence sections
 export const trustClassificationSchema = z.enum([
+  "consensus-verified",
   "proof-verified",
   "self-verified",
   "rpc-sourced",
@@ -131,6 +132,28 @@ export const stateDiffEntrySchema = z.object({
 
 export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
 
+// Consensus proof section (Phase 4 — Helios light client verification)
+// Contains beacon chain light client data that allows offline BLS verification
+// of the state root against Ethereum consensus.
+export const consensusProofSchema = z.object({
+  /** Beacon block root used as the bootstrap checkpoint */
+  checkpoint: hashSchema,
+  /** JSON-serialized light client bootstrap (sync committee + beacon header) */
+  bootstrap: z.string(),
+  /** JSON-serialized light client updates (sync committee period transitions) */
+  updates: z.array(z.string()),
+  /** JSON-serialized light client finality update (BLS-signed finalized header) */
+  finalityUpdate: z.string(),
+  /** Network identifier for selecting the correct fork config and genesis root */
+  network: z.enum(["mainnet", "sepolia", "holesky", "gnosis"]),
+  /** The EVM execution state root extracted from the finalized header */
+  stateRoot: hashSchema,
+  /** Block number of the finalized execution payload */
+  blockNumber: z.number(),
+});
+
+export type ConsensusProof = z.infer<typeof consensusProofSchema>;
+
 // Simulation section (Phase 3 will populate these)
 export const simulationSchema = z.object({
   success: z.boolean(),
@@ -146,7 +169,7 @@ export type Simulation = z.infer<typeof simulationSchema>;
 
 // Evidence package schema
 export const evidencePackageSchema = z.object({
-  version: z.union([z.literal("1.0"), z.literal("1.1")]),
+  version: z.union([z.literal("1.0"), z.literal("1.1"), z.literal("1.2")]),
   safeAddress: addressSchema,
   safeTxHash: hashSchema,
   chainId: z.number(),
@@ -174,6 +197,7 @@ export const evidencePackageSchema = z.object({
   dataDecoded: z.any().nullable().optional(),
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
   simulation: simulationSchema.optional(),
+  consensusProof: consensusProofSchema.optional(),
   sources: z.object({
     safeApiUrl: z.string().url(),
     transactionUrl: z.string().url(),

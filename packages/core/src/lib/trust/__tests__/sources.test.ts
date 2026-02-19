@@ -23,9 +23,10 @@ describe("buildVerificationSources", () => {
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     });
 
-    expect(sources).toHaveLength(9);
+    expect(sources).toHaveLength(10);
     expect(sources.map((s) => s.id)).toEqual([
       "evidence-package",
       "hash-recompute",
@@ -35,6 +36,7 @@ describe("buildVerificationSources", () => {
       "onchain-policy-proof",
       "decoded-calldata",
       "simulation",
+      "consensus-proof",
       "settings",
     ]);
     expect(sources.find((s) => s.id === "settings")?.status).toBe("enabled");
@@ -52,6 +54,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: false,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     });
 
     const settingsSource = sources.find((s) => s.id === "settings");
@@ -68,6 +71,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     });
 
     const cryptoSource = sources.find((s) => s.id === "signatures");
@@ -86,6 +90,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
+      hasConsensusProof: false,
     });
 
     const coverage = sources.find((s) => s.id === "signature-scheme-coverage");
@@ -121,6 +126,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: false,
       hasOnchainPolicyProof: false,
       hasSimulation: true,
+      hasConsensusProof: false,
       simulationTrust: "rpc-sourced",
     });
 
@@ -137,6 +143,7 @@ describe("buildVerificationSources", () => {
       hasDecodedData: false,
       hasOnchainPolicyProof: true,
       hasSimulation: true,
+      hasConsensusProof: false,
       onchainPolicyProofTrust: "rpc-sourced",
       simulationTrust: "proof-verified",
     });

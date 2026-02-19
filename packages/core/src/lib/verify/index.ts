@@ -26,6 +26,21 @@ export type SignatureCheckBundle = {
   summary: SignatureCheckSummary;
 };
 
+export type ConsensusVerificationResult = {
+  valid: boolean;
+  verified_state_root: string | null;
+  verified_block_number: number | null;
+  state_root_matches: boolean;
+  sync_committee_participants: number;
+  error: string | null;
+  checks: Array<{
+    id: string;
+    label: string;
+    passed: boolean;
+    detail: string | null;
+  }>;
+};
+
 export type EvidenceVerificationReport = {
   proposer: string | null;
   targetWarnings: TransactionWarning[];
@@ -36,6 +51,8 @@ export type EvidenceVerificationReport = {
   hashMatch: boolean;
   policyProof?: PolicyProofVerificationResult;
   simulationVerification?: SimulationVerificationResult;
+  /** Consensus verification result (from Tauri backend, if available). */
+  consensusVerification?: ConsensusVerificationResult;
 };
 
 export interface VerifyEvidenceOptions {
@@ -165,6 +182,7 @@ export async function verifyEvidencePackage(
       hasDecodedData: Boolean(evidence.dataDecoded),
       hasOnchainPolicyProof: Boolean(evidence.onchainPolicyProof),
       hasSimulation: Boolean(evidence.simulation),
+      hasConsensusProof: Boolean(evidence.consensusProof),
       // After successful local Merkle verification, upgrade trust from
       // "rpc-sourced" to "proof-verified" — the proof was cryptographically
       // validated against the state root, not just fetched from an RPC.
@@ -172,6 +190,10 @@ export async function verifyEvidencePackage(
         ? "proof-verified"
         : evidence.onchainPolicyProof?.trust,
       simulationTrust: evidence.simulation?.trust,
+      // consensusVerified will be set to true by the desktop app after
+      // Tauri backend verifies the BLS signatures. It stays false here
+      // because the core verifier runs in JS and can't do BLS verification.
+      consensusVerified: false,
     }),
     signatures: {
       list: signatureList,

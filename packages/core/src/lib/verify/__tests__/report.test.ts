@@ -25,7 +25,7 @@ describe("verifyEvidencePackage", () => {
     expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
     expect(result.signatures.byOwner[evidence.confirmations[0].owner].status).toBe("valid");
     expect(result.hashMatch).toBe(true);
-    expect(result.sources).toHaveLength(9);
+    expect(result.sources).toHaveLength(10);
     expect(result.sources.find((s) => s.id === "settings")?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === "safe-owners-threshold")?.trust).toBe("api-sourced");
     expect(result.sources.find((s) => s.id === "decoded-calldata")?.status).toBe("enabled");

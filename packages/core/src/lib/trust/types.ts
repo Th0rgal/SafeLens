@@ -15,6 +15,11 @@ export type TrustConfig = {
 };
 
 export const TRUST_CONFIG: Record<TrustLevel, TrustConfig> = {
+  "consensus-verified": {
+    label: "Consensus-verified",
+    color: "text-green-400",
+    icon: "ShieldCheck",
+  },
   "proof-verified": {
     label: "Proof-verified",
     color: "text-blue-400",

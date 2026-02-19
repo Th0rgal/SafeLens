@@ -17,8 +17,10 @@ export interface VerificationSourceContext {
   hasDecodedData: boolean;
   hasOnchainPolicyProof: boolean;
   hasSimulation: boolean;
+  hasConsensusProof: boolean;
   onchainPolicyProofTrust?: TrustLevel;
   simulationTrust?: TrustLevel;
+  consensusVerified?: boolean;
 }
 
 /**
@@ -197,6 +199,28 @@ export function buildVerificationSources(
           summary: "No simulation included in evidence.",
           detail:
             "Without simulation data, the transaction's execution outcome is unknown until it is signed and broadcast.",
+          status: "disabled" as VerificationSourceStatus,
+        },
+    context.hasConsensusProof
+      ? {
+          id: "consensus-proof",
+          title: "Consensus verification",
+          trust: context.consensusVerified ? ("consensus-verified" as TrustLevel) : ("rpc-sourced" as TrustLevel),
+          summary: context.consensusVerified
+            ? "State root verified against Ethereum consensus via BLS sync committee signatures."
+            : "Consensus proof included but not yet verified (requires desktop app).",
+          detail: context.consensusVerified
+            ? "The state root used in policy proofs has been cryptographically verified against a finalized beacon block header signed by the Ethereum sync committee (512 validators)."
+            : "The evidence package contains beacon chain light client data. Verification requires the desktop app's Helios-based verifier.",
+          status: "enabled" as VerificationSourceStatus,
+        }
+      : {
+          id: "consensus-proof",
+          title: "Consensus verification",
+          trust: "rpc-sourced" as TrustLevel,
+          summary: "No consensus proof included. State root is RPC-trusted.",
+          detail:
+            "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
           status: "disabled" as VerificationSourceStatus,
         },
     context.hasSettings

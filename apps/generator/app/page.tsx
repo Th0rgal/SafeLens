@@ -14,6 +14,7 @@ import {
   createEvidencePackage,
   enrichWithOnchainProof,
   enrichWithSimulation,
+  enrichWithConsensusProof,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
@@ -48,6 +49,7 @@ export default function AnalyzePage() {
 
   const [proofWarning, setProofWarning] = useState<string | null>(null);
   const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
+  const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
 
   /** Optionally enrich a package with on-chain policy proof + simulation. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
@@ -74,6 +76,16 @@ export default function AnalyzePage() {
       );
     }
 
+    // Always attempt consensus proof (uses public beacon RPCs, no user RPC needed)
+    try {
+      enriched = await enrichWithConsensusProof(enriched);
+    } catch (err) {
+      console.warn("Failed to fetch consensus proof:", err);
+      setConsensusWarning(
+        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+      );
+    }
+
     return enriched;
   };
 
@@ -81,6 +93,7 @@ export default function AnalyzePage() {
     setError(null);
     setProofWarning(null);
     setSimulationWarning(null);
+    setConsensusWarning(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -335,6 +348,13 @@ export default function AnalyzePage() {
         </Alert>
       )}
 
+      {consensusWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Consensus Proof Warning</AlertTitle>
+          <AlertDescription>{consensusWarning}</AlertDescription>
+        </Alert>
+      )}
+
       {evidence && (
         <Card>
           <CardHeader>
@@ -390,6 +410,14 @@ export default function AnalyzePage() {
                     {evidence.simulation.logs.length > 0 && (
                       <span className="text-gray-400"> — {evidence.simulation.logs.length} event log{evidence.simulation.logs.length !== 1 ? "s" : ""}</span>
                     )}
+                  </div>
+                </div>
+              )}
+              {evidence.consensusProof && (
+                <div className="col-span-2">
+                  <div className="font-medium text-muted">Consensus Proof</div>
+                  <div className="text-xs text-green-400">
+                    Included ({evidence.consensusProof.network}, block {evidence.consensusProof.blockNumber}, {evidence.consensusProof.updates.length} sync committee update{evidence.consensusProof.updates.length !== 1 ? "s" : ""})
                   </div>
                 </div>
               )}

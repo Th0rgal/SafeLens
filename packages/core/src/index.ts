@@ -25,4 +25,6 @@ export * from "./lib/proof";
 
 export * from "./lib/simulation";
 
+export * from "./lib/consensus";
+
 export * from "./lib/erc7730/index-export";
