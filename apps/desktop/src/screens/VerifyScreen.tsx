@@ -59,6 +59,7 @@ export default function VerifyScreen() {
       setSigResults({});
       setProposer(null);
       setTargetWarnings([]);
+      setErrors([]);
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
       return;
@@ -67,6 +68,7 @@ export default function VerifyScreen() {
     setSigResults({});
     setProposer(null);
     setTargetWarnings([]);
+    setErrors([]);
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
 
@@ -83,6 +85,7 @@ export default function VerifyScreen() {
         setSigResults(report.signatures.byOwner);
         setProposer(report.proposer);
         setTargetWarnings(report.targetWarnings);
+        setErrors([]);
         setPolicyProof(report.policyProof);
         setSimulationVerification(report.simulationVerification);
       } catch (err) {
