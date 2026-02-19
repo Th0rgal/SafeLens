@@ -289,8 +289,9 @@ function printVerificationText(
       simRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
     }
 
+    const simTrust = evidence.simulation?.trust ?? "rpc-sourced";
     const simTitle = sv.valid
-      ? "⚡ Transaction Simulation " + trustBadge("rpc-sourced")
+      ? "⚡ Transaction Simulation " + trustBadge(simTrust)
       : "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)");
 
     console.log("");

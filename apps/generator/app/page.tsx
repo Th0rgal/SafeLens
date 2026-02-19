@@ -47,6 +47,7 @@ export default function AnalyzePage() {
   const [safeAddress, setSafeAddress] = useState<string | null>(null);
 
   const [proofWarning, setProofWarning] = useState<string | null>(null);
+  const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
 
   /** Optionally enrich a package with on-chain policy proof + simulation. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
@@ -68,6 +69,9 @@ export default function AnalyzePage() {
       enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
     } catch (err) {
       console.warn("Failed to simulate transaction:", err);
+      setSimulationWarning(
+        `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
+      );
     }
 
     return enriched;
@@ -76,6 +80,7 @@ export default function AnalyzePage() {
   const handleAnalyze = async () => {
     setError(null);
     setProofWarning(null);
+    setSimulationWarning(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -318,6 +323,13 @@ export default function AnalyzePage() {
         <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
           <AlertTitle>Policy Proof Warning</AlertTitle>
           <AlertDescription>{proofWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {simulationWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Simulation Warning</AlertTitle>
+          <AlertDescription>{simulationWarning}</AlertDescription>
         </Alert>
       )}
 

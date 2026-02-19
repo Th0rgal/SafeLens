@@ -399,7 +399,7 @@ export default function VerifyScreen() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <CardTitle>Transaction Simulation</CardTitle>
-                  <TrustBadge level="rpc-sourced" />
+                  <TrustBadge level={evidence?.simulation?.trust ?? "rpc-sourced"} />
                 </div>
                 <CardDescription>
                   {simulationVerification.valid

@@ -6,8 +6,10 @@
  * execute `execTransaction` via eth_call. This reveals the transaction's
  * success/revert status and return data without needing real signatures.
  *
- * Optionally fetches logs and state diffs via `debug_traceCall` when the
- * RPC node supports it.
+ * Optionally fetches event logs via `debug_traceCall` when the RPC node
+ * supports it. Note: state diffs require `prestateTracer` with diffMode,
+ * which is not yet implemented — the `stateDiffs` field in the schema
+ * will be undefined for now.
  */
 
 import {
@@ -70,8 +72,9 @@ const DEFAULT_RPC_URLS: Record<number, string> = {
 
 /**
  * A deterministic private key used only for state-override simulation.
- * The Safe's storage is overridden so this address is the sole 1-of-1
- * owner. This key never controls real funds.
+ * This is Hardhat/Anvil account #0 — universally known and never used
+ * to control real funds. It is safe here because we only call eth_call
+ * (a read-only RPC method), never eth_sendRawTransaction.
  */
 const SIMULATION_PRIVATE_KEY: Hex =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
@@ -169,9 +172,13 @@ export async function fetchSimulation(
   });
 
   // ── Step 2: Sign with simulation account ────────────────────────
+  // IMPORTANT: Use sign({hash}) — NOT signMessage — because Safe's
+  // checkNSignatures calls ecrecover on the raw safeTxHash.
+  // signMessage would apply an EIP-191 prefix, producing a different
+  // hash and causing the signature to always be rejected (GS026).
 
-  const signature = await SIMULATION_ACCOUNT.signMessage({
-    message: { raw: safeTxHash as Hex },
+  const signature = await SIMULATION_ACCOUNT.sign({
+    hash: safeTxHash as Hex,
   });
 
   // ── Step 3: Build state overrides ───────────────────────────────
