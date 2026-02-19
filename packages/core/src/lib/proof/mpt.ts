@@ -130,55 +130,69 @@ function decodeInlineChild(child: RlpItem): RlpItem[] {
   return rlpDecodeNode(child as Hex);
 }
 
-// ── MPT proof verification ─────────────────────────────────────────
+// ── Shared MPT trie walk ──────────────────────────────────────────
 
 /**
- * Verify a Merkle Patricia Trie inclusion proof.
- *
- * Given:
- *   - rootHash: the expected trie root
- *   - path: the key being proven (will be keccak256-hashed for the trie path)
- *   - expectedValue: the RLP-encoded value at that key (or "0x" for zero/empty)
- *   - proof: array of RLP-encoded trie nodes
- *
- * Returns verification result with errors if invalid.
+ * Leaf match strategy — controls how the proven leaf value is compared
+ * against the expected value, and how missing keys are handled.
  */
-export function verifyMptProof(
+interface LeafMatcher {
+  /** Compare the proven leaf value against the expected value. */
+  matchValue(provenValue: Hex, errors: string[]): ProofVerificationResult;
+  /** Handle a missing key (path diverges or empty branch child). */
+  onKeyMissing(context: string, errors: string[]): ProofVerificationResult;
+}
+
+/** Storage leaf matcher: RLP-decodes + normalizes, allows zero-value absence. */
+function storageMatcher(expectedValue: Hex): LeafMatcher {
+  return {
+    matchValue: (provenValue, errors) => verifyValue(provenValue, expectedValue, errors),
+    onKeyMissing: (_ctx, errors) => {
+      if (isZeroValue(expectedValue)) return { valid: true, errors: [] };
+      errors.push(`Key not found in trie (${_ctx})`);
+      return { valid: false, errors };
+    },
+  };
+}
+
+/** Account leaf matcher: direct RLP equality, key absence is always an error. */
+function accountMatcher(expectedRlpValue: Hex): LeafMatcher {
+  return {
+    matchValue: (provenValue, errors) => {
+      if (provenValue === expectedRlpValue) return { valid: true, errors: [] };
+      errors.push("Value mismatch");
+      return { valid: false, errors };
+    },
+    onKeyMissing: (ctx, errors) => {
+      errors.push(`Not found in trie (${ctx})`);
+      return { valid: false, errors };
+    },
+  };
+}
+
+function nibbleArraysEqual(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Walk an MPT proof, verifying hash links and returning the leaf value.
+ *
+ * This is the single trie-walking implementation used by both storage
+ * and account proof verification. The `matcher` controls how leaf
+ * values are compared and how missing keys are handled.
+ */
+function walkMptProof(
   rootHash: Hex,
-  rawKey: Hex,
-  expectedValue: Hex,
-  proof: Hex[]
+  pathNibbles: number[],
+  proof: Hex[],
+  matcher: LeafMatcher,
 ): ProofVerificationResult {
   const errors: string[] = [];
-
-  if (proof.length === 0) {
-    // An empty proof is only valid for a zero value when the trie is
-    // completely empty (rootHash equals the empty trie root).  A non-empty
-    // trie always provides proof nodes — even for absent keys (proof of
-    // non-inclusion).  Without this check an attacker could supply
-    // proof:[] to falsely claim any slot is zero.
-    const EMPTY_TRIE_ROOT: Hex =
-      "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
-    if (isZeroValue(expectedValue) && rootHash.toLowerCase() === EMPTY_TRIE_ROOT) {
-      return { valid: true, errors: [] };
-    }
-    if (isZeroValue(expectedValue)) {
-      errors.push(
-        "Empty proof for zero value but storage trie is non-empty — proof of non-inclusion required"
-      );
-    } else {
-      errors.push("Empty proof but expected non-zero value");
-    }
-    return { valid: false, errors };
-  }
-
-  // Compute the trie path as nibbles of keccak256(key)
-  const keyHash = keccak256(rawKey);
-  const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
   let pathOffset = 0;
-
-  // Walk the proof nodes.  `nextNode` is either null (= consume next
-  // proof element by hash) or an already-decoded inline node.
   let currentHash = rootHash;
   let proofIdx = 0;
   let nextNode: RlpItem[] | null = null;
@@ -202,15 +216,11 @@ export function verifyMptProof(
 
       if (proofIdx === 0) {
         if (nodeHash !== rootHash) {
-          errors.push(
-            `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
-          );
+          errors.push(`Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`);
           return { valid: false, errors };
         }
       } else if (nodeHash !== currentHash) {
-        errors.push(
-          `Node ${proofIdx} hash mismatch: expected ${currentHash}, got ${nodeHash}`
-        );
+        errors.push(`Node ${proofIdx} hash mismatch: expected ${currentHash}, got ${nodeHash}`);
         return { valid: false, errors };
       }
 
@@ -221,8 +231,7 @@ export function verifyMptProof(
     if (node.length === 17) {
       // Branch node: 16 children + value
       if (pathOffset >= pathNibbles.length) {
-        const value = rlpItemToHex(node[16]);
-        return verifyValue(value, expectedValue, errors);
+        return matcher.matchValue(rlpItemToHex(node[16]), errors);
       }
 
       const nibble = pathNibbles[pathOffset];
@@ -232,11 +241,7 @@ export function verifyMptProof(
       const childHex = rlpItemToHex(child);
 
       if (childHex === "0x" || childHex === "0x80") {
-        if (isZeroValue(expectedValue)) {
-          return { valid: true, errors: [] };
-        }
-        errors.push("Path leads to empty branch but expected non-zero value");
-        return { valid: false, errors };
+        return matcher.onKeyMissing("empty branch child", errors);
       }
 
       const childBytes = rlpItemToBytes(child);
@@ -244,7 +249,6 @@ export function verifyMptProof(
         currentHash = bytesToHex(childBytes) as Hex;
       } else {
         // Inlined node: child RLP < 32 bytes, embedded directly in the parent.
-        // Decode and process it on the next iteration without consuming a proof entry.
         nextNode = decodeInlineChild(child);
       }
     } else if (node.length === 2) {
@@ -254,27 +258,16 @@ export function verifyMptProof(
 
       if (isLeaf) {
         if (!nibbleArraysEqual(nodePath, remainingPath)) {
-          if (isZeroValue(expectedValue)) {
-            return { valid: true, errors: [] };
-          }
-          errors.push("Leaf path mismatch — key not found in trie");
-          return { valid: false, errors };
+          return matcher.onKeyMissing("leaf path mismatch", errors);
         }
-        const value = rlpItemToHex(node[1]);
-        return verifyValue(value, expectedValue, errors);
+        return matcher.matchValue(rlpItemToHex(node[1]), errors);
       } else {
+        // Extension node
         if (
           remainingPath.length < nodePath.length ||
-          !nibbleArraysEqual(
-            nodePath,
-            remainingPath.slice(0, nodePath.length)
-          )
+          !nibbleArraysEqual(nodePath, remainingPath.slice(0, nodePath.length))
         ) {
-          if (isZeroValue(expectedValue)) {
-            return { valid: true, errors: [] };
-          }
-          errors.push("Extension path mismatch — key not found in trie");
-          return { valid: false, errors };
+          return matcher.onKeyMissing("extension path mismatch", errors);
         }
 
         pathOffset += nodePath.length;
@@ -297,12 +290,41 @@ export function verifyMptProof(
   return { valid: false, errors };
 }
 
-function nibbleArraysEqual(a: number[], b: number[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
+// ── MPT proof verification (public API) ──────────────────────────────
+
+/**
+ * Verify a Merkle Patricia Trie inclusion proof for a storage slot.
+ *
+ * The key is keccak256-hashed for the trie path. Zero-valued slots
+ * with empty proofs are accepted only when the trie root equals the
+ * empty trie root (prevents empty-proof bypass attacks).
+ */
+export function verifyMptProof(
+  rootHash: Hex,
+  rawKey: Hex,
+  expectedValue: Hex,
+  proof: Hex[]
+): ProofVerificationResult {
+  if (proof.length === 0) {
+    // An empty proof is only valid for a zero value when the trie is
+    // completely empty (rootHash equals the empty trie root).  A non-empty
+    // trie always provides proof nodes — even for absent keys (proof of
+    // non-inclusion).  Without this check an attacker could supply
+    // proof:[] to falsely claim any slot is zero.
+    const EMPTY_TRIE_ROOT: Hex =
+      "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421";
+    if (isZeroValue(expectedValue) && rootHash.toLowerCase() === EMPTY_TRIE_ROOT) {
+      return { valid: true, errors: [] };
+    }
+    const msg = isZeroValue(expectedValue)
+      ? "Empty proof for zero value but storage trie is non-empty — proof of non-inclusion required"
+      : "Empty proof but expected non-zero value";
+    return { valid: false, errors: [msg] };
   }
-  return true;
+
+  const keyHash = keccak256(rawKey);
+  const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
+  return walkMptProof(rootHash, pathNibbles, proof, storageMatcher(expectedValue));
 }
 
 function verifyValue(
@@ -310,10 +332,7 @@ function verifyValue(
   expectedValue: Hex,
   errors: string[]
 ): ProofVerificationResult {
-  // Normalize: RLP-decoded value for storage slots
-  // The proven value is RLP-encoded in the trie. For storage,
-  // the value is RLP(value). So we need to compare the RLP-decoded
-  // proven value against the expected value.
+  // The proven value is RLP-encoded in the trie. Decode it once.
   let decodedValue: Hex;
   try {
     const decoded = fromRlp(provenValue, "hex");
@@ -322,14 +341,11 @@ function verifyValue(
     decodedValue = provenValue;
   }
 
-  // Normalize both to compare
   const normalizedProven = normalizeStorageValue(decodedValue);
   const normalizedExpected = normalizeStorageValue(expectedValue);
 
   if (normalizedProven !== normalizedExpected) {
-    errors.push(
-      `Value mismatch: proven ${normalizedProven}, expected ${normalizedExpected}`
-    );
+    errors.push(`Value mismatch: proven ${normalizedProven}, expected ${normalizedExpected}`);
     return { valid: false, errors };
   }
 
@@ -345,13 +361,11 @@ function normalizeStorageValue(value: Hex): Hex {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
   }
 
-  // Remove leading zeros for comparison, then pad back to 32 bytes
   const stripped = value.replace(/^0x0*/, "0x");
   if (stripped === "0x") {
     return "0x0000000000000000000000000000000000000000000000000000000000000000";
   }
 
-  // Pad to 64 hex chars (32 bytes)
   const hexDigits = stripped.slice(2);
   return `0x${hexDigits.padStart(64, "0")}` as Hex;
 }
@@ -368,7 +382,6 @@ export function verifyAccountProof(
   stateRoot: Hex,
   account: AccountProofInput
 ): ProofVerificationResult {
-  // Build the expected RLP-encoded account value
   const expectedAccountRlp = toRlp([
     account.nonce === 0 ? "0x" : toHex(account.nonce),
     account.balance === "0" ? "0x" : toHex(BigInt(account.balance)),
@@ -376,19 +389,14 @@ export function verifyAccountProof(
     account.codeHash,
   ]) as Hex;
 
-  // The account trie uses keccak256(address) as the key, but the proof
-  // already traverses this path. We pass the raw address and let
-  // verifyMptProof hash it.
   const addressHex = account.address.toLowerCase() as Hex;
 
-  // For the account trie, the key is the address (hashed by verifyMptProof)
-  // and the expected value is the RLP-encoded account
-  return verifyMptProofRaw(
-    stateRoot,
-    keccak256(addressHex),
-    expectedAccountRlp,
-    account.accountProof
-  );
+  if (account.accountProof.length === 0) {
+    return { valid: false, errors: ["Empty account proof"] };
+  }
+
+  const pathNibbles = bytesToNibbles(hexToBytes(keccak256(addressHex)));
+  return walkMptProof(stateRoot, pathNibbles, account.accountProof, accountMatcher(expectedAccountRlp));
 }
 
 /**
@@ -404,138 +412,4 @@ export function verifyStorageProof(
     storageProof.value,
     storageProof.proof
   );
-}
-
-/**
- * Like verifyMptProof but takes a pre-hashed key path.
- * Used for account proofs where the path is keccak256(address).
- */
-function verifyMptProofRaw(
-  rootHash: Hex,
-  keyHash: Hex,
-  expectedRlpValue: Hex,
-  proof: Hex[]
-): ProofVerificationResult {
-  const errors: string[] = [];
-
-  if (proof.length === 0) {
-    errors.push("Empty account proof");
-    return { valid: false, errors };
-  }
-
-  const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
-  let pathOffset = 0;
-  let currentHash = rootHash;
-  let proofIdx = 0;
-  let nextNode: RlpItem[] | null = null;
-
-  const MAX_ITERATIONS = proof.length + 64;
-  for (let guard = 0; guard < MAX_ITERATIONS; guard++) {
-    let node: RlpItem[];
-
-    if (nextNode !== null) {
-      node = nextNode;
-      nextNode = null;
-    } else {
-      if (proofIdx >= proof.length) {
-        errors.push("Account proof exhausted before reaching leaf");
-        return { valid: false, errors };
-      }
-      const nodeRlp = proof[proofIdx];
-      const nodeHash = keccak256(nodeRlp);
-
-      if (proofIdx === 0) {
-        if (nodeHash !== rootHash) {
-          errors.push(
-            `Root node hash mismatch: expected ${rootHash}, got ${nodeHash}`
-          );
-          return { valid: false, errors };
-        }
-      } else if (nodeHash !== currentHash) {
-        errors.push(
-          `Node ${proofIdx} hash mismatch: expected ${currentHash}, got ${nodeHash}`
-        );
-        return { valid: false, errors };
-      }
-
-      node = rlpDecodeNode(nodeRlp);
-      proofIdx++;
-    }
-
-    if (node.length === 17) {
-      if (pathOffset >= pathNibbles.length) {
-        const value = rlpItemToHex(node[16]);
-        if (value === expectedRlpValue) {
-          return { valid: true, errors: [] };
-        }
-        errors.push("Account value mismatch at branch terminus");
-        return { valid: false, errors };
-      }
-
-      const nibble = pathNibbles[pathOffset];
-      pathOffset += 1;
-
-      const child = node[nibble];
-      const childHex = rlpItemToHex(child);
-
-      if (childHex === "0x" || childHex === "0x80") {
-        errors.push("Account not found in state trie");
-        return { valid: false, errors };
-      }
-
-      const childBytes = rlpItemToBytes(child);
-      if (childBytes.length === 32) {
-        currentHash = bytesToHex(childBytes) as Hex;
-      } else {
-        nextNode = decodeInlineChild(child);
-      }
-    } else if (node.length === 2) {
-      const encodedPath = rlpItemToBytes(node[0]);
-      const [nodePath, isLeaf] = decodeHpPath(encodedPath);
-      const remainingPath = pathNibbles.slice(pathOffset);
-
-      if (isLeaf) {
-        if (!nibbleArraysEqual(nodePath, remainingPath)) {
-          errors.push("Account leaf path mismatch");
-          return { valid: false, errors };
-        }
-
-        const value = rlpItemToHex(node[1]);
-        if (value === expectedRlpValue) {
-          return { valid: true, errors: [] };
-        }
-        errors.push("Account value mismatch at leaf");
-        return { valid: false, errors };
-      } else {
-        if (
-          remainingPath.length < nodePath.length ||
-          !nibbleArraysEqual(
-            nodePath,
-            remainingPath.slice(0, nodePath.length)
-          )
-        ) {
-          errors.push("Account extension path mismatch");
-          return { valid: false, errors };
-        }
-
-        pathOffset += nodePath.length;
-
-        const child = node[1];
-        const childBytes = rlpItemToBytes(child);
-        if (childBytes.length === 32) {
-          currentHash = bytesToHex(childBytes) as Hex;
-        } else {
-          nextNode = decodeInlineChild(child);
-        }
-      }
-    } else {
-      errors.push(
-        `Invalid trie node: expected 2 or 17 items, got ${node.length}`
-      );
-      return { valid: false, errors };
-    }
-  }
-
-  errors.push("Account proof exhausted before reaching leaf");
-  return { valid: false, errors };
 }

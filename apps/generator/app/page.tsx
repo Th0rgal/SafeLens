@@ -156,6 +156,7 @@ export default function AnalyzePage() {
     setError(null);
     setProofWarning(null);
     setSimulationWarning(null);
+    setConsensusWarning(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);

@@ -143,7 +143,15 @@ function formatAmount(raw: string, decimals: number, symbol: string | null): str
   const wholeStr = whole.toLocaleString("en-US");
   const fractional = remainder.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
 
-  const numStr = fractional.length > 0 ? `${wholeStr}.${fractional}` : wholeStr;
+  let numStr: string;
+  if (fractional.length > 0) {
+    numStr = `${wholeStr}.${fractional}`;
+  } else if (whole === 0n && remainder > 0n) {
+    // Non-zero amount too small for 4 decimal places (e.g. 1 wei of WETH)
+    numStr = "<0.0001";
+  } else {
+    numStr = wholeStr;
+  }
   return symbol ? `${numStr} ${symbol}` : numStr;
 }
 
@@ -298,7 +306,7 @@ export function decodeSimulationEvents(
         // TransferBatch data: two ABI-encoded uint256[] arrays (ids and amounts)
         // Layout: offset_ids(32) | offset_vals(32) | len_ids(32) | ids... | len_vals(32) | vals...
         const data = log.data.slice(2); // strip 0x
-        if (data.length < 192) break; // need at least 3 words
+        if (data.length < 320) break; // need at least 5 words (2 offsets + 2 lengths + 1 element)
 
         try {
           const idsOffset = Number(BigInt("0x" + data.slice(0, 64)));

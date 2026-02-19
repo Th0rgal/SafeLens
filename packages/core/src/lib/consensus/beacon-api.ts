@@ -134,9 +134,9 @@ export async function fetchConsensusProof(
   const finalizedStateRoot =
     finalityUpdate.data.finalized_header.execution?.state_root;
 
-  if (!finalizedStateRoot) {
+  if (!finalizedStateRoot || finalizedBlockNumber == null) {
     throw new Error(
-      "Finality update does not contain an execution payload header. The beacon node may be pre-Capella."
+      "Finality update does not contain an execution payload header (missing state_root or block_number). The beacon node may be pre-Capella."
     );
   }
 
