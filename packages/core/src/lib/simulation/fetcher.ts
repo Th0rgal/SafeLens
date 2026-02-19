@@ -244,11 +244,13 @@ export async function fetchSimulation(
       returnData = result.data;
     }
   } catch (err) {
-    // If the call reverts, that's the simulation result (not an error)
+    // If the call reverts, that's the simulation result (not an error).
+    // Note: RPC/network errors also land here — we conservatively treat
+    // them as "reverted" since we can't distinguish without parsing error codes.
     success = false;
-    if (err instanceof Error && "data" in err) {
-      returnData = (err as { data?: Hex }).data ?? null;
-    }
+    // Viem wraps reverts in CallExecutionError → cause chain.
+    // Revert data lives at err.cause.data (RpcRequestError.data), not err.data.
+    returnData = extractRevertData(err);
   }
 
   // ── Step 5: Try to get gas estimate ─────────────────────────────
@@ -262,7 +264,8 @@ export async function fetchSimulation(
     });
     gasUsed = gas.toString();
   } catch {
-    // Gas estimation may fail if the call reverts — that's fine
+    // Gas estimation may fail if the call reverts, or if the node does
+    // not support stateOverride on estimateGas (common on public RPCs).
     gasUsed = "0";
   }
 
@@ -288,6 +291,31 @@ export async function fetchSimulation(
   };
 
   return simulation;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+/** Ensure a hex string starts with 0x (some RPC nodes return bare hex). */
+function normalizeHex(value: string): string {
+  return value.startsWith("0x") ? value : `0x${value}`;
+}
+
+/**
+ * Walk viem's error cause chain to extract revert data.
+ * Viem wraps reverts as CallExecutionError → RpcRequestError.
+ * The raw revert bytes live at the innermost cause's `.data` property.
+ */
+function extractRevertData(err: unknown): Hex | null {
+  let current: unknown = err;
+  for (let depth = 0; depth < 5; depth++) {
+    if (current == null || typeof current !== "object") break;
+    const obj = current as Record<string, unknown>;
+    if (typeof obj.data === "string" && obj.data.startsWith("0x")) {
+      return obj.data as Hex;
+    }
+    current = obj.cause;
+  }
+  return null;
 }
 
 // ── Optional: fetch logs via debug_traceCall ──────────────────────
@@ -349,9 +377,9 @@ async function tryFetchLogs(
       if (frame.logs && Array.isArray(frame.logs)) {
         for (const log of frame.logs) {
           collected.push({
-            address: log.address as Address,
-            topics: log.topics as Hex[],
-            data: (log.data ?? "0x") as Hex,
+            address: normalizeHex(log.address) as Address,
+            topics: log.topics.map((t) => normalizeHex(t)) as Hex[],
+            data: normalizeHex(log.data ?? "0x") as Hex,
           });
         }
       }

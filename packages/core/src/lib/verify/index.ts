@@ -125,7 +125,12 @@ export async function verifyEvidencePackage(
       hasDecodedData: Boolean(evidence.dataDecoded),
       hasOnchainPolicyProof: Boolean(evidence.onchainPolicyProof),
       hasSimulation: Boolean(evidence.simulation),
-      onchainPolicyProofTrust: evidence.onchainPolicyProof?.trust,
+      // After successful local Merkle verification, upgrade trust from
+      // "rpc-sourced" to "proof-verified" — the proof was cryptographically
+      // validated against the state root, not just fetched from an RPC.
+      onchainPolicyProofTrust: policyProof?.valid
+        ? "proof-verified"
+        : evidence.onchainPolicyProof?.trust,
       simulationTrust: evidence.simulation?.trust,
     }),
     signatures: {
