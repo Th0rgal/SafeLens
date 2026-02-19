@@ -140,6 +140,7 @@ export default function AnalyzePage() {
     setPendingTxs(null);
     setError(null);
     setProofWarning(null);
+    setSimulationWarning(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);
