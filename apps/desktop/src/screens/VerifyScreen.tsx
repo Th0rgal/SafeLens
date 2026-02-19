@@ -103,9 +103,15 @@ export default function VerifyScreen() {
         // If consensus proof is present, verify via Tauri backend (BLS verification)
         if (currentEvidence.consensusProof) {
           try {
+            const consensusInput = {
+              ...currentEvidence.consensusProof,
+              // Cross-link the consensus proof to the independently fetched
+              // policy proof root when present.
+              expectedStateRoot: currentEvidence.onchainPolicyProof?.stateRoot ?? null,
+            };
             const consensusResult = await invoke<ConsensusVerificationResult>(
               "verify_consensus_proof",
-              { input: currentEvidence.consensusProof }
+              { input: consensusInput }
             );
             if (!cancelled) {
               setConsensusVerification(consensusResult);

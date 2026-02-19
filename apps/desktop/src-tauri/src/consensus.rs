@@ -26,7 +26,12 @@ pub struct ConsensusProofInput {
     pub updates: Vec<String>,
     pub finality_update: String,
     pub network: String,
+    /// State root claimed by the consensus proof payload itself.
     pub state_root: String,
+    /// Optional independent state root from onchainPolicyProof.stateRoot.
+    /// When provided, we compare the consensus-verified root against this
+    /// value to link the two proof chains.
+    pub expected_state_root: Option<String>,
     #[allow(dead_code)]
     pub block_number: u64,
 }
@@ -323,8 +328,27 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     let verified_state_root = format!("{:#x}", execution.state_root());
     let verified_block_number = *execution.block_number();
 
-    // Compare against claimed state root
-    let claimed_state_root = input.state_root.to_lowercase();
+    // Compare against expected state root from the policy proof when present.
+    // Fallback to the consensus proof's own claimed state root for backwards
+    // compatibility with older evidence packages.
+    let has_expected_state_root = input.expected_state_root.is_some();
+    let (claimed_state_root, match_label, match_success_detail, match_fail_detail_prefix) =
+        if let Some(expected) = input.expected_state_root.as_ref() {
+            (
+                expected.to_lowercase(),
+                "State root matches policy proof",
+                "The consensus-verified state root matches the state root used in the on-chain policy proof.",
+                "Mismatch: consensus says",
+            )
+        } else {
+            (
+                input.state_root.to_lowercase(),
+                "State root matches consensus payload",
+                "The consensus-verified state root matches the state root embedded in the consensus proof payload.",
+                "Mismatch: consensus says",
+            )
+        };
+
     let state_root_matches =
         verified_state_root.to_lowercase() == claimed_state_root;
 
@@ -340,17 +364,24 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
 
     checks.push(ConsensusCheck {
         id: "state-root-match".into(),
-        label: "State root matches policy proof".into(),
+        label: match_label.into(),
         passed: state_root_matches,
         detail: if state_root_matches {
-            Some("The consensus-verified state root matches the one used in the policy proof.".into())
+            Some(match_success_detail.into())
         } else {
             Some(format!(
-                "Mismatch: consensus says {} but policy proof claims {}.",
+                "{} {} but expected root is {}.",
+                match_fail_detail_prefix,
                 verified_state_root, claimed_state_root
             ))
         },
     });
+
+    let mismatch_error = if has_expected_state_root {
+        "State root mismatch between consensus proof and policy proof."
+    } else {
+        "State root mismatch within consensus proof payload."
+    };
 
     ConsensusVerificationResult {
         valid: state_root_matches,
@@ -361,7 +392,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
         error: if state_root_matches {
             None
         } else {
-            Some("State root mismatch between consensus proof and policy proof.".into())
+            Some(mismatch_error.into())
         },
         checks,
     }
