@@ -336,24 +336,34 @@ async function tryFetchLogs(
       ],
     });
 
-    // Extract logs from the trace result
-    const trace = result as unknown as {
-      logs?: Array<{
-        address: string;
-        topics: string[];
-        data: string;
-      }>;
-    };
-
-    if (trace.logs && Array.isArray(trace.logs)) {
-      return trace.logs.map((log) => ({
-        address: log.address as Address,
-        topics: log.topics as Hex[],
-        data: (log.data ?? "0x") as Hex,
-      }));
+    // callTracer with withLog:true nests logs inside call frames.
+    // Each frame has an optional `logs` array and an optional `calls`
+    // array of child frames. We recursively collect all logs.
+    interface CallFrame {
+      logs?: Array<{ address: string; topics: string[]; data: string }>;
+      calls?: CallFrame[];
     }
 
-    return [];
+    function collectLogs(frame: CallFrame): Simulation["logs"] {
+      const collected: Simulation["logs"] = [];
+      if (frame.logs && Array.isArray(frame.logs)) {
+        for (const log of frame.logs) {
+          collected.push({
+            address: log.address as Address,
+            topics: log.topics as Hex[],
+            data: (log.data ?? "0x") as Hex,
+          });
+        }
+      }
+      if (frame.calls && Array.isArray(frame.calls)) {
+        for (const child of frame.calls) {
+          collected.push(...collectLogs(child));
+        }
+      }
+      return collected;
+    }
+
+    return collectLogs(result as unknown as CallFrame);
   } catch {
     // debug_traceCall is not supported by all RPCs — silently fall back
     return [];

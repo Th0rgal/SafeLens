@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createEvidencePackage, enrichWithOnchainProof } from "../creator";
+import { createEvidencePackage, enrichWithOnchainProof, enrichWithSimulation } from "../creator";
 import { evidencePackageSchema } from "../../types";
 import {
   COWSWAP_TWAP_TX,
@@ -52,6 +52,51 @@ describe("enrichWithOnchainProof", () => {
     }
 
     // All original fields should be preserved
+    expect(enriched.safeAddress).toBe(evidence.safeAddress);
+    expect(enriched.safeTxHash).toBe(evidence.safeTxHash);
+    expect(enriched.chainId).toBe(evidence.chainId);
+    expect(enriched.transaction).toEqual(evidence.transaction);
+    expect(enriched.confirmations).toEqual(evidence.confirmations);
+    expect(enriched.confirmationsRequired).toBe(evidence.confirmationsRequired);
+    expect(enriched.sources).toEqual(evidence.sources);
+  }, 60_000);
+});
+
+describe("enrichWithSimulation", () => {
+  it("bumps version to 1.1 and attaches simulation", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+
+    let enriched;
+    try {
+      enriched = await enrichWithSimulation(evidence);
+    } catch (err) {
+      console.warn("Skipping simulation enrichment test (network unavailable):", err);
+      return;
+    }
+
+    expect(enriched.version).toBe("1.1");
+    expect(enriched.simulation).toBeDefined();
+    expect(enriched.simulation!.trust).toBe("rpc-sourced");
+    expect(enriched.simulation!.blockNumber).toBeGreaterThan(0);
+    expect(typeof enriched.simulation!.success).toBe("boolean");
+    expect(typeof enriched.simulation!.gasUsed).toBe("string");
+
+    // Validate the enriched package against the Zod schema
+    const result = evidencePackageSchema.safeParse(enriched);
+    expect(result.success).toBe(true);
+  }, 60_000);
+
+  it("preserves all original evidence fields after simulation enrichment", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+
+    let enriched;
+    try {
+      enriched = await enrichWithSimulation(evidence);
+    } catch {
+      console.warn("Skipping simulation enrichment test (network unavailable)");
+      return;
+    }
+
     expect(enriched.safeAddress).toBe(evidence.safeAddress);
     expect(enriched.safeTxHash).toBe(evidence.safeTxHash);
     expect(enriched.chainId).toBe(evidence.chainId);
