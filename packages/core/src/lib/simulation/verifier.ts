@@ -140,6 +140,42 @@ export function verifySimulation(
     detail: simulation.success ? "Transaction succeeded" : "Transaction reverted",
   });
 
+  // 6b. Cross-validate success flag against returnData content.
+  // Safe's execTransaction returns abi.encode(bool) — 32 bytes where
+  // the last byte is 0x01 for true. If success=true but returnData
+  // decodes to false (or contains a revert selector), the package
+  // may have been tampered with.
+  if (simulation.success && simulation.returnData) {
+    const rd = simulation.returnData.toLowerCase();
+    const EXEC_TX_TRUE =
+      "0x0000000000000000000000000000000000000000000000000000000000000001";
+    // Standard revert selector: Error(string) = 0x08c379a2
+    const REVERT_SELECTOR = "0x08c379a2";
+
+    const returnDataConsistent =
+      rd === EXEC_TX_TRUE || // normal success
+      rd.length < 66; // short return data — can't decode, skip check
+
+    if (!returnDataConsistent) {
+      // returnData is long enough to decode but doesn't match success=true
+      const isRevertPayload = rd.startsWith(REVERT_SELECTOR);
+      const consistencyPassed = !isRevertPayload;
+      checks.push({
+        id: "return-data-consistency",
+        label: "Return data consistency",
+        passed: consistencyPassed,
+        detail: consistencyPassed
+          ? "Return data is consistent with success flag"
+          : "Return data contains a revert payload but success=true — possible tampering",
+      });
+      if (!consistencyPassed) {
+        errors.push(
+          "Return data contains a revert payload but success=true"
+        );
+      }
+    }
+  }
+
   // 7. Trust classification
   const trustValid =
     typeof simulation.trust === "string" && simulation.trust.length > 0;

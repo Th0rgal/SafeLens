@@ -239,4 +239,102 @@ describe("verifySimulation", () => {
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBe(4);
   });
+
+  // ── Return data consistency cross-check (check 6b) ──────────────
+
+  it("passes consistency check when success=true and returnData is execTransaction true", () => {
+    const result = verifySimulation(
+      makeValidSimulation({
+        success: true,
+        returnData:
+          "0x0000000000000000000000000000000000000000000000000000000000000001",
+      })
+    );
+    expect(result.valid).toBe(true);
+    // The consistency check should not even appear (short-circuit on match)
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeUndefined();
+  });
+
+  it("skips consistency check when returnData is null", () => {
+    const result = verifySimulation(
+      makeValidSimulation({ success: true, returnData: null })
+    );
+    expect(result.valid).toBe(true);
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeUndefined();
+  });
+
+  it("skips consistency check when success=false (revert case)", () => {
+    const result = verifySimulation(
+      makeValidSimulation({ success: false, returnData: "0x08c379a2" + "00".repeat(60) })
+    );
+    // success=false → the cross-check doesn't run (only checks success=true)
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeUndefined();
+  });
+
+  it("skips consistency check for short returnData (< 66 chars)", () => {
+    const result = verifySimulation(
+      makeValidSimulation({ success: true, returnData: "0xabcdef" })
+    );
+    expect(result.valid).toBe(true);
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeUndefined();
+  });
+
+  it("fails consistency check when success=true but returnData has revert selector", () => {
+    // Error(string) selector = 0x08c379a2 followed by ABI-encoded revert reason
+    const revertPayload =
+      "0x08c379a2" +
+      "0000000000000000000000000000000000000000000000000000000000000020" +
+      "0000000000000000000000000000000000000000000000000000000000000005" +
+      "6572726f72000000000000000000000000000000000000000000000000000000";
+    const result = verifySimulation(
+      makeValidSimulation({
+        success: true,
+        returnData: revertPayload as `0x${string}`,
+      })
+    );
+    expect(result.valid).toBe(false);
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeDefined();
+    expect(check?.passed).toBe(false);
+    expect(check?.detail).toContain("revert");
+    expect(check?.detail).toContain("tampering");
+    expect(result.errors).toContain(
+      "Return data contains a revert payload but success=true"
+    );
+  });
+
+  it("passes consistency check when success=true and long returnData is not a revert", () => {
+    // 66+ chars but doesn't start with revert selector — e.g. some custom return value
+    const customReturn =
+      "0x" +
+      "0000000000000000000000000000000000000000000000000000000000000042" +
+      "0000000000000000000000000000000000000000000000000000000000000001";
+    const result = verifySimulation(
+      makeValidSimulation({
+        success: true,
+        returnData: customReturn as `0x${string}`,
+      })
+    );
+    expect(result.valid).toBe(true);
+    const check = result.checks.find(
+      (c) => c.id === "return-data-consistency"
+    );
+    expect(check).toBeDefined();
+    expect(check?.passed).toBe(true);
+    expect(check?.detail).toContain("consistent");
+  });
 });

@@ -10,6 +10,7 @@ import {
   createPublicClient,
   http,
   pad,
+  toHex,
   type Address,
   type Hex,
   type PublicClient,
@@ -170,10 +171,7 @@ export async function fetchOnchainPolicyProof(
       accountProof: proof.accountProof,
       storageProof: proof.storageProof.map((sp) => ({
         key: sp.key,
-        value: pad(
-          `0x${sp.value.toString(16)}` as Hex,
-          { size: 32 }
-        ),
+        value: pad(toHex(sp.value), { size: 32 }),
         proof: sp.proof,
       })),
     },
