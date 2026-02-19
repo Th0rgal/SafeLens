@@ -11,6 +11,7 @@ describe("simulation fetcher RPC payloads", () => {
   const data =
     "0x6a7612020000000000000000000000000000000000000000000000000000000000000000" as Hex;
   const blockNumber = 24492059n;
+  const gasPrice = 5_000_000_000n;
   const stateOverride = [
     {
       address: to,
@@ -29,6 +30,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gasPrice,
       blockNumber,
       stateOverride
     );
@@ -36,6 +38,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(req.account).toBe(from);
     expect(req.to).toBe(to);
     expect(req.data).toBe(data);
+    expect(req.gasPrice).toBe(gasPrice);
     expect(req.blockNumber).toBe(blockNumber);
     expect(req.stateOverride).toEqual(stateOverride);
   });
@@ -53,6 +56,7 @@ describe("simulation fetcher RPC payloads", () => {
       from,
       to,
       data,
+      gasPrice,
       blockNumber,
       overrideObject
     );
@@ -61,9 +65,41 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[0].callObject.from).toBe(from);
     expect(attempts[0].callObject.to).toBe(to);
     expect(attempts[0].callObject.data).toBe(data);
+    expect(attempts[0].callObject.gasPrice).toBe("0x12a05f200");
     expect(attempts[0].blockHex).toBe("0x175b81b");
     expect(attempts[0].traceConfig).toHaveProperty("stateOverrides");
     expect(attempts[1].traceConfig).toHaveProperty("stateOverride");
     expect(attempts[2].stateOverrideArg).toEqual(overrideObject);
+  });
+
+  it("omits gasPrice when transaction gasPrice is zero", () => {
+    const req = buildExecSimulationCallRequest(
+      from,
+      to,
+      data,
+      0n,
+      blockNumber,
+      stateOverride
+    );
+
+    expect(req.gasPrice).toBeUndefined();
+
+    const attempts = buildTraceCallAttempts(
+      from,
+      to,
+      data,
+      0n,
+      blockNumber,
+      {
+        [to]: {
+          stateDiff: {
+            [stateOverride[0].stateDiff[0].slot]:
+              stateOverride[0].stateDiff[0].value,
+          },
+        },
+      }
+    );
+
+    expect(attempts[0].callObject.gasPrice).toBeUndefined();
   });
 });

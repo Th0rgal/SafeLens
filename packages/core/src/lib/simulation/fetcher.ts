@@ -87,6 +87,7 @@ interface ExecSimulationCallRequest {
   account: Address;
   to: Address;
   data: Hex;
+  gasPrice?: bigint;
   blockNumber: bigint;
   stateOverride: Array<{
     address: Address;
@@ -95,7 +96,7 @@ interface ExecSimulationCallRequest {
 }
 
 interface TraceCallAttempt {
-  callObject: { from: Address; to: Address; data: Hex };
+  callObject: { from: Address; to: Address; data: Hex; gasPrice?: Hex };
   blockHex: string;
   traceConfig: Record<string, unknown>;
   stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
@@ -219,10 +220,12 @@ export async function fetchSimulation(
   let success = false;
   let returnData: Hex | null = null;
   let gasUsed = "0";
+  const txGasPrice = BigInt(transaction.gasPrice);
   const callRequest = buildExecSimulationCallRequest(
     simulatorAddress,
     safeAddress,
     calldata,
+    txGasPrice,
     block.number,
     viemStateOverride
   );
@@ -264,6 +267,7 @@ export async function fetchSimulation(
     simulatorAddress,
     safeAddress,
     calldata,
+    txGasPrice,
     block.number,
     viemStateOverride
   );
@@ -308,6 +312,7 @@ export function buildExecSimulationCallRequest(
   account: Address,
   to: Address,
   data: Hex,
+  gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Array<{
     address: Address;
@@ -318,6 +323,7 @@ export function buildExecSimulationCallRequest(
     account,
     to,
     data,
+    gasPrice: gasPrice > 0n ? gasPrice : undefined,
     blockNumber,
     stateOverride,
   };
@@ -360,6 +366,7 @@ async function tryTraceCall(
   from: Address,
   safeAddress: Address,
   calldata: Hex,
+  gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Array<{
     address: Address;
@@ -384,6 +391,7 @@ async function tryTraceCall(
       from,
       safeAddress,
       calldata,
+      gasPrice,
       blockNumber,
       stateOverrideObj
     );
@@ -398,7 +406,7 @@ async function tryTraceCall(
         result = await client.request({
           method: "debug_traceCall" as "eth_call",
           params: params as unknown as [
-            { from: Address; to: Address; data: Hex },
+            { from: Address; to: Address; data: Hex; gasPrice?: Hex },
             string,
             Record<string, unknown>,
             Record<string, unknown>?,
@@ -469,11 +477,17 @@ export function buildTraceCallAttempts(
   from: Address,
   to: Address,
   data: Hex,
+  gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>
 ): TraceCallAttempt[] {
   const blockHex = `0x${blockNumber.toString(16)}`;
-  const callObject = { from, to, data };
+  const callObject: TraceCallAttempt["callObject"] = {
+    from,
+    to,
+    data,
+    gasPrice: gasPrice > 0n ? toHex(gasPrice) : undefined,
+  };
   const baseConfig = { tracer: "callTracer", tracerConfig: { withLog: true } };
 
   return [
