@@ -58,6 +58,7 @@ export const BEACON_NETWORKS: Record<string, BeaconNetworkConfig> = {
 /** Map chainId to beacon network name. */
 export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, string> = {
   1: "mainnet",
+  100: "gnosis",
   11155111: "sepolia",
 };
 
@@ -91,7 +92,7 @@ export async function fetchConsensusProof(
   const networkName = CHAIN_ID_TO_BEACON_NETWORK[chainId];
   if (!networkName) {
     throw new Error(
-      `No beacon chain config for chain ID ${chainId}. Consensus proofs are currently supported for Ethereum mainnet (1) and Sepolia (11155111).`
+      `No beacon chain config for chain ID ${chainId}. Consensus proofs are supported for Ethereum mainnet (1), Gnosis (100), and Sepolia (11155111).`
     );
   }
 
