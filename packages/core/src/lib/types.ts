@@ -169,6 +169,33 @@ export const simulationSchema = z.object({
 
 export type Simulation = z.infer<typeof simulationSchema>;
 
+// Generator export contract status (explicit full vs partial package mode)
+export const exportContractReasonSchema = z.enum([
+  "missing-consensus-proof",
+  "missing-onchain-policy-proof",
+  "missing-rpc-url",
+  "consensus-proof-fetch-failed",
+  "policy-proof-fetch-failed",
+  "simulation-fetch-failed",
+  "missing-simulation",
+]);
+
+export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
+
+export const evidenceExportContractSchema = z.object({
+  mode: z.enum(["fully-verifiable", "partial"]),
+  status: z.enum(["complete", "partial"]),
+  isFullyVerifiable: z.boolean(),
+  reasons: z.array(exportContractReasonSchema),
+  artifacts: z.object({
+    consensusProof: z.boolean(),
+    onchainPolicyProof: z.boolean(),
+    simulation: z.boolean(),
+  }),
+});
+
+export type EvidenceExportContract = z.infer<typeof evidenceExportContractSchema>;
+
 // Evidence package schema
 export const evidencePackageSchema = z.object({
   version: z.union([z.literal("1.0"), z.literal("1.1"), z.literal("1.2")]),
@@ -200,6 +227,7 @@ export const evidencePackageSchema = z.object({
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
   simulation: simulationSchema.optional(),
   consensusProof: consensusProofSchema.optional(),
+  exportContract: evidenceExportContractSchema.optional(),
   sources: z.object({
     safeApiUrl: z.string().url(),
     transactionUrl: z.string().url(),

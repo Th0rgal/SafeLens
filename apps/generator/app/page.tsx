@@ -15,10 +15,12 @@ import {
   enrichWithOnchainProof,
   enrichWithSimulation,
   enrichWithConsensusProof,
+  finalizeEvidenceExport,
   decodeSimulationEvents,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
+  type ExportContractReason,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
@@ -29,6 +31,15 @@ const generationSources = buildGenerationSources();
 type PendingTx = SafeTransaction & { _chainId: number };
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
+  "missing-consensus-proof": "Consensus proof was not included.",
+  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
+  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
+  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
+  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
+  "simulation-fetch-failed": "Simulation fetch failed.",
+  "missing-simulation": "Simulation result was not included.",
+};
 
 function extractAddress(input: string): string | null {
   const trimmed = input.trim();
@@ -56,34 +67,45 @@ export default function AnalyzePage() {
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
     let enriched = pkg;
     const trimmedRpc = rpcUrl.trim();
+    const rpcProvided = Boolean(trimmedRpc);
+    let consensusProofFailed = false;
+    let onchainPolicyProofFailed = false;
+    let simulationFailed = false;
+    let onchainPolicyProofAttempted = false;
+    let simulationAttempted = false;
 
     // Fetch consensus proof first so policy proof can be pinned to the same
     // finalized execution block.
     try {
       enriched = await enrichWithConsensusProof(enriched);
     } catch (err) {
+      consensusProofFailed = true;
       console.warn("Failed to fetch consensus proof:", err);
       setConsensusWarning(
         `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
       );
     }
 
-    if (trimmedRpc) {
+    if (rpcProvided) {
+      onchainPolicyProofAttempted = true;
       try {
         enriched = await enrichWithOnchainProof(enriched, {
           rpcUrl: trimmedRpc,
           blockNumber: enriched.consensusProof?.blockNumber,
         });
       } catch (err) {
+        onchainPolicyProofFailed = true;
         console.warn("Failed to fetch on-chain policy proof:", err);
         setProofWarning(
           `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
         );
       }
 
+      simulationAttempted = true;
       try {
         enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
       } catch (err) {
+        simulationFailed = true;
         console.warn("Failed to simulate transaction:", err);
         setSimulationWarning(
           `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
@@ -91,7 +113,15 @@ export default function AnalyzePage() {
       }
     }
 
-    return enriched;
+    return finalizeEvidenceExport(enriched, {
+      rpcProvided,
+      consensusProofAttempted: true,
+      consensusProofFailed,
+      onchainPolicyProofAttempted,
+      onchainPolicyProofFailed,
+      simulationAttempted,
+      simulationFailed,
+    });
   };
 
   const handleAnalyze = async () => {
@@ -366,11 +396,30 @@ export default function AnalyzePage() {
           <CardHeader>
             <CardTitle>Evidence Package</CardTitle>
             <CardDescription>
-              Transaction successfully analyzed and evidence package created.
+              {evidence.exportContract?.mode === "fully-verifiable"
+                ? "Fully verifiable package created."
+                : "Partial package created with explicit limitations."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {evidence.exportContract?.mode === "partial" && (
+              <Alert className="border-amber-500/20 bg-amber-500/10 text-amber-200">
+                <AlertTitle>Partial Export</AlertTitle>
+                <AlertDescription>
+                  This package is not fully verifiable. Reasons:
+                  {evidence.exportContract.reasons.map((reason) => (
+                    <div key={reason}>- {EXPORT_REASON_LABELS[reason] ?? reason}</div>
+                  ))}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="font-medium text-muted">Export Mode</div>
+                <div className={evidence.exportContract?.mode === "fully-verifiable" ? "text-green-400" : "text-amber-300"}>
+                  {evidence.exportContract?.mode === "fully-verifiable" ? "Fully verifiable" : "Partial"}
+                </div>
+              </div>
               <div>
                 <div className="font-medium text-muted">Chain</div>
                 <div className="font-mono">{getChainName(evidence.chainId)}</div>
@@ -449,7 +498,9 @@ export default function AnalyzePage() {
 
             <div className="flex gap-2 pt-4">
               <Button onClick={handleDownload} className="flex-1">
-                Download JSON
+                {evidence.exportContract?.mode === "fully-verifiable"
+                  ? "Download Fully Verifiable JSON"
+                  : "Download Partial JSON"}
               </Button>
               <Button onClick={handleCopy} variant="outline" className="flex-1">
                 {copied ? "Copied!" : "Copy to Clipboard"}

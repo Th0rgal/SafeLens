@@ -1,4 +1,9 @@
-import type { EvidencePackage, SafeTransaction } from "../types";
+import type {
+  EvidencePackage,
+  EvidenceExportContract,
+  ExportContractReason,
+  SafeTransaction,
+} from "../types";
 import type { Address } from "viem";
 import { getSafeApiUrl } from "../safe/url-parser";
 import {
@@ -149,6 +154,86 @@ export async function enrichWithConsensusProof(
  */
 export function exportEvidencePackage(evidence: EvidencePackage): string {
   return JSON.stringify(evidence, null, 2);
+}
+
+export interface FinalizeExportContractOptions {
+  rpcProvided: boolean;
+  consensusProofAttempted: boolean;
+  consensusProofFailed: boolean;
+  onchainPolicyProofAttempted: boolean;
+  onchainPolicyProofFailed: boolean;
+  simulationAttempted: boolean;
+  simulationFailed: boolean;
+}
+
+/**
+ * Stamp package export status with explicit machine-readable completeness data.
+ * A package is "fully-verifiable" only when consensus proof, on-chain policy
+ * proof, and simulation are all present. All other states are partial.
+ */
+export function finalizeEvidenceExport(
+  evidence: EvidencePackage,
+  options: FinalizeExportContractOptions
+): EvidencePackage {
+  const hasConsensusProof = Boolean(evidence.consensusProof);
+  const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
+  const hasSimulation = Boolean(evidence.simulation);
+  const reasons = new Set<ExportContractReason>();
+
+  if (!hasConsensusProof) {
+    if (!options.consensusProofAttempted) {
+      reasons.add("missing-consensus-proof");
+    } else {
+      reasons.add(
+        options.consensusProofFailed
+          ? "consensus-proof-fetch-failed"
+          : "missing-consensus-proof"
+      );
+    }
+  }
+
+  if (!hasOnchainPolicyProof) {
+    if (!options.rpcProvided || !options.onchainPolicyProofAttempted) {
+      reasons.add("missing-rpc-url");
+      reasons.add("missing-onchain-policy-proof");
+    } else if (options.onchainPolicyProofFailed) {
+      reasons.add("policy-proof-fetch-failed");
+      reasons.add("missing-onchain-policy-proof");
+    } else {
+      reasons.add("missing-onchain-policy-proof");
+    }
+  }
+
+  if (!hasSimulation) {
+    if (!options.rpcProvided || !options.simulationAttempted) {
+      reasons.add("missing-rpc-url");
+      reasons.add("missing-simulation");
+    } else if (options.simulationFailed) {
+      reasons.add("simulation-fetch-failed");
+      reasons.add("missing-simulation");
+    } else {
+      reasons.add("missing-simulation");
+    }
+  }
+
+  const isFullyVerifiable =
+    hasConsensusProof && hasOnchainPolicyProof && hasSimulation;
+  const exportContract: EvidenceExportContract = {
+    mode: isFullyVerifiable ? "fully-verifiable" : "partial",
+    status: isFullyVerifiable ? "complete" : "partial",
+    isFullyVerifiable,
+    reasons: Array.from(reasons),
+    artifacts: {
+      consensusProof: hasConsensusProof,
+      onchainPolicyProof: hasOnchainPolicyProof,
+      simulation: hasSimulation,
+    },
+  };
+
+  return {
+    ...evidence,
+    exportContract,
+  };
 }
 
 function assertProofAlignment(

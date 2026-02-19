@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   evidencePackageSchema,
+  evidenceExportContractSchema,
   onchainPolicyProofSchema,
   simulationSchema,
   trustClassificationSchema,
@@ -178,6 +179,7 @@ describe("evidence package schema backward compatibility", () => {
 describe("trust classification schema", () => {
   it("accepts all valid trust levels", () => {
     const levels = [
+      "consensus-verified",
       "proof-verified",
       "self-verified",
       "rpc-sourced",
@@ -193,6 +195,38 @@ describe("trust classification schema", () => {
     expect(trustClassificationSchema.safeParse("unknown").success).toBe(false);
     expect(trustClassificationSchema.safeParse("").success).toBe(false);
     expect(trustClassificationSchema.safeParse(123).success).toBe(false);
+  });
+});
+
+describe("export contract schema", () => {
+  it("accepts a fully verifiable contract", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "fully-verifiable",
+      status: "complete",
+      isFullyVerifiable: true,
+      reasons: [],
+      artifacts: {
+        consensusProof: true,
+        onchainPolicyProof: true,
+        simulation: true,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a partial contract with machine-readable reasons", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "partial",
+      status: "partial",
+      isFullyVerifiable: false,
+      reasons: ["missing-rpc-url", "missing-onchain-policy-proof"],
+      artifacts: {
+        consensusProof: true,
+        onchainPolicyProof: false,
+        simulation: false,
+      },
+    });
+    expect(result.success).toBe(true);
   });
 });
 
