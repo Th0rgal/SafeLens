@@ -24,6 +24,7 @@ describe("verifyEvidencePackage", () => {
     expect(result.signatures.summary.total).toBe(evidence.confirmations.length);
     expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
     expect(result.signatures.byOwner[evidence.confirmations[0].owner].status).toBe("valid");
+    expect(result.hashMatch).toBe(true);
     expect(result.sources).toHaveLength(9);
     expect(result.sources.find((s) => s.id === "settings")?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === "safe-owners-threshold")?.trust).toBe("api-sourced");
@@ -31,6 +32,29 @@ describe("verifyEvidencePackage", () => {
     // Without policy proof or simulation, those sections should be disabled
     expect(result.sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === "simulation")?.status).toBe("disabled");
+  });
+
+  it("detects tampered safeTxHash and still validates signatures against recomputed hash", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const originalHash = evidence.safeTxHash;
+
+    // Tamper the safeTxHash field
+    evidence.safeTxHash = "0x" + "aa".repeat(32);
+
+    const result = await verifyEvidencePackage(evidence);
+
+    // hashMatch should be false since we tampered the stored hash
+    expect(result.hashMatch).toBe(false);
+
+    // The recomputed hash in hashDetails should match the original
+    expect(result.hashDetails?.safeTxHash.toLowerCase()).toBe(
+      originalHash.toLowerCase()
+    );
+
+    // Signatures should STILL be valid — they are verified against the
+    // recomputed hash, not the tampered evidence.safeTxHash
+    expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
+    expect(result.signatures.summary.invalid).toBe(0);
   });
 
   it("returns target warnings when settings are unavailable", async () => {

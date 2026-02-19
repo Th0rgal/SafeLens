@@ -32,6 +32,8 @@ export type EvidenceVerificationReport = {
   signatures: SignatureCheckBundle;
   sources: ReturnType<typeof buildVerificationSources>;
   hashDetails?: SafeTxHashDetails;
+  /** Whether the recomputed safeTxHash matches the one stored in the evidence package. */
+  hashMatch: boolean;
   policyProof?: PolicyProofVerificationResult;
   simulationVerification?: SimulationVerificationResult;
 };
@@ -56,11 +58,35 @@ export async function verifyEvidencePackage(
       )
     : [];
 
+  // Recompute the safeTxHash from the transaction fields FIRST, so
+  // signatures are always verified against the locally-computed hash —
+  // not the one stored in the evidence JSON. This prevents a tampered
+  // safeTxHash field from causing forged signatures to pass.
+  const hashDetails = computeSafeTxHashDetailed({
+    safeAddress: evidence.safeAddress as Address,
+    chainId: evidence.chainId,
+    to: evidence.transaction.to as Address,
+    value: BigInt(evidence.transaction.value),
+    data: (evidence.transaction.data ?? "0x") as Hex,
+    operation: evidence.transaction.operation,
+    safeTxGas: BigInt(evidence.transaction.safeTxGas),
+    baseGas: BigInt(evidence.transaction.baseGas),
+    gasPrice: BigInt(evidence.transaction.gasPrice),
+    gasToken: evidence.transaction.gasToken as Address,
+    refundReceiver: evidence.transaction.refundReceiver as Address,
+    nonce: evidence.transaction.nonce,
+  });
+
+  const hashMatch =
+    hashDetails.safeTxHash.toLowerCase() ===
+    (evidence.safeTxHash as string).toLowerCase();
+
+  // Verify signatures against the RECOMPUTED hash, not evidence.safeTxHash
   const signatureList: SignatureCheckEntry[] = await Promise.all(
     evidence.confirmations.map(async (conf) => ({
       owner: conf.owner,
       result: await verifySignature(
-        evidence.safeTxHash as Hash,
+        hashDetails.safeTxHash as Hash,
         conf.signature as Hex,
         conf.owner as Address
       ),
@@ -84,22 +110,6 @@ export async function verifyEvidencePackage(
     else if (check.result.status === "invalid") summary.invalid += 1;
     else summary.unsupported += 1;
   }
-
-  // Compute detailed hash information for hardware wallet verification
-  const hashDetails = computeSafeTxHashDetailed({
-    safeAddress: evidence.safeAddress as Address,
-    chainId: evidence.chainId,
-    to: evidence.transaction.to as Address,
-    value: BigInt(evidence.transaction.value),
-    data: (evidence.transaction.data ?? "0x") as Hex,
-    operation: evidence.transaction.operation,
-    safeTxGas: BigInt(evidence.transaction.safeTxGas),
-    baseGas: BigInt(evidence.transaction.baseGas),
-    gasPrice: BigInt(evidence.transaction.gasPrice),
-    gasToken: evidence.transaction.gasToken as Address,
-    refundReceiver: evidence.transaction.refundReceiver as Address,
-    nonce: evidence.transaction.nonce,
-  });
 
   // Verify on-chain policy proof if present
   let policyProof: PolicyProofVerificationResult | undefined;
@@ -139,6 +149,7 @@ export async function verifyEvidencePackage(
       summary,
     },
     hashDetails,
+    hashMatch,
     policyProof,
     simulationVerification,
   };

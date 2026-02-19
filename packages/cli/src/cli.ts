@@ -102,6 +102,7 @@ function createVerifyPayload(
     signatures: report.signatures,
     sources: report.sources,
     hashDetails: report.hashDetails,
+    hashMatch: report.hashMatch,
     policyProof: report.policyProof,
     simulationVerification: report.simulationVerification,
   };
@@ -222,9 +223,18 @@ function printVerificationText(
   console.log("");
   console.log(box(
     (() => {
+      const hashBadge = report.hashMatch
+        ? trustBadge("self-verified")
+        : colors.red(colors.bold("MISMATCH"));
       const rows: Array<[string, string]> = [
-        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
+        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${hashBadge}`],
       ];
+
+      if (!report.hashMatch && hashDetails) {
+        rows.push(
+          ["Recomputed", `${formatAddress(hashDetails.safeTxHash)} ${colors.red("← expected")}`]
+        );
+      }
 
       if (hashDetails) {
         rows.push(
