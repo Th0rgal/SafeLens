@@ -8,3 +8,9 @@ export {
   type SimulationVerificationResult,
   type SimulationCheck,
 } from "./verifier";
+
+export {
+  decodeSimulationEvents,
+  type DecodedEvent,
+  type DecodedEventKind,
+} from "./event-decoder";

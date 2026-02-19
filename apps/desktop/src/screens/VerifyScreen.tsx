@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -8,14 +8,16 @@ import {
   parseEvidencePackage,
   getChainName,
   verifyEvidencePackage,
+  decodeSimulationEvents,
 } from "@safelens/core";
+import type { DecodedEvent } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight } from "lucide-react";
+import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -432,53 +434,10 @@ export default function VerifyScreen() {
           )}
 
           {simulationVerification && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>Transaction Simulation</CardTitle>
-                  <TrustBadge level={evidence?.simulation?.trust ?? "rpc-sourced"} />
-                </div>
-                <CardDescription>
-                  {!simulationVerification.valid
-                    ? `Simulation has ${simulationVerification.errors.length} issue(s)`
-                    : simulationVerification.executionReverted
-                      ? "Structurally valid, but the transaction REVERTED"
-                      : "Simulation passed all checks — transaction succeeded"}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {simulationVerification.checks.map((check) => (
-                    <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                      <span className="text-sm font-medium">{check.label}</span>
-                      <div className="flex items-center gap-2">
-                        {check.detail && (
-                          <span className="text-xs text-muted">{check.detail}</span>
-                        )}
-                        {check.passed ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                            <ShieldCheck className="h-3 w-3" />
-                            Pass
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                            <AlertTriangle className="h-3 w-3" />
-                            Fail
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {simulationVerification.errors.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    {simulationVerification.errors.map((err, i) => (
-                      <div key={i} className="text-xs text-red-400">{err}</div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <SimulationCard
+              evidence={evidence}
+              simulationVerification={simulationVerification}
+            />
           )}
 
           {(consensusVerification || evidence?.consensusProof) && (
@@ -590,6 +549,220 @@ export default function VerifyScreen() {
             </CardContent>
           </Card>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Token event icons ─────────────────────────────────────────────────
+
+const EVENT_ICON: Record<string, { Icon: typeof ArrowUpRight; color: string; label: string }> = {
+  transfer: { Icon: ArrowUpRight, color: "text-blue-400", label: "Transfer" },
+  approval: { Icon: KeyRound, color: "text-amber-400", label: "Approval" },
+  "nft-transfer": { Icon: ArrowUpRight, color: "text-purple-400", label: "NFT Transfer" },
+  "erc1155-transfer": { Icon: ArrowUpRight, color: "text-purple-400", label: "ERC-1155" },
+  wrap: { Icon: Repeat, color: "text-cyan-400", label: "Wrap" },
+  unwrap: { Icon: Repeat, color: "text-cyan-400", label: "Unwrap" },
+};
+
+const DIRECTION_STYLE: Record<string, { bg: string; border: string; label: string; Icon: typeof ArrowUpRight }> = {
+  send: { bg: "bg-red-500/8", border: "border-red-500/20", label: "Send", Icon: ArrowUpRight },
+  receive: { bg: "bg-emerald-500/8", border: "border-emerald-500/20", label: "Receive", Icon: ArrowDownLeft },
+  internal: { bg: "bg-surface-2/40", border: "border-border/15", label: "Internal", Icon: Repeat },
+};
+
+// ── SimulationCard ───────────────────────────────────────────────────
+
+function SimulationCard({
+  evidence,
+  simulationVerification,
+}: {
+  evidence: EvidencePackage;
+  simulationVerification: SimulationVerificationResult;
+}) {
+  const [showChecks, setShowChecks] = useState(false);
+
+  const decodedEvents = useMemo(() => {
+    if (!evidence.simulation?.logs) return [];
+    return decodeSimulationEvents(
+      evidence.simulation.logs,
+      evidence.safeAddress,
+      evidence.chainId,
+    );
+  }, [evidence.simulation?.logs, evidence.safeAddress, evidence.chainId]);
+
+  // Separate events by direction for summary
+  const sends = decodedEvents.filter((e) => e.direction === "send" && e.kind === "transfer");
+  const receives = decodedEvents.filter((e) => e.direction === "receive" && e.kind === "transfer");
+  const approvals = decodedEvents.filter((e) => e.kind === "approval");
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <CardTitle>Transaction Simulation</CardTitle>
+          <TrustBadge level={evidence?.simulation?.trust ?? "rpc-sourced"} />
+        </div>
+        <CardDescription>
+          {!simulationVerification.valid
+            ? `Simulation has ${simulationVerification.errors.length} issue(s)`
+            : simulationVerification.executionReverted
+              ? "Structurally valid, but the transaction REVERTED"
+              : decodedEvents.length > 0
+                ? `${decodedEvents.length} token event${decodedEvents.length !== 1 ? "s" : ""} detected`
+                : "Simulation passed — no token events detected"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {/* Primary view: decoded token movements */}
+        {decodedEvents.length > 0 && (
+          <div className="space-y-2 mb-4">
+            {decodedEvents.map((event, i) => (
+              <TokenEventRow key={i} event={event} chainId={evidence.chainId} />
+            ))}
+          </div>
+        )}
+
+        {/* Net summary for swaps: show what goes out and what comes in */}
+        {sends.length > 0 && receives.length > 0 && (
+          <div className="mb-4 rounded-md border border-border/15 glass-subtle p-3">
+            <div className="text-xs font-medium text-muted mb-2">Net Effect</div>
+            <div className="flex items-center gap-3 flex-wrap">
+              {sends.map((s, i) => (
+                <span key={`s-${i}`} className="inline-flex items-center gap-1 text-sm text-red-400">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  {s.amountFormatted}
+                </span>
+              ))}
+              <span className="text-muted text-xs">→</span>
+              {receives.map((r, i) => (
+                <span key={`r-${i}`} className="inline-flex items-center gap-1 text-sm text-emerald-400">
+                  <ArrowDownLeft className="h-3.5 w-3.5" />
+                  {r.amountFormatted}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Approval warnings */}
+        {approvals.length > 0 && (
+          <div className="mb-4 space-y-1.5">
+            {approvals.map((a, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
+                <KeyRound className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                <span className="text-xs text-amber-300">
+                  Approves <span className="font-medium text-amber-400">{a.amountFormatted}</span>
+                  {" "}to <code className="font-mono text-[10px]">{a.to.slice(0, 10)}…</code>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Collapsible structural checks */}
+        <button
+          onClick={() => setShowChecks((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
+        >
+          <ChevronDown className={`h-3 w-3 transition-transform ${showChecks ? "rotate-180" : ""}`} />
+          {showChecks ? "Hide" : "Show"} structural checks ({simulationVerification.checks.length})
+        </button>
+
+        {showChecks && (
+          <div className="mt-2 space-y-1.5">
+            {simulationVerification.checks.map((check) => (
+              <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                <span className="text-sm font-medium">{check.label}</span>
+                <div className="flex items-center gap-2">
+                  {check.detail && (
+                    <span className="text-xs text-muted">{check.detail}</span>
+                  )}
+                  {check.passed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                      <ShieldCheck className="h-3 w-3" />
+                      Pass
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                      <AlertTriangle className="h-3 w-3" />
+                      Fail
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {simulationVerification.errors.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {simulationVerification.errors.map((err, i) => (
+                  <div key={i} className="text-xs text-red-400">{err}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── TokenEventRow ─────────────────────────────────────────────────────
+
+function TokenEventRow({ event, chainId }: { event: DecodedEvent; chainId: number }) {
+  const evStyle = EVENT_ICON[event.kind] ?? EVENT_ICON.transfer;
+  const dirStyle = DIRECTION_STYLE[event.direction] ?? DIRECTION_STYLE.internal;
+  const DirIcon = dirStyle.Icon;
+
+  return (
+    <div className={`flex items-center gap-3 rounded-md border ${dirStyle.border} ${dirStyle.bg} px-3 py-2.5`}>
+      {/* Direction icon */}
+      <div className={`shrink-0 rounded-full p-1.5 ${
+        event.direction === "send" ? "bg-red-500/15" :
+        event.direction === "receive" ? "bg-emerald-500/15" :
+        "bg-surface-2/60"
+      }`}>
+        <DirIcon className={`h-4 w-4 ${
+          event.direction === "send" ? "text-red-400" :
+          event.direction === "receive" ? "text-emerald-400" :
+          "text-muted"
+        }`} />
+      </div>
+
+      {/* Amount + token */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-semibold ${
+            event.direction === "send" ? "text-red-400" :
+            event.direction === "receive" ? "text-emerald-400" :
+            "text-fg"
+          }`}>
+            {event.direction === "send" ? "−" : event.direction === "receive" ? "+" : ""}
+            {event.amountFormatted}
+          </span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${evStyle.color} bg-surface-2/50`}>
+            {evStyle.label}
+          </span>
+        </div>
+        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
+          {event.kind !== "approval" ? (
+            <>
+              <span>From</span>
+              <AddressDisplay address={event.from} chainId={chainId} className="text-[10px]" />
+              <span>→</span>
+              <AddressDisplay address={event.to} chainId={chainId} className="text-[10px]" />
+            </>
+          ) : (
+            <>
+              <span>Spender</span>
+              <AddressDisplay address={event.to} chainId={chainId} className="text-[10px]" />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Token contract */}
+      {!event.tokenSymbol && (
+        <AddressDisplay address={event.token} chainId={chainId} className="text-[10px]" />
       )}
     </div>
   );

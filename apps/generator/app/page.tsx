@@ -15,6 +15,7 @@ import {
   enrichWithOnchainProof,
   enrichWithSimulation,
   enrichWithConsensusProof,
+  decodeSimulationEvents,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
@@ -399,20 +400,38 @@ export default function AnalyzePage() {
                   </div>
                 </div>
               )}
-              {evidence.simulation && (
-                <div className="col-span-2">
-                  <div className="font-medium text-muted">Simulation</div>
-                  <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
-                    {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
-                    {!evidence.simulation.success && evidence.simulation.returnData && (
-                      <span className="text-gray-400"> — revert data: {evidence.simulation.returnData.slice(0, 42)}…</span>
-                    )}
-                    {evidence.simulation.logs.length > 0 && (
-                      <span className="text-gray-400"> — {evidence.simulation.logs.length} event log{evidence.simulation.logs.length !== 1 ? "s" : ""}</span>
+              {evidence.simulation && (() => {
+                const events = decodeSimulationEvents(
+                  evidence.simulation.logs,
+                  evidence.safeAddress,
+                  evidence.chainId,
+                );
+                return (
+                  <div className="col-span-2">
+                    <div className="font-medium text-muted">Simulation</div>
+                    <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
+                      {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
+                    </div>
+                    {events.length > 0 && (
+                      <div className="mt-1.5 space-y-1">
+                        {events.map((e, i) => (
+                          <div key={i} className={`text-xs rounded px-2 py-1 ${
+                            e.direction === "send" ? "bg-red-500/10 text-red-400" :
+                            e.direction === "receive" ? "bg-green-500/10 text-green-400" :
+                            "bg-gray-500/10 text-gray-400"
+                          }`}>
+                            {e.direction === "send" ? "↗ Send" :
+                             e.direction === "receive" ? "↙ Receive" :
+                             e.kind === "approval" ? "🔑 Approve" :
+                             "↔ Internal"}{" "}
+                            <span className="font-medium">{e.amountFormatted}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
               {evidence.consensusProof && (
                 <div className="col-span-2">
                   <div className="font-medium text-muted">Consensus Proof</div>
