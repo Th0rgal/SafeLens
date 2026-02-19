@@ -7,7 +7,9 @@
  * success/revert status and return data without needing real signatures.
  *
  * Optionally fetches event logs via `debug_traceCall` when the RPC node
- * supports it, and state diffs via `prestateTracer` with `diffMode`.
+ * supports it. Note: state diffs require `prestateTracer` with diffMode,
+ * which is not yet implemented — the `stateDiffs` field in the schema
+ * will be undefined for now.
  */
 
 import {
@@ -79,26 +81,6 @@ interface TransactionFields {
   gasPrice: string;
   gasToken: string;
   refundReceiver: string;
-}
-
-interface ExecSimulationCallRequest {
-  account: Address;
-  to: Address;
-  data: Hex;
-  gas?: bigint;
-  gasPrice: bigint;
-  blockNumber: bigint;
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>;
-}
-
-interface TraceCallAttempt {
-  callObject: { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex };
-  blockHex: string;
-  traceConfig: Record<string, unknown>;
-  stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
 }
 
 // ── Main fetcher ──────────────────────────────────────────────────
@@ -219,20 +201,14 @@ export async function fetchSimulation(
   let success = false;
   let returnData: Hex | null = null;
   let gasUsed = "0";
-  const callGasLimit = deriveSimulationGasLimit(block.gasLimit);
-  const txGasPrice = BigInt(transaction.gasPrice);
-  const callRequest = buildExecSimulationCallRequest(
-    simulatorAddress,
-    safeAddress,
-    calldata,
-    callGasLimit,
-    txGasPrice,
-    block.number,
-    viemStateOverride
-  );
 
   try {
-    const result = await client.call(callRequest);
+    const result = await client.call({
+      to: safeAddress,
+      data: calldata,
+      blockNumber: block.number,
+      stateOverride: viemStateOverride,
+    });
 
     // Decode the bool return value from execTransaction
     if (result.data) {
@@ -265,11 +241,8 @@ export async function fetchSimulation(
 
   const traceResult = await tryTraceCall(
     client,
-    simulatorAddress,
     safeAddress,
     calldata,
-    callGasLimit,
-    txGasPrice,
     block.number,
     viemStateOverride
   );
@@ -283,7 +256,10 @@ export async function fetchSimulation(
     // It throws on reverted txs, so we only try it when eth_call succeeded.
     try {
       const gas = await client.estimateGas({
-        ...callRequest,
+        to: safeAddress,
+        data: calldata,
+        blockNumber: block.number,
+        stateOverride: viemStateOverride,
       });
       gasUsed = gas.toString();
     } catch {
@@ -298,40 +274,11 @@ export async function fetchSimulation(
     returnData,
     gasUsed,
     logs: traceResult.logs,
-    stateDiffs: traceResult.stateDiffs,
     blockNumber,
     trust: "rpc-sourced" as TrustClassification,
   };
 
   return simulation;
-}
-
-/**
- * Build a call request that mirrors a real EOA-submitted transaction:
- * `account` is explicitly set so msg.sender/tx.origin parity matches
- * Foundry and real execution more closely.
- */
-export function buildExecSimulationCallRequest(
-  account: Address,
-  to: Address,
-  data: Hex,
-  gas: bigint,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>
-): ExecSimulationCallRequest {
-  return {
-    account,
-    to,
-    data,
-    gas,
-    gasPrice,
-    blockNumber,
-    stateOverride,
-  };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -359,89 +306,17 @@ function extractRevertData(err: unknown): Hex | null {
   return null;
 }
 
-/**
- * Use an explicit gas limit to avoid provider-specific default caps and
- * better match Foundry/anvil simulation behavior.
- */
-function deriveSimulationGasLimit(blockGasLimit: bigint): bigint {
-  if (blockGasLimit <= 1n) {
-    return 1n;
-  }
-  return blockGasLimit - 1n;
-}
-
 // ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
 
 interface TraceResult {
   logs: Simulation["logs"];
   gasUsed: string | null;
-  stateDiffs?: Simulation["stateDiffs"];
-}
-
-interface TraceLogEntry {
-  address: string;
-  topics: string[];
-  data: string;
-}
-
-interface PrestateAccountState {
-  storage?: Record<string, string>;
-}
-
-interface PrestateTraceResult {
-  pre?: Record<string, PrestateAccountState>;
-  post?: Record<string, PrestateAccountState>;
-}
-
-interface CallFrame {
-  gasUsed?: string;
-  logs?: TraceLogEntry[];
-  calls?: CallFrame[];
-  error?: string;
-}
-
-/**
- * Collect only committed logs from a callTracer frame tree.
- *
- * Foundry/anvil parity: logs emitted by reverted frames are discarded from
- * transaction receipts. callTracer can still surface them in trace frames.
- * We therefore ignore logs for any frame that has an `error`.
- */
-export function collectCommittedLogsFromCallTrace(
-  frame: CallFrame
-): Simulation["logs"] {
-  if (frame.error) {
-    return [];
-  }
-
-  const collected: Simulation["logs"] = [];
-
-  if (frame.logs && Array.isArray(frame.logs)) {
-    for (const log of frame.logs) {
-      collected.push({
-        address: normalizeHex(log.address) as Address,
-        topics: log.topics.map((topic) => normalizeHex(topic)) as Hex[],
-        data: normalizeHex(log.data ?? "0x") as Hex,
-      });
-    }
-  }
-
-  if (frame.calls && Array.isArray(frame.calls)) {
-    for (const child of frame.calls) {
-      collected.push(...collectCommittedLogsFromCallTrace(child));
-    }
-  }
-
-  return collected;
 }
 
 async function tryTraceCall(
   client: ReturnType<typeof createPublicClient>,
-  from: Address,
   safeAddress: Address,
   calldata: Hex,
-  gas: bigint,
-  gasPrice: bigint,
   blockNumber: bigint,
   stateOverride: Array<{
     address: Address;
@@ -462,20 +337,57 @@ async function tryTraceCall(
       stateOverrideObj[override.address] = { stateDiff: diffs };
     }
 
-    const attempts = buildTraceCallAttempts(
-      from,
-      safeAddress,
-      calldata,
-      gas,
-      gasPrice,
-      blockNumber,
-      stateOverrideObj
-    );
+    const result = await client.request({
+      method: "debug_traceCall" as "eth_call",
+      params: [
+        {
+          to: safeAddress,
+          data: calldata,
+        },
+        `0x${blockNumber.toString(16)}`,
+        {
+          tracer: "callTracer",
+          tracerConfig: { withLog: true },
+          stateOverrides: stateOverrideObj,
+        },
+      ] as unknown as [
+        { to: Address; data: Hex },
+        string,
+        Record<string, unknown>,
+      ],
+    });
 
-    const result = await executeTraceCallAttempts(client, attempts);
+    // callTracer with withLog:true nests logs inside call frames.
+    // Each frame has an optional `logs` array and an optional `calls`
+    // array of child frames. We recursively collect all logs.
+    // The top-level frame also has `gasUsed` (hex string).
+    interface CallFrame {
+      gasUsed?: string;
+      logs?: Array<{ address: string; topics: string[]; data: string }>;
+      calls?: CallFrame[];
+    }
+
+    function collectLogs(frame: CallFrame): Simulation["logs"] {
+      const collected: Simulation["logs"] = [];
+      if (frame.logs && Array.isArray(frame.logs)) {
+        for (const log of frame.logs) {
+          collected.push({
+            address: normalizeHex(log.address) as Address,
+            topics: log.topics.map((t) => normalizeHex(t)) as Hex[],
+            data: normalizeHex(log.data ?? "0x") as Hex,
+          });
+        }
+      }
+      if (frame.calls && Array.isArray(frame.calls)) {
+        for (const child of frame.calls) {
+          collected.push(...collectLogs(child));
+        }
+      }
+      return collected;
+    }
 
     const frame = result as unknown as CallFrame;
-    const logs = collectCommittedLogsFromCallTrace(frame);
+    const logs = collectLogs(frame);
 
     // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
     let gasUsed: string | null = null;
@@ -484,206 +396,9 @@ async function tryTraceCall(
       if (isNaN(Number(gasUsed))) gasUsed = null;
     }
 
-    const stateDiffs = await tryTraceStateDiffs(
-      client,
-      from,
-      safeAddress,
-      calldata,
-      gas,
-      gasPrice,
-      blockNumber,
-      stateOverrideObj
-    );
-
-    return { logs, gasUsed, stateDiffs };
+    return { logs, gasUsed };
   } catch {
     // debug_traceCall is not supported by all RPCs — silently fall back
     return { logs: [], gasUsed: null };
   }
-}
-
-async function executeTraceCallAttempts(
-  client: ReturnType<typeof createPublicClient>,
-  attempts: TraceCallAttempt[]
-): Promise<unknown> {
-  let result: unknown = null;
-  let traceError: unknown = null;
-
-  for (const attempt of attempts) {
-    try {
-      const params = attempt.stateOverrideArg
-        ? [attempt.callObject, attempt.blockHex, attempt.traceConfig, attempt.stateOverrideArg]
-        : [attempt.callObject, attempt.blockHex, attempt.traceConfig];
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: params as unknown as [
-          { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex },
-          string,
-          Record<string, unknown>,
-          Record<string, unknown>?,
-        ],
-      });
-      traceError = null;
-      break;
-    } catch (err) {
-      traceError = err;
-    }
-  }
-
-  if (traceError) {
-    throw traceError;
-  }
-
-  return result;
-}
-
-async function tryTraceStateDiffs(
-  client: ReturnType<typeof createPublicClient>,
-  from: Address,
-  to: Address,
-  data: Hex,
-  gas: bigint,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>
-): Promise<Simulation["stateDiffs"] | undefined> {
-  const attempts = buildPrestateTraceCallAttempts(
-    from,
-    to,
-    data,
-    gas,
-    gasPrice,
-    blockNumber,
-    stateOverride
-  );
-
-  try {
-    const result = await executeTraceCallAttempts(client, attempts);
-    return parseStateDiffsFromPrestateTrace(result as PrestateTraceResult);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Build a compatibility matrix of debug_traceCall shapes used by
- * different RPC backends (Geth/Erigon/hosted providers).
- */
-export function buildTraceCallAttempts(
-  from: Address,
-  to: Address,
-  data: Hex,
-  gas: bigint,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>
-): TraceCallAttempt[] {
-  return buildTraceCallAttemptsForConfig(
-    from,
-    to,
-    data,
-    gas,
-    gasPrice,
-    blockNumber,
-    stateOverride,
-    { tracer: "callTracer", tracerConfig: { withLog: true } }
-  );
-}
-
-function buildPrestateTraceCallAttempts(
-  from: Address,
-  to: Address,
-  data: Hex,
-  gas: bigint,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>
-): TraceCallAttempt[] {
-  return buildTraceCallAttemptsForConfig(
-    from,
-    to,
-    data,
-    gas,
-    gasPrice,
-    blockNumber,
-    stateOverride,
-    { tracer: "prestateTracer", tracerConfig: { diffMode: true } }
-  );
-}
-
-function buildTraceCallAttemptsForConfig(
-  from: Address,
-  to: Address,
-  data: Hex,
-  gas: bigint,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>,
-  traceConfigBase: Record<string, unknown>
-): TraceCallAttempt[] {
-  const blockHex = `0x${blockNumber.toString(16)}`;
-  const callObject: TraceCallAttempt["callObject"] = {
-    from,
-    to,
-    data,
-    gas: toHex(gas),
-    // Keep tx.gasprice parity with Foundry/anvil, including explicit zero.
-    gasPrice: toHex(gasPrice),
-  };
-
-  return [
-    {
-      callObject,
-      blockHex,
-      traceConfig: { ...traceConfigBase, stateOverrides: stateOverride },
-    },
-    {
-      callObject,
-      blockHex,
-      traceConfig: { ...traceConfigBase, stateOverride },
-    },
-    {
-      callObject,
-      blockHex,
-      traceConfig: traceConfigBase,
-      stateOverrideArg: stateOverride,
-    },
-  ];
-}
-
-function toWordHex(value: string): Hex {
-  return pad(normalizeHex(value) as Hex, { size: 32 });
-}
-
-export function parseStateDiffsFromPrestateTrace(
-  trace: PrestateTraceResult
-): Simulation["stateDiffs"] | undefined {
-  const pre = trace.pre ?? {};
-  const post = trace.post ?? {};
-  const addresses = new Set<string>([...Object.keys(pre), ...Object.keys(post)]);
-  const diffs: NonNullable<Simulation["stateDiffs"]> = [];
-
-  for (const rawAddress of addresses) {
-    const address = normalizeHex(rawAddress) as Address;
-    const preStorage = pre[rawAddress]?.storage ?? {};
-    const postStorage = post[rawAddress]?.storage ?? {};
-    const slots = new Set<string>([
-      ...Object.keys(preStorage),
-      ...Object.keys(postStorage),
-    ]);
-
-    for (const rawSlot of slots) {
-      const beforeRaw = preStorage[rawSlot] ?? "0x0";
-      const afterRaw = postStorage[rawSlot] ?? "0x0";
-      if (beforeRaw === afterRaw) continue;
-      diffs.push({
-        address,
-        key: toWordHex(rawSlot),
-        before: toWordHex(beforeRaw),
-        after: toWordHex(afterRaw),
-      });
-    }
-  }
-
-  return diffs.length > 0 ? diffs : undefined;
 }
