@@ -7,7 +7,9 @@
  * success/revert status and return data without needing real signatures.
  *
  * Optionally fetches event logs via `debug_traceCall` when the RPC node
- * supports it, and state diffs via `prestateTracer` with `diffMode`.
+ * supports it. Note: state diffs require `prestateTracer` with diffMode,
+ * which is not yet implemented — the `stateDiffs` field in the schema
+ * will be undefined for now.
  */
 
 import {
@@ -294,7 +296,6 @@ export async function fetchSimulation(
     returnData,
     gasUsed,
     logs: traceResult.logs,
-    stateDiffs: traceResult.stateDiffs,
     blockNumber,
     trust: "rpc-sourced" as TrustClassification,
   };
@@ -358,22 +359,12 @@ function extractRevertData(err: unknown): Hex | null {
 interface TraceResult {
   logs: Simulation["logs"];
   gasUsed: string | null;
-  stateDiffs?: Simulation["stateDiffs"];
 }
 
 interface TraceLogEntry {
   address: string;
   topics: string[];
   data: string;
-}
-
-interface PrestateAccountState {
-  storage?: Record<string, string>;
-}
-
-interface PrestateTraceResult {
-  pre?: Record<string, PrestateAccountState>;
-  post?: Record<string, PrestateAccountState>;
 }
 
 interface CallFrame {
@@ -453,7 +444,32 @@ async function tryTraceCall(
       stateOverrideObj
     );
 
-    const result = await executeTraceCallAttempts(client, attempts);
+    let result: unknown = null;
+    let traceError: unknown = null;
+    for (const attempt of attempts) {
+      try {
+        const params = attempt.stateOverrideArg
+          ? [attempt.callObject, attempt.blockHex, attempt.traceConfig, attempt.stateOverrideArg]
+          : [attempt.callObject, attempt.blockHex, attempt.traceConfig];
+        result = await client.request({
+          method: "debug_traceCall" as "eth_call",
+          params: params as unknown as [
+            { from: Address; to: Address; data: Hex; gasPrice?: Hex },
+            string,
+            Record<string, unknown>,
+            Record<string, unknown>?,
+          ],
+        });
+        traceError = null;
+        break;
+      } catch (err) {
+        traceError = err;
+      }
+    }
+
+    if (traceError) {
+      throw traceError;
+    }
 
     const frame = result as unknown as CallFrame;
     const logs = collectCommittedLogsFromCallTrace(frame);
@@ -465,81 +481,10 @@ async function tryTraceCall(
       if (isNaN(Number(gasUsed))) gasUsed = null;
     }
 
-    const stateDiffs = await tryTraceStateDiffs(
-      client,
-      from,
-      safeAddress,
-      calldata,
-      gasPrice,
-      blockNumber,
-      stateOverrideObj
-    );
-
-    return { logs, gasUsed, stateDiffs };
+    return { logs, gasUsed };
   } catch {
     // debug_traceCall is not supported by all RPCs — silently fall back
     return { logs: [], gasUsed: null };
-  }
-}
-
-async function executeTraceCallAttempts(
-  client: ReturnType<typeof createPublicClient>,
-  attempts: TraceCallAttempt[]
-): Promise<unknown> {
-  let result: unknown = null;
-  let traceError: unknown = null;
-
-  for (const attempt of attempts) {
-    try {
-      const params = attempt.stateOverrideArg
-        ? [attempt.callObject, attempt.blockHex, attempt.traceConfig, attempt.stateOverrideArg]
-        : [attempt.callObject, attempt.blockHex, attempt.traceConfig];
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: params as unknown as [
-          { from: Address; to: Address; data: Hex; gasPrice?: Hex },
-          string,
-          Record<string, unknown>,
-          Record<string, unknown>?,
-        ],
-      });
-      traceError = null;
-      break;
-    } catch (err) {
-      traceError = err;
-    }
-  }
-
-  if (traceError) {
-    throw traceError;
-  }
-
-  return result;
-}
-
-async function tryTraceStateDiffs(
-  client: ReturnType<typeof createPublicClient>,
-  from: Address,
-  to: Address,
-  data: Hex,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>
-): Promise<Simulation["stateDiffs"] | undefined> {
-  const attempts = buildPrestateTraceCallAttempts(
-    from,
-    to,
-    data,
-    gasPrice,
-    blockNumber,
-    stateOverride
-  );
-
-  try {
-    const result = await executeTraceCallAttempts(client, attempts);
-    return parseStateDiffsFromPrestateTrace(result as PrestateTraceResult);
-  } catch {
-    return undefined;
   }
 }
 
@@ -555,45 +500,6 @@ export function buildTraceCallAttempts(
   blockNumber: bigint,
   stateOverride: Record<string, { stateDiff: Record<string, string> }>
 ): TraceCallAttempt[] {
-  return buildTraceCallAttemptsForConfig(
-    from,
-    to,
-    data,
-    gasPrice,
-    blockNumber,
-    stateOverride,
-    { tracer: "callTracer", tracerConfig: { withLog: true } }
-  );
-}
-
-function buildPrestateTraceCallAttempts(
-  from: Address,
-  to: Address,
-  data: Hex,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>
-): TraceCallAttempt[] {
-  return buildTraceCallAttemptsForConfig(
-    from,
-    to,
-    data,
-    gasPrice,
-    blockNumber,
-    stateOverride,
-    { tracer: "prestateTracer", tracerConfig: { diffMode: true } }
-  );
-}
-
-function buildTraceCallAttemptsForConfig(
-  from: Address,
-  to: Address,
-  data: Hex,
-  gasPrice: bigint,
-  blockNumber: bigint,
-  stateOverride: Record<string, { stateDiff: Record<string, string> }>,
-  traceConfigBase: Record<string, unknown>
-): TraceCallAttempt[] {
   const blockHex = `0x${blockNumber.toString(16)}`;
   const callObject: TraceCallAttempt["callObject"] = {
     from,
@@ -601,60 +507,24 @@ function buildTraceCallAttemptsForConfig(
     data,
     gasPrice: gasPrice > 0n ? toHex(gasPrice) : undefined,
   };
+  const baseConfig = { tracer: "callTracer", tracerConfig: { withLog: true } };
 
   return [
     {
       callObject,
       blockHex,
-      traceConfig: { ...traceConfigBase, stateOverrides: stateOverride },
+      traceConfig: { ...baseConfig, stateOverrides: stateOverride },
     },
     {
       callObject,
       blockHex,
-      traceConfig: { ...traceConfigBase, stateOverride },
+      traceConfig: { ...baseConfig, stateOverride },
     },
     {
       callObject,
       blockHex,
-      traceConfig: traceConfigBase,
+      traceConfig: baseConfig,
       stateOverrideArg: stateOverride,
     },
   ];
-}
-
-function toWordHex(value: string): Hex {
-  return pad(normalizeHex(value) as Hex, { size: 32 });
-}
-
-export function parseStateDiffsFromPrestateTrace(
-  trace: PrestateTraceResult
-): Simulation["stateDiffs"] | undefined {
-  const pre = trace.pre ?? {};
-  const post = trace.post ?? {};
-  const addresses = new Set<string>([...Object.keys(pre), ...Object.keys(post)]);
-  const diffs: NonNullable<Simulation["stateDiffs"]> = [];
-
-  for (const rawAddress of addresses) {
-    const address = normalizeHex(rawAddress) as Address;
-    const preStorage = pre[rawAddress]?.storage ?? {};
-    const postStorage = post[rawAddress]?.storage ?? {};
-    const slots = new Set<string>([
-      ...Object.keys(preStorage),
-      ...Object.keys(postStorage),
-    ]);
-
-    for (const rawSlot of slots) {
-      const beforeRaw = preStorage[rawSlot] ?? "0x0";
-      const afterRaw = postStorage[rawSlot] ?? "0x0";
-      if (beforeRaw === afterRaw) continue;
-      diffs.push({
-        address,
-        key: toWordHex(rawSlot),
-        before: toWordHex(beforeRaw),
-        after: toWordHex(afterRaw),
-      });
-    }
-  }
-
-  return diffs.length > 0 ? diffs : undefined;
 }

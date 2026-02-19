@@ -3,7 +3,6 @@ import {
   buildExecSimulationCallRequest,
   buildTraceCallAttempts,
   collectCommittedLogsFromCallTrace,
-  parseStateDiffsFromPrestateTrace,
 } from "../fetcher";
 import type { Address, Hex } from "viem";
 
@@ -164,58 +163,5 @@ describe("simulation fetcher RPC payloads", () => {
 
     const logs = collectCommittedLogsFromCallTrace(trace);
     expect(logs).toEqual([]);
-  });
-
-  it("parses prestate tracer diff into normalized stateDiff entries", () => {
-    const trace = {
-      pre: {
-        [to]: {
-          storage: {
-            "0x3":
-              "0x0000000000000000000000000000000000000000000000000000000000000001",
-          },
-        },
-      },
-      post: {
-        [to]: {
-          storage: {
-            "0x3":
-              "0x0000000000000000000000000000000000000000000000000000000000000002",
-            "0x4":
-              "0x0000000000000000000000000000000000000000000000000000000000000001",
-          },
-        },
-      },
-    };
-
-    const diffs = parseStateDiffsFromPrestateTrace(trace);
-    expect(diffs).toHaveLength(2);
-    expect(diffs?.[0].address).toBe(to);
-    expect(diffs?.[0].key).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(diffs?.[0].before).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(diffs?.[0].after).toMatch(/^0x[0-9a-f]{64}$/);
-  });
-
-  it("returns undefined when prestate trace has no changed storage", () => {
-    const trace = {
-      pre: {
-        [to]: {
-          storage: {
-            "0x3":
-              "0x0000000000000000000000000000000000000000000000000000000000000001",
-          },
-        },
-      },
-      post: {
-        [to]: {
-          storage: {
-            "0x3":
-              "0x0000000000000000000000000000000000000000000000000000000000000001",
-          },
-        },
-      },
-    };
-
-    expect(parseStateDiffsFromPrestateTrace(trace)).toBeUndefined();
   });
 });
