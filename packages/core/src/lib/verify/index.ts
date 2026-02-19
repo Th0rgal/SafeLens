@@ -6,7 +6,7 @@ import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof"
 import { verifySimulation, type SimulationVerificationResult } from "../simulation";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
-import { buildVerificationSources } from "../trust";
+import { buildVerificationSources, createVerificationSourceContext } from "../trust";
 
 export type SignatureCheckSummary = {
   total: number;
@@ -176,7 +176,7 @@ export async function verifyEvidencePackage(
   return {
     proposer,
     targetWarnings,
-    sources: buildVerificationSources({
+    sources: buildVerificationSources(createVerificationSourceContext({
       hasSettings: Boolean(settings),
       hasUnsupportedSignatures: summary.unsupported > 0,
       hasDecodedData: Boolean(evidence.dataDecoded),
@@ -194,7 +194,7 @@ export async function verifyEvidencePackage(
       // Tauri backend verifies the BLS signatures. It stays false here
       // because the core verifier runs in JS and can't do BLS verification.
       consensusVerified: false,
-    }),
+    })),
     signatures: {
       list: signatureList,
       byOwner,

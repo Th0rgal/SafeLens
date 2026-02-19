@@ -1,63 +1,69 @@
 import { describe, expect, it } from "vitest";
-import { buildGenerationSources, buildVerificationSources } from "../sources";
+import {
+  GENERATION_SOURCE_IDS,
+  VERIFICATION_SOURCE_IDS,
+  buildGenerationSources,
+  buildVerificationSources,
+  createVerificationSourceContext,
+} from "../sources";
 
 describe("buildVerificationSources", () => {
   it("documents generation assumptions with explicit trust levels", () => {
     const sources = buildGenerationSources();
 
     expect(sources.map((s) => s.id)).toEqual([
-      "safe-url-input",
-      "safe-api-response",
-      "packaged-at-timestamp",
-      "exported-json",
+      GENERATION_SOURCE_IDS.SAFE_URL_INPUT,
+      GENERATION_SOURCE_IDS.SAFE_API_RESPONSE,
+      GENERATION_SOURCE_IDS.PACKAGED_AT_TIMESTAMP,
+      GENERATION_SOURCE_IDS.EXPORTED_JSON,
     ]);
-    expect(sources.find((s) => s.id === "safe-api-response")?.trust).toBe(
+    expect(sources.find((s) => s.id === GENERATION_SOURCE_IDS.SAFE_API_RESPONSE)?.trust).toBe(
       "api-sourced"
     );
   });
 
   it("describes all core verification sources when settings are enabled", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    });
+    }));
 
     expect(sources).toHaveLength(10);
     expect(sources.map((s) => s.id)).toEqual([
-      "evidence-package",
-      "hash-recompute",
-      "signatures",
-      "signature-scheme-coverage",
-      "safe-owners-threshold",
-      "onchain-policy-proof",
-      "decoded-calldata",
-      "simulation",
-      "consensus-proof",
-      "settings",
+      VERIFICATION_SOURCE_IDS.EVIDENCE_PACKAGE,
+      VERIFICATION_SOURCE_IDS.HASH_RECOMPUTE,
+      VERIFICATION_SOURCE_IDS.SIGNATURES,
+      VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE,
+      VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD,
+      VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF,
+      VERIFICATION_SOURCE_IDS.DECODED_CALLDATA,
+      VERIFICATION_SOURCE_IDS.SIMULATION,
+      VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
+      VERIFICATION_SOURCE_IDS.SETTINGS,
     ]);
-    expect(sources.find((s) => s.id === "settings")?.status).toBe("enabled");
-    expect(sources.find((s) => s.id === "settings")?.trust).toBe("user-provided");
-    expect(sources.find((s) => s.id === "hash-recompute")?.summary).toContain("Recomputed");
-    expect(sources.find((s) => s.id === "signature-scheme-coverage")?.status).toBe("disabled");
-    expect(sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("disabled");
-    expect(sources.find((s) => s.id === "simulation")?.status).toBe("disabled");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.status).toBe("enabled");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.trust).toBe("user-provided");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.HASH_RECOMPUTE)?.summary).toContain("Recomputed");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE)?.status).toBe("disabled");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF)?.status).toBe("disabled");
+    expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION)?.status).toBe("disabled");
   });
 
   it("marks settings source disabled when no settings are available", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: false,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    });
+    }));
 
-    const settingsSource = sources.find((s) => s.id === "settings");
+    const settingsSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS);
     expect(settingsSource).toBeDefined();
     expect(settingsSource?.status).toBe("disabled");
     expect(settingsSource?.trust).toBe("api-sourced");
@@ -65,35 +71,35 @@ describe("buildVerificationSources", () => {
   });
 
   it("uses self-verified sources for cryptographic checks", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    });
+    }));
 
-    const cryptoSource = sources.find((s) => s.id === "signatures");
+    const cryptoSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIGNATURES);
     expect(cryptoSource?.trust).toBe("self-verified");
     expect(cryptoSource?.detail).toMatch(/signature/i);
 
-    const hashSource = sources.find((s) => s.id === "hash-recompute");
+    const hashSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.HASH_RECOMPUTE);
     expect(hashSource?.trust).toBe("self-verified");
     expect(hashSource?.detail).toMatch(/safeTxHash/i);
   });
 
   it("flags unsupported signature schemes as an explicit api-sourced assumption", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: true,
       hasUnsupportedSignatures: true,
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    });
+    }));
 
-    const coverage = sources.find((s) => s.id === "signature-scheme-coverage");
+    const coverage = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE);
     expect(coverage).toBeDefined();
     expect(coverage?.trust).toBe("api-sourced");
     expect(coverage?.status).toBe("enabled");
@@ -101,7 +107,7 @@ describe("buildVerificationSources", () => {
   });
 
   it("upgrades safe-owners-threshold to proof-verified when policy proof is present", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: false,
@@ -109,19 +115,19 @@ describe("buildVerificationSources", () => {
       hasSimulation: false,
       hasConsensusProof: false,
       onchainPolicyProofTrust: "proof-verified",
-    });
+    }));
 
-    const ownersSource = sources.find((s) => s.id === "safe-owners-threshold");
+    const ownersSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD);
     expect(ownersSource?.trust).toBe("proof-verified");
     expect(ownersSource?.summary).toContain("storage proofs");
 
-    const proofSource = sources.find((s) => s.id === "onchain-policy-proof");
+    const proofSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF);
     expect(proofSource?.status).toBe("enabled");
     expect(proofSource?.trust).toBe("proof-verified");
   });
 
   it("marks simulation as enabled with rpc-sourced trust when present", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: false,
@@ -129,16 +135,16 @@ describe("buildVerificationSources", () => {
       hasSimulation: true,
       hasConsensusProof: false,
       simulationTrust: "rpc-sourced",
-    });
+    }));
 
-    const simSource = sources.find((s) => s.id === "simulation");
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
     expect(simSource?.status).toBe("enabled");
     expect(simSource?.trust).toBe("rpc-sourced");
     expect(simSource?.summary).toContain("simulated");
   });
 
   it("respects custom trust levels for policy proof and simulation", () => {
-    const sources = buildVerificationSources({
+    const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: false,
@@ -147,12 +153,12 @@ describe("buildVerificationSources", () => {
       hasConsensusProof: false,
       onchainPolicyProofTrust: "rpc-sourced",
       simulationTrust: "proof-verified",
-    });
+    }));
 
-    const proofSource = sources.find((s) => s.id === "onchain-policy-proof");
+    const proofSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF);
     expect(proofSource?.trust).toBe("rpc-sourced");
 
-    const simSource = sources.find((s) => s.id === "simulation");
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
     expect(simSource?.trust).toBe("proof-verified");
   });
 });

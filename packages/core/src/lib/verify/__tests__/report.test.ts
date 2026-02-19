@@ -4,6 +4,7 @@ import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
 import type { OnchainPolicyProof, Simulation } from "../../types";
+import { VERIFICATION_SOURCE_IDS } from "../../trust/sources";
 import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
 
@@ -26,12 +27,12 @@ describe("verifyEvidencePackage", () => {
     expect(result.signatures.byOwner[evidence.confirmations[0].owner].status).toBe("valid");
     expect(result.hashMatch).toBe(true);
     expect(result.sources).toHaveLength(10);
-    expect(result.sources.find((s) => s.id === "settings")?.status).toBe("disabled");
-    expect(result.sources.find((s) => s.id === "safe-owners-threshold")?.trust).toBe("api-sourced");
-    expect(result.sources.find((s) => s.id === "decoded-calldata")?.status).toBe("enabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.status).toBe("disabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD)?.trust).toBe("api-sourced");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA)?.status).toBe("enabled");
     // Without policy proof or simulation, those sections should be disabled
-    expect(result.sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("disabled");
-    expect(result.sources.find((s) => s.id === "simulation")?.status).toBe("disabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF)?.status).toBe("disabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION)?.status).toBe("disabled");
   });
 
   it("detects tampered safeTxHash and still validates signatures against recomputed hash", async () => {
@@ -66,7 +67,7 @@ describe("verifyEvidencePackage", () => {
       level: "danger",
       message: expect.stringContaining("unknown contract"),
     });
-    expect(result.sources.find((s) => s.id === "settings")?.status).toBe("enabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.status).toBe("enabled");
   });
 
   it("returns no target warnings without settings", async () => {
@@ -130,7 +131,7 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
       expect(check.passed).toBe(true);
     }
     // The onchain-policy-proof source should be enabled
-    expect(result.sources.find((s) => s.id === "onchain-policy-proof")?.status).toBe("enabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF)?.status).toBe("enabled");
   });
 
   it("returns policyProof.valid=false when proof is tampered", async () => {

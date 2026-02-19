@@ -16,6 +16,7 @@ import {
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
   buildVerificationSources,
+  createVerificationSourceContext,
   getChainName,
   interpretTransaction,
   computeSafeTxHashDetailed,
@@ -477,26 +478,26 @@ async function runSources() {
   console.log("");
   console.log("Verification sources reference:");
   printSourceFactsFromList(
-    buildVerificationSources({
+    buildVerificationSources(createVerificationSourceContext({
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    })
+    }))
   );
   console.log("");
   console.log("Verification sources without local settings:");
   printSourceFactsFromList(
-    buildVerificationSources({
+    buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
       hasOnchainPolicyProof: false,
       hasSimulation: false,
       hasConsensusProof: false,
-    })
+    }))
   );
 }
 
