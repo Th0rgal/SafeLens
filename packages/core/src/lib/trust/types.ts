@@ -1,9 +1,12 @@
-export type TrustLevel =
-  | "proof-verified"
-  | "self-verified"
-  | "rpc-sourced"
-  | "api-sourced"
-  | "user-provided";
+import type { TrustClassification } from "../types";
+
+/**
+ * TrustLevel is an alias for TrustClassification so that both the Zod
+ * schema (used for runtime validation) and the display/config layer
+ * share a single source of truth.  Adding a sixth level to the Zod enum
+ * will surface a compile error in TRUST_CONFIG automatically.
+ */
+export type TrustLevel = TrustClassification;
 
 export type TrustConfig = {
   label: string;
