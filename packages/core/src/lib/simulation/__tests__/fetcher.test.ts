@@ -79,7 +79,7 @@ describe("simulation fetcher RPC payloads", () => {
     expect(attempts[2].stateOverrideArg).toEqual(overrideObject);
   });
 
-  it("keeps explicit zero gasPrice for Foundry parity", () => {
+  it("omits gasPrice when transaction gasPrice is zero", () => {
     const req = buildExecSimulationCallRequest(
       from,
       to,
@@ -90,7 +90,7 @@ describe("simulation fetcher RPC payloads", () => {
       stateOverride
     );
 
-    expect(req.gasPrice).toBe(0n);
+    expect(req.gasPrice).toBeUndefined();
 
     const attempts = buildTraceCallAttempts(
       from,
@@ -110,7 +110,7 @@ describe("simulation fetcher RPC payloads", () => {
     );
 
     expect(attempts[0].callObject.gas).toBe("0x1c9c380");
-    expect(attempts[0].callObject.gasPrice).toBe("0x0");
+    expect(attempts[0].callObject.gasPrice).toBeUndefined();
   });
 
   it("drops logs emitted by reverted frames", () => {

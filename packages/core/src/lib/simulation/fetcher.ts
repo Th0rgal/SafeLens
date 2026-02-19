@@ -86,7 +86,7 @@ interface ExecSimulationCallRequest {
   to: Address;
   data: Hex;
   gas?: bigint;
-  gasPrice: bigint;
+  gasPrice?: bigint;
   blockNumber: bigint;
   stateOverride: Array<{
     address: Address;
@@ -95,7 +95,7 @@ interface ExecSimulationCallRequest {
 }
 
 interface TraceCallAttempt {
-  callObject: { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex };
+  callObject: { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice?: Hex };
   blockHex: string;
   traceConfig: Record<string, unknown>;
   stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
@@ -328,7 +328,7 @@ export function buildExecSimulationCallRequest(
     to,
     data,
     gas,
-    gasPrice,
+    gasPrice: gasPrice > 0n ? gasPrice : undefined,
     blockNumber,
     stateOverride,
   };
@@ -517,7 +517,7 @@ async function executeTraceCallAttempts(
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: params as unknown as [
-          { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice: Hex },
+          { from: Address; to: Address; data: Hex; gas?: Hex; gasPrice?: Hex },
           string,
           Record<string, unknown>,
           Record<string, unknown>?,
@@ -627,8 +627,7 @@ function buildTraceCallAttemptsForConfig(
     to,
     data,
     gas: toHex(gas),
-    // Keep tx.gasprice parity with Foundry/anvil, including explicit zero.
-    gasPrice: toHex(gasPrice),
+    gasPrice: gasPrice > 0n ? toHex(gasPrice) : undefined,
   };
 
   return [
