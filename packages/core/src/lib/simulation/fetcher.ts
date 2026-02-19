@@ -50,7 +50,6 @@ const SIMULATION_PRIVATE_KEY: Hex =
   "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 const SIMULATION_ACCOUNT = privateKeyToAccount(SIMULATION_PRIVATE_KEY);
-const SIMULATION_ACCOUNT_BALANCE_OVERRIDE = 100000000000000000000n; // 100 ETH
 
 // ── Safe execTransaction ABI ──────────────────────────────────────
 
@@ -92,8 +91,7 @@ interface ExecSimulationCallRequest {
   blockNumber: bigint;
   stateOverride: Array<{
     address: Address;
-    stateDiff?: Array<{ slot: Hex; value: Hex }>;
-    balance?: bigint;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
   }>;
 }
 
@@ -101,10 +99,7 @@ interface TraceCallAttempt {
   callObject: { from: Address; to: Address; data: Hex; value: Hex; gas?: Hex; gasPrice: Hex };
   blockHex: string;
   traceConfig: Record<string, unknown>;
-  stateOverrideArg?: Record<
-    string,
-    { stateDiff?: Record<string, string>; balance?: string }
-  >;
+  stateOverrideArg?: Record<string, { stateDiff: Record<string, string> }>;
 }
 
 // ── Main fetcher ──────────────────────────────────────────────────
@@ -201,11 +196,7 @@ export async function fetchSimulation(
     { slot: moduleSlot(SENTINEL), value: pad(SENTINEL, { size: 32 }) },
   ];
 
-  const viemStateOverride: ExecSimulationCallRequest["stateOverride"] = [
-    { address: safeAddress, stateDiff: safeStateDiff },
-    // Fund simulation sender for providers that enforce affordability on eth_call/trace.
-    { address: simulatorAddress, balance: SIMULATION_ACCOUNT_BALANCE_OVERRIDE },
-  ];
+  const viemStateOverride = [{ address: safeAddress, stateDiff: safeStateDiff }];
 
   // ── Step 4: Encode and call ─────────────────────────────────────
 
@@ -332,8 +323,7 @@ export function buildExecSimulationCallRequest(
   blockNumber: bigint,
   stateOverride: Array<{
     address: Address;
-    stateDiff?: Array<{ slot: Hex; value: Hex }>;
-    balance?: bigint;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
   }>
 ): ExecSimulationCallRequest {
   return {
@@ -459,29 +449,21 @@ async function tryTraceCall(
   blockNumber: bigint,
   stateOverride: Array<{
     address: Address;
-    stateDiff?: Array<{ slot: Hex; value: Hex }>;
-    balance?: bigint;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
   }>
 ): Promise<TraceResult> {
   try {
     // Build state override in the raw JSON-RPC format for debug_traceCall
     const stateOverrideObj: Record<
       string,
-      { stateDiff?: Record<string, string>; balance?: string }
+      { stateDiff: Record<string, string> }
     > = {};
     for (const override of stateOverride) {
-      const rpcOverride: { stateDiff?: Record<string, string>; balance?: string } = {};
-      if (override.stateDiff && override.stateDiff.length > 0) {
-        const diffs: Record<string, string> = {};
-        for (const entry of override.stateDiff) {
-          diffs[entry.slot] = entry.value;
-        }
-        rpcOverride.stateDiff = diffs;
+      const diffs: Record<string, string> = {};
+      for (const entry of override.stateDiff) {
+        diffs[entry.slot] = entry.value;
       }
-      if (override.balance) {
-        rpcOverride.balance = toHex(override.balance);
-      }
-      stateOverrideObj[override.address] = rpcOverride;
+      stateOverrideObj[override.address] = { stateDiff: diffs };
     }
 
     const attempts = buildTraceCallAttempts(
@@ -567,10 +549,7 @@ async function tryTraceStateDiffs(
   gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
-  stateOverride: Record<
-    string,
-    { stateDiff?: Record<string, string>; balance?: string }
-  >
+  stateOverride: Record<string, { stateDiff: Record<string, string> }>
 ): Promise<Simulation["stateDiffs"] | undefined> {
   const attempts = buildPrestateTraceCallAttempts(
     from,
@@ -601,10 +580,7 @@ export function buildTraceCallAttempts(
   gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
-  stateOverride: Record<
-    string,
-    { stateDiff?: Record<string, string>; balance?: string }
-  >
+  stateOverride: Record<string, { stateDiff: Record<string, string> }>
 ): TraceCallAttempt[] {
   return buildTraceCallAttemptsForConfig(
     from,
@@ -625,10 +601,7 @@ function buildPrestateTraceCallAttempts(
   gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
-  stateOverride: Record<
-    string,
-    { stateDiff?: Record<string, string>; balance?: string }
-  >
+  stateOverride: Record<string, { stateDiff: Record<string, string> }>
 ): TraceCallAttempt[] {
   return buildTraceCallAttemptsForConfig(
     from,
@@ -649,10 +622,7 @@ function buildTraceCallAttemptsForConfig(
   gas: bigint,
   gasPrice: bigint,
   blockNumber: bigint,
-  stateOverride: Record<
-    string,
-    { stateDiff?: Record<string, string>; balance?: string }
-  >,
+  stateOverride: Record<string, { stateDiff: Record<string, string> }>,
   traceConfigBase: Record<string, unknown>
 ): TraceCallAttempt[] {
   const blockHex = `0x${blockNumber.toString(16)}`;
