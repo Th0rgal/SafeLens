@@ -126,6 +126,12 @@ const BUILT_IN_INTERPRETERS = [
     description: "Decodes Time-Weighted Average Price orders created via CoW Protocol's Composable Order Framework.",
   },
   {
+    id: "cowswap-presign",
+    protocol: "CoW Protocol",
+    action: "Pre-Sign Order",
+    description: "Decodes on-chain pre-signatures for CoW Protocol swap orders via the Settlement contract.",
+  },
+  {
     id: "safe-policy",
     protocol: "Safe",
     action: "Policy Change",

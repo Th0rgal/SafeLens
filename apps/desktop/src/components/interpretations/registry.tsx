@@ -15,6 +15,7 @@ import type { ComponentType } from "react";
 import type { Interpretation, Severity } from "@safelens/core";
 import { ERC20TransferCard } from "./erc20-transfer-card";
 import { CowSwapTwapCard } from "./cowswap-twap-card";
+import { CowSwapPreSignCard } from "./cowswap-presign-card";
 import { SafePolicyCard } from "./safe-policy-card";
 import { ERC7730Card } from "./erc7730-card";
 
@@ -38,6 +39,7 @@ export interface EvidenceContext {
 const RENDERERS: Record<Interpretation["id"], ComponentType<{ details: any; context?: EvidenceContext }>> = {
   "erc20-transfer": ERC20TransferCard,
   "cowswap-twap": CowSwapTwapCard,
+  "cowswap-presign": CowSwapPreSignCard,
   "safe-policy": SafePolicyCard,
   "erc7730": ERC7730Card,
 };

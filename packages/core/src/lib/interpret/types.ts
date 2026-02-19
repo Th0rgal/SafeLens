@@ -124,6 +124,24 @@ export interface ERC20TransferDetails {
   isUnlimitedApproval?: boolean;
 }
 
+/** CoW Protocol setPreSignature details. */
+export interface CowSwapPreSignDetails {
+  /** The full orderUid (hex string). */
+  orderUid: string;
+  /** The 32-byte order digest extracted from the orderUid. */
+  orderDigest: string;
+  /** The owner address extracted from the orderUid. */
+  owner: string;
+  /** The validTo timestamp extracted from the orderUid (unix seconds). */
+  validTo: number;
+  /** Human-readable expiry date. */
+  validToFormatted: string;
+  /** Whether the order is being signed (true) or cancelled (false). */
+  signed: boolean;
+  /** The settlement contract address. */
+  settlementContract: string;
+}
+
 /** ERC-7730 generic interpretation details. */
 export interface ERC7730Details {
   fields: Array<{
@@ -167,6 +185,14 @@ export type Interpretation =
       severity: "critical";
       summary: string;
       details: SafePolicyChangeDetails;
+    }
+  | {
+      id: "cowswap-presign";
+      protocol: "CoW Protocol";
+      action: "Pre-Sign Order" | "Cancel Pre-Sign";
+      severity: "info";
+      summary: string;
+      details: CowSwapPreSignDetails;
     }
   | {
       id: "erc7730";
