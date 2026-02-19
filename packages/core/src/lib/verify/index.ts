@@ -91,7 +91,7 @@ export async function verifyEvidencePackage(
     chainId: evidence.chainId,
     to: evidence.transaction.to as Address,
     value: BigInt(evidence.transaction.value),
-    data: evidence.transaction.data as Hex,
+    data: (evidence.transaction.data ?? "0x") as Hex,
     operation: evidence.transaction.operation,
     safeTxGas: BigInt(evidence.transaction.safeTxGas),
     baseGas: BigInt(evidence.transaction.baseGas),

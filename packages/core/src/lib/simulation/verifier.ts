@@ -134,7 +134,7 @@ export function verifySimulation(
   checks.push({
     id: "execution-result",
     label: "Execution result",
-    passed: true,
+    passed: simulation.success,
     detail: simulation.success ? "Transaction succeeded" : "Transaction reverted",
   });
 

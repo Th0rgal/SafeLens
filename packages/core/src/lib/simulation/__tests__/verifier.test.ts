@@ -29,9 +29,9 @@ describe("verifySimulation", () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-    // Execution result check should still pass (it always passes, just reports status)
+    // Structurally valid, but execution-result check reflects the revert
     const execCheck = result.checks.find((c) => c.id === "execution-result");
-    expect(execCheck?.passed).toBe(true);
+    expect(execCheck?.passed).toBe(false);
     expect(execCheck?.detail).toContain("reverted");
   });
 
