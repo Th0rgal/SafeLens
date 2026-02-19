@@ -123,7 +123,7 @@ export function buildVerificationSources(
       ? {
           id: "safe-owners-threshold",
           title: "Safe owners and threshold",
-          trust: context.onchainPolicyProofTrust ?? "proof-verified",
+          trust: context.onchainPolicyProofTrust ?? "rpc-sourced",
           summary:
             "Owner set and threshold verified against on-chain storage proofs.",
           detail:
@@ -143,7 +143,7 @@ export function buildVerificationSources(
       ? {
           id: "onchain-policy-proof",
           title: "On-chain policy proof",
-          trust: context.onchainPolicyProofTrust ?? "proof-verified",
+          trust: context.onchainPolicyProofTrust ?? "rpc-sourced",
           summary:
             "Safe policy verified via eth_getProof Merkle storage proofs.",
           detail:
