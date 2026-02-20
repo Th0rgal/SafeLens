@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchConsensusProof } from "../index";
+import {
+  fetchConsensusProof,
+  UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
+} from "../index";
 
 describe("consensus mode routing", () => {
   afterEach(() => {
@@ -69,6 +72,7 @@ describe("consensus mode routing", () => {
 
     const proof = await fetchConsensusProof(59144, {
       rpcUrl: "https://example.invalid/rpc",
+      enableExperimentalLineaConsensus: true,
     });
 
     expect(proof).toMatchObject({
@@ -79,6 +83,14 @@ describe("consensus mode routing", () => {
         "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     });
     expect("proofPayload" in proof).toBe(true);
+  });
+
+  it("rejects linea envelopes when rollout feature flag is disabled", async () => {
+    await expect(fetchConsensusProof(59144)).rejects.toMatchObject({
+      code: UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
+      consensusMode: "linea",
+      reason: "disabled-by-feature-flag",
+    });
   });
 
   it("rejects chains without any configured consensus path", async () => {

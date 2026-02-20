@@ -22,7 +22,13 @@ export {
 
 export interface FetchConsensusProofOptions
   extends BeaconFetchConsensusProofOptions,
-    FetchExecutionConsensusProofOptions {}
+    FetchExecutionConsensusProofOptions {
+  /**
+   * Rollout gate for experimental Linea consensus envelopes.
+   * Default is false until the full verifier path is complete.
+   */
+  enableExperimentalLineaConsensus?: boolean;
+}
 
 export const UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE =
   "unsupported-consensus-mode" as const;
@@ -32,10 +38,13 @@ export class UnsupportedConsensusModeError extends Error {
 
   constructor(
     readonly chainId: number,
-    readonly consensusMode: "opstack" | "linea"
+    readonly consensusMode: "opstack" | "linea",
+    readonly reason: "not-implemented" | "disabled-by-feature-flag" = "not-implemented"
   ) {
     super(
-      `Consensus mode '${consensusMode}' is not implemented for chain ID ${chainId}.`
+      reason === "disabled-by-feature-flag"
+        ? `Consensus mode '${consensusMode}' is disabled by feature flag for chain ID ${chainId}.`
+        : `Consensus mode '${consensusMode}' is not implemented for chain ID ${chainId}.`
     );
     this.name = "UnsupportedConsensusModeError";
   }
@@ -61,6 +70,17 @@ export async function fetchConsensusProof(
 
   if (capability.consensusMode === "beacon") {
     return fetchBeaconConsensusProof(chainId, options);
+  }
+
+  if (
+    capability.consensusMode === "linea" &&
+    options.enableExperimentalLineaConsensus !== true
+  ) {
+    throw new UnsupportedConsensusModeError(
+      chainId,
+      capability.consensusMode,
+      "disabled-by-feature-flag"
+    );
   }
 
   return fetchExecutionConsensusProof(chainId, capability.consensusMode, options);

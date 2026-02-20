@@ -123,6 +123,11 @@ bun --cwd packages/cli dev settings init   # initialize settings
 bun --cwd packages/cli dev sources         # show verification sources
 ```
 
+Generator rollout flags:
+
+- `NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS=1` enables experimental Linea consensus envelope generation.
+- Default is disabled so Linea remains an explicit partial-support path until full verifier rollout is complete.
+
 ### Cleanup
 
 ```bash
