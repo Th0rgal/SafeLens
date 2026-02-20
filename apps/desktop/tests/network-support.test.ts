@@ -67,6 +67,26 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.helperText).toContain("consensus envelope checks");
   });
 
+  it("returns full support for holesky when package includes consensus and simulation", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(17000, { consensusProof: true, simulation: true })
+    );
+
+    expect(status.isFullySupported).toBe(true);
+    expect(status.badgeText).toBe("Full");
+    expect(status.helperText).toBeNull();
+  });
+
+  it("returns full support for hoodi when package includes consensus and simulation", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(560048, { consensusProof: true, simulation: true })
+    );
+
+    expect(status.isFullySupported).toBe(true);
+    expect(status.badgeText).toBe("Full");
+    expect(status.helperText).toBeNull();
+  });
+
   it("surfaces feature-flag-disabled consensus mode in helper text", () => {
     const status = buildNetworkSupportStatus(
       makeEvidence(59144, {
