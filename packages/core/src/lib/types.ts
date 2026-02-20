@@ -220,6 +220,27 @@ export const exportContractReasonSchema = z.enum([
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
 
+export const LEGACY_PENDING_CONSENSUS_EXPORT_REASONS = [
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
+] as const satisfies readonly ExportContractReason[];
+
+export type LegacyPendingConsensusExportReason =
+  (typeof LEGACY_PENDING_CONSENSUS_EXPORT_REASONS)[number];
+
+export function findLegacyPendingConsensusExportReason(
+  reasons: readonly ExportContractReason[] | null | undefined
+): LegacyPendingConsensusExportReason | null {
+  if (!reasons || reasons.length === 0) {
+    return null;
+  }
+
+  const matched = LEGACY_PENDING_CONSENSUS_EXPORT_REASONS.find((reasonCode) =>
+    reasons.includes(reasonCode)
+  );
+  return matched ?? null;
+}
+
 export const evidenceExportContractSchema = z.object({
   mode: z.enum(["fully-verifiable", "partial"]),
   status: z.enum(["complete", "partial"]),

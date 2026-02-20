@@ -1,4 +1,7 @@
-import { getNetworkCapability } from "@safelens/core";
+import {
+  findLegacyPendingConsensusExportReason,
+  getNetworkCapability,
+} from "@safelens/core";
 import type { EvidencePackage, ExportContractReason } from "@safelens/core";
 
 export type NetworkSupportStatus = {
@@ -26,10 +29,7 @@ function getConsensusSupportReasonText(
     return "Partially supported: this network's consensus verification mode is not supported in this build.";
   }
 
-  if (
-    exportReasons.includes("opstack-consensus-verifier-pending") ||
-    exportReasons.includes("linea-consensus-verifier-pending")
-  ) {
+  if (findLegacyPendingConsensusExportReason(exportReasons)) {
     return "Partially supported: this package was exported with a legacy pending-verifier reason. Re-export with a current SafeLens build.";
   }
 

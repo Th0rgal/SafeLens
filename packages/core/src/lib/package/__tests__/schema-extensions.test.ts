@@ -3,6 +3,7 @@ import {
   evidencePackageSchema,
   evidenceExportContractSchema,
   consensusProofSchema,
+  findLegacyPendingConsensusExportReason,
   onchainPolicyProofSchema,
   simulationSchema,
   trustClassificationSchema,
@@ -268,6 +269,31 @@ describe("export contract schema", () => {
       },
     });
     expect(result.success).toBe(true);
+  });
+
+  it("finds only legacy pending consensus export reasons", () => {
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "missing-simulation",
+        "opstack-consensus-verifier-pending",
+      ])
+    ).toBe("opstack-consensus-verifier-pending");
+
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "linea-consensus-verifier-pending",
+        "missing-consensus-proof",
+      ])
+    ).toBe("linea-consensus-verifier-pending");
+
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "missing-consensus-proof",
+        "simulation-fetch-failed",
+      ])
+    ).toBeNull();
+    expect(findLegacyPendingConsensusExportReason([])).toBeNull();
+    expect(findLegacyPendingConsensusExportReason(undefined)).toBeNull();
   });
 });
 

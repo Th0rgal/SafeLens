@@ -177,6 +177,7 @@ Generator rollout flags:
 - `ExecutionSafetyPanel` verdict copy now avoids ambiguous "safe/verified" phrasing (`Manual review required` / `No critical issues found`), includes a per-package checks summary counter, and labels missing desktop consensus output as `Unavailable in this session` instead of `Running`.
 - `ExecutionSafetyPanel` collapsed view now surfaces a prioritized `Attention needed` summary (errors/warnings first, explicit reason codes, deduped against network-support helper text), while detailed helper text remains in expanded view to reduce repeated partial-support copy.
 - Core now exports a strict `ConsensusVerifierErrorCode` contract + type guard; desktop consensus-detail mapping only accepts that explicit code set (plus one documented feature-flag fallback), reducing broad string handling drift at the app/core boundary.
+- Core now also exports `findLegacyPendingConsensusExportReason(...)`; desktop support/safety UI uses this shared helper instead of duplicating `*-consensus-verifier-pending` checks, keeping legacy-reason handling centralized and typed.
 
 ### Cleanup
 

@@ -1,4 +1,5 @@
 import {
+  findLegacyPendingConsensusExportReason,
   isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
@@ -67,14 +68,6 @@ const NO_PROOF_CONSENSUS_REASON_CODES = [
 
 type NoProofConsensusReasonCode = (typeof NO_PROOF_CONSENSUS_REASON_CODES)[number];
 
-const LEGACY_PENDING_CONSENSUS_REASON_CODES = [
-  "opstack-consensus-verifier-pending",
-  "linea-consensus-verifier-pending",
-] as const;
-
-type LegacyPendingConsensusReasonCode =
-  (typeof LEGACY_PENDING_CONSENSUS_REASON_CODES)[number];
-
 const NO_PROOF_CONSENSUS_DETAILS: Record<NoProofConsensusReasonCode, string> = {
   "consensus-mode-disabled-by-feature-flag":
     "Consensus verification for this mode is disabled in this build.",
@@ -98,12 +91,8 @@ function getNoProofConsensusReasonCode(
 
 function getLegacyPendingConsensusReasonCode(
   evidence: Pick<EvidencePackage, "exportContract">
-): LegacyPendingConsensusReasonCode | null {
-  const exportReasons = evidence.exportContract?.reasons ?? [];
-  const matched = LEGACY_PENDING_CONSENSUS_REASON_CODES.find((reasonCode) =>
-    exportReasons.includes(reasonCode)
-  );
-  return matched ?? null;
+): ReturnType<typeof findLegacyPendingConsensusExportReason> {
+  return findLegacyPendingConsensusExportReason(evidence.exportContract?.reasons);
 }
 
 function getConsensusFailureDetail(
