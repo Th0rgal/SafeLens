@@ -220,85 +220,107 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
   });
 
-  it("keeps export partial with OP Stack pending-verifier reason when envelope artifact exists", () => {
-    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-    const evidence = {
-      ...base,
-      onchainPolicyProof: {
-        blockNumber: 1,
-        stateRoot:
-          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
-        accountProof: {
-          address: COWSWAP_TWAP_TX.safe,
-          balance: "0",
-          codeHash:
-            "0x1111111111111111111111111111111111111111111111111111111111111111",
-          nonce: 0,
-          storageHash:
-            "0x2222222222222222222222222222222222222222222222222222222222222222",
-          accountProof: [],
-          storageProof: [],
+  it.each([
+    {
+      chainId: 10,
+      consensusMode: "opstack" as const,
+      network: "optimism" as const,
+      pendingReason: "opstack-consensus-verifier-pending" as const,
+    },
+    {
+      chainId: 59144,
+      consensusMode: "linea" as const,
+      network: "linea" as const,
+      pendingReason: "linea-consensus-verifier-pending" as const,
+    },
+  ])(
+    "keeps export partial with non-beacon pending-verifier reason when $consensusMode envelope artifact exists",
+    ({ chainId, consensusMode, network, pendingReason }) => {
+      const base = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
+      const evidence = {
+        ...base,
+        onchainPolicyProof: {
+          blockNumber: 1,
+          stateRoot:
+            "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+          accountProof: {
+            address: COWSWAP_TWAP_TX.safe,
+            balance: "0",
+            codeHash:
+              "0x1111111111111111111111111111111111111111111111111111111111111111",
+            nonce: 0,
+            storageHash:
+              "0x2222222222222222222222222222222222222222222222222222222222222222",
+            accountProof: [],
+            storageProof: [],
+          },
+          decodedPolicy: {
+            owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+            threshold: 1,
+            nonce: 0,
+            modules: [],
+            guard: "0x0000000000000000000000000000000000000000",
+            fallbackHandler: "0x0000000000000000000000000000000000000000",
+            singleton: "0x0000000000000000000000000000000000000000",
+          },
+          trust: "rpc-sourced" as const,
         },
-        decodedPolicy: {
-          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
-          threshold: 1,
-          nonce: 0,
-          modules: [],
-          guard: "0x0000000000000000000000000000000000000000",
-          fallbackHandler: "0x0000000000000000000000000000000000000000",
-          singleton: "0x0000000000000000000000000000000000000000",
+        consensusProof: {
+          consensusMode,
+          network,
+          proofPayload: "{\"kind\":\"envelope-only\"}",
+          stateRoot:
+            "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+          blockNumber: 1,
         },
-        trust: "rpc-sourced" as const,
-      },
-      consensusProof: {
-        consensusMode: "opstack" as const,
-        network: "optimism",
-        proofPayload: "{\"kind\":\"envelope-only\"}",
-        stateRoot:
-          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
-        blockNumber: 1,
-      },
-      simulation: {
-        success: true,
-        returnData: "0x",
-        gasUsed: "1",
-        logs: [],
-        blockNumber: 1,
-        trust: "rpc-sourced" as const,
-      },
-    };
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "1",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced" as const,
+        },
+      };
 
-    const finalized = finalizeEvidenceExport(evidence, {
-      rpcProvided: true,
-      consensusProofAttempted: true,
-      consensusProofFailed: false,
-      onchainPolicyProofAttempted: true,
-      onchainPolicyProofFailed: false,
-      simulationAttempted: true,
-      simulationFailed: false,
-    });
+      const finalized = finalizeEvidenceExport(evidence, {
+        rpcProvided: true,
+        consensusProofAttempted: true,
+        consensusProofFailed: false,
+        onchainPolicyProofAttempted: true,
+        onchainPolicyProofFailed: false,
+        simulationAttempted: true,
+        simulationFailed: false,
+      });
 
-    expect(finalized.exportContract?.mode).toBe("partial");
-    expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
-    expect(finalized.exportContract?.reasons).toContain("opstack-consensus-verifier-pending");
-    expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
-    expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
-  });
+      expect(finalized.exportContract?.mode).toBe("partial");
+      expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
+      expect(finalized.exportContract?.reasons).toContain(pendingReason);
+      expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
+      expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
+    }
+  );
 
-  it("does not mark consensus fetch failure for opstack chains when rpc was not provided", () => {
-    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, 10, TX_URL);
-    const finalized = finalizeEvidenceExport(evidence, {
-      rpcProvided: false,
-      consensusProofAttempted: true,
-      consensusProofFailed: true,
-      onchainPolicyProofAttempted: false,
-      onchainPolicyProofFailed: false,
-      simulationAttempted: false,
-      simulationFailed: false,
-    });
+  it.each([
+    { chainId: 10, label: "opstack" },
+    { chainId: 59144, label: "linea" },
+  ])(
+    "does not mark consensus fetch failure for $label chains when rpc was not provided",
+    ({ chainId }) => {
+      const evidence = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
+      const finalized = finalizeEvidenceExport(evidence, {
+        rpcProvided: false,
+        consensusProofAttempted: true,
+        consensusProofFailed: true,
+        onchainPolicyProofAttempted: false,
+        onchainPolicyProofFailed: false,
+        simulationAttempted: false,
+        simulationFailed: false,
+      });
 
-    expect(finalized.exportContract?.reasons).toContain("missing-consensus-proof");
-    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
-    expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
-  });
+      expect(finalized.exportContract?.reasons).toContain("missing-consensus-proof");
+      expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+      expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
+    }
+  );
 });
