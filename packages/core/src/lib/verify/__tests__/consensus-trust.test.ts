@@ -48,6 +48,37 @@ describe("consensus trust reason contract", () => {
     ).toBe("non-finalized-consensus-envelope");
   });
 
+  it("maps every current desktop verifier machine error code deterministically", () => {
+    const expectedMappings: Array<[string, string]> = [
+      ["unsupported-network", "unsupported-network"],
+      ["envelope-network-mismatch", "envelope-network-mismatch"],
+      ["unsupported-consensus-mode", "unsupported-consensus-mode"],
+      ["opstack-consensus-verifier-pending", "opstack-consensus-verifier-pending"],
+      ["linea-consensus-verifier-pending", "linea-consensus-verifier-pending"],
+      ["invalid-checkpoint-hash", "invalid-proof-payload"],
+      ["invalid-bootstrap-json", "invalid-proof-payload"],
+      ["bootstrap-verification-failed", "invalid-proof-payload"],
+      ["invalid-update-json", "invalid-proof-payload"],
+      ["update-verification-failed", "invalid-proof-payload"],
+      ["invalid-finality-update-json", "invalid-proof-payload"],
+      ["finality-verification-failed", "invalid-proof-payload"],
+      ["missing-execution-payload", "invalid-proof-payload"],
+      ["invalid-expected-state-root", "invalid-expected-state-root"],
+      ["state-root-mismatch", "state-root-mismatch-flag"],
+      ["envelope-state-root-mismatch", "invalid-proof-payload"],
+      ["envelope-block-number-mismatch", "invalid-proof-payload"],
+      ["invalid-proof-payload", "invalid-proof-payload"],
+      ["stale-consensus-envelope", "stale-consensus-envelope"],
+      ["non-finalized-consensus-envelope", "non-finalized-consensus-envelope"],
+    ];
+
+    for (const [errorCode, expectedReason] of expectedMappings) {
+      expect(mapConsensusVerifierErrorCodeToTrustReason(errorCode)).toBe(
+        expectedReason
+      );
+    }
+  });
+
   it("returns null for unknown verifier error codes", () => {
     expect(mapConsensusVerifierErrorCodeToTrustReason("some-new-code")).toBeNull();
     expect(mapConsensusVerifierErrorCodeToTrustReason(undefined)).toBeNull();
