@@ -628,6 +628,18 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
             ))
         },
     });
+    if !state_root_matches {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some("Envelope state root does not match onchainPolicyProof.stateRoot.".into()),
+            error_code: Some(ERR_STATE_ROOT_MISMATCH.into()),
+            checks,
+        };
+    }
 
     ConsensusVerificationResult {
         valid: false,
@@ -1011,7 +1023,8 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_INVALID_PROOF_PAYLOAD, ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
+        ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1278,5 +1291,34 @@ mod tests {
             "unexpected error: {:?}",
             result.error
         );
+    }
+
+    #[test]
+    fn returns_state_root_mismatch_for_non_beacon_envelope_root_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_STATE_ROOT_MISMATCH));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
     }
 }

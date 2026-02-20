@@ -107,6 +107,22 @@ function evaluateConsensusTrustDecision(
       reason: "unsupported-consensus-mode",
     };
   }
+  if (consensusVerification?.error_code === "state-root-mismatch") {
+    return {
+      trusted: false,
+      reason: "state-root-mismatch-flag",
+    };
+  }
+  if (
+    consensusVerification &&
+    !consensusVerification.state_root_matches &&
+    Boolean(consensusVerification.verified_state_root)
+  ) {
+    return {
+      trusted: false,
+      reason: "state-root-mismatch-flag",
+    };
+  }
   if (!consensusVerification?.valid) {
     return {
       trusted: false,
@@ -122,13 +138,6 @@ function evaluateConsensusTrustDecision(
       reason: "missing-verified-root-or-block",
     };
   }
-  if (!consensusVerification.state_root_matches) {
-    return {
-      trusted: false,
-      reason: "state-root-mismatch-flag",
-    };
-  }
-
   const expectedStateRoot = evidence.onchainPolicyProof.stateRoot;
   const expectedBlockNumber = evidence.onchainPolicyProof.blockNumber;
   const rootMatches =
