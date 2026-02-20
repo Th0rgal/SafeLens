@@ -30,7 +30,7 @@ describe("consensus trust reason contract", () => {
     );
     expect(
       mapConsensusVerifierErrorCodeToTrustReason("envelope-network-mismatch")
-    ).toBe("invalid-proof-payload");
+    ).toBe("envelope-network-mismatch");
     expect(
       mapConsensusVerifierErrorCodeToTrustReason("envelope-state-root-mismatch")
     ).toBe("invalid-proof-payload");
@@ -53,6 +53,9 @@ describe("consensus trust reason contract", () => {
     expect(isWarningConsensusTrustDecisionReason("invalid-proof-payload")).toBe(
       false
     );
+    expect(
+      isWarningConsensusTrustDecisionReason("envelope-network-mismatch")
+    ).toBe(false);
     expect(
       isWarningConsensusTrustDecisionReason("state-root-mismatch-policy-proof")
     ).toBe(false);

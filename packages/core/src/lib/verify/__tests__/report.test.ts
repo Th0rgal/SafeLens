@@ -923,7 +923,7 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
   });
 
-  it("maps explicit envelope-network-mismatch error code to invalid-proof-payload trust reason", async () => {
+  it("maps explicit envelope-network-mismatch error code to deterministic trust reason", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {
       ...evidence,
@@ -946,12 +946,14 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
       },
     });
 
-    expect(upgraded.consensusTrustDecisionReason).toBe("invalid-proof-payload");
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "envelope-network-mismatch"
+    );
     const consensusSource = upgraded.sources.find(
       (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
     );
     expect(consensusSource?.summary).toContain(
-      "payload is malformed or failed integrity validation"
+      "network metadata does not match expected chain metadata"
     );
   });
 

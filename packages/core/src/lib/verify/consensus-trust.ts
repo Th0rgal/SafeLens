@@ -11,6 +11,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "unsupported-consensus-mode",
   // Consensus mode is known, but envelope chain is outside supported rollout scope.
   "unsupported-network",
+  // Envelope metadata network label does not match expected chain metadata.
+  "envelope-network-mismatch",
   // Mode-specific envelope checks passed, but cryptographic verification is pending.
   "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending",
@@ -45,7 +47,7 @@ const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
 > = {
   "unsupported-consensus-mode": "unsupported-consensus-mode",
   "unsupported-network": "unsupported-network",
-  "envelope-network-mismatch": "invalid-proof-payload",
+  "envelope-network-mismatch": "envelope-network-mismatch",
   "opstack-consensus-verifier-pending": "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending": "linea-consensus-verifier-pending",
   "state-root-mismatch": "state-root-mismatch-flag",
@@ -79,6 +81,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "consensus mode is not supported by the desktop verifier",
   "unsupported-network":
     "consensus envelope chain is not supported for this consensus mode",
+  "envelope-network-mismatch":
+    "consensus envelope network metadata does not match expected chain metadata",
   "opstack-consensus-verifier-pending":
     "OP Stack envelope checks passed but cryptographic consensus verification is still pending",
   "linea-consensus-verifier-pending":
