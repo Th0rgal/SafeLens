@@ -136,6 +136,7 @@ Generator rollout flags:
 - CLI `analyze` now attempts consensus enrichment where supported and always stamps `exportContract` with explicit machine-readable partial/failure reasons.
 - Export contracts now treat OP Stack/Linea consensus without an RPC URL as `missing-consensus-proof` (configuration gap), not `consensus-proof-fetch-failed` (runtime failure).
 - Verification reports now preserve `invalid-proof-payload` as an explicit consensus trust reason, instead of collapsing malformed envelope failures into a generic invalid-result message.
+- Verification reports now also map Beacon payload parse/verification failure codes (for example `invalid-checkpoint-hash`, `invalid-bootstrap-json`, `missing-execution-payload`) to explicit `invalid-proof-payload` trust semantics instead of generic invalid-result fallback.
 - Verification reports now preserve `invalid-expected-state-root` as an explicit consensus trust reason when policy root formatting is invalid.
 - Verification reports now preserve `envelope-network-mismatch` as an explicit consensus trust reason (instead of collapsing it into generic `invalid-proof-payload`), keeping chain-metadata integrity failures auditable.
 - Verification reports now preserve export-contract `unsupported-consensus-mode` as an explicit consensus trust reason when consensus proof is intentionally omitted, instead of collapsing to generic missing-proof output.

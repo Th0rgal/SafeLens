@@ -53,6 +53,16 @@ const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
   "state-root-mismatch": "state-root-mismatch-flag",
   "stale-consensus-envelope": "stale-consensus-envelope",
   "non-finalized-consensus-envelope": "non-finalized-consensus-envelope",
+  // Beacon parsing / verification failures are deterministic payload integrity
+  // failures at the trust boundary.
+  "invalid-checkpoint-hash": "invalid-proof-payload",
+  "invalid-bootstrap-json": "invalid-proof-payload",
+  "bootstrap-verification-failed": "invalid-proof-payload",
+  "invalid-update-json": "invalid-proof-payload",
+  "update-verification-failed": "invalid-proof-payload",
+  "invalid-finality-update-json": "invalid-proof-payload",
+  "finality-verification-failed": "invalid-proof-payload",
+  "missing-execution-payload": "invalid-proof-payload",
   "invalid-proof-payload": "invalid-proof-payload",
   "envelope-state-root-mismatch": "invalid-proof-payload",
   "envelope-block-number-mismatch": "invalid-proof-payload",

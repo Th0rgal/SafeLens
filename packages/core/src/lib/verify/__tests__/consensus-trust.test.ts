@@ -29,6 +29,15 @@ describe("consensus trust reason contract", () => {
       "unsupported-network"
     );
     expect(
+      mapConsensusVerifierErrorCodeToTrustReason("invalid-checkpoint-hash")
+    ).toBe("invalid-proof-payload");
+    expect(
+      mapConsensusVerifierErrorCodeToTrustReason("bootstrap-verification-failed")
+    ).toBe("invalid-proof-payload");
+    expect(
+      mapConsensusVerifierErrorCodeToTrustReason("missing-execution-payload")
+    ).toBe("invalid-proof-payload");
+    expect(
       mapConsensusVerifierErrorCodeToTrustReason("envelope-network-mismatch")
     ).toBe("envelope-network-mismatch");
     expect(
