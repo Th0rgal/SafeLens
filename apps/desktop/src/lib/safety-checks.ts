@@ -19,6 +19,43 @@ const WARNING_CONSENSUS_ERROR_CODES = new Set([
   "non-finalized-consensus-envelope",
 ]);
 
+const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
+  "consensus-mode-disabled-by-feature-flag":
+    "Consensus verification for this mode is disabled in this build.",
+  "unsupported-consensus-mode":
+    "This package uses a consensus mode the desktop verifier does not support.",
+  "unsupported-network":
+    "Consensus verification is not available for this network/mode combination.",
+  "opstack-consensus-verifier-pending":
+    "OP Stack envelope integrity checks passed, but full cryptographic consensus verification is not available yet.",
+  "linea-consensus-verifier-pending":
+    "Linea envelope integrity checks passed, but full cryptographic consensus verification is not available yet.",
+  "stale-consensus-envelope":
+    "Consensus envelope is stale versus package creation time. Regenerate evidence with fresher consensus data.",
+  "non-finalized-consensus-envelope":
+    "Consensus envelope is not finalized. Regenerate evidence at a finalized block.",
+  "state-root-mismatch":
+    "Consensus-verified state root does not match the package state root.",
+  "invalid-proof-payload":
+    "Consensus proof payload is invalid or malformed.",
+  "invalid-expected-state-root":
+    "Expected state root format is invalid.",
+};
+
+function getConsensusFailureDetail(
+  consensusVerification: ConsensusVerificationResult,
+  fallbackSummary: string
+): string {
+  const mapped = consensusVerification.error_code
+    ? CONSENSUS_ERROR_DETAILS[consensusVerification.error_code]
+    : undefined;
+  if (mapped) {
+    return mapped;
+  }
+
+  return consensusVerification.error ?? fallbackSummary;
+}
+
 function getConsensusSuccessDetail(
   consensusMode: string | undefined,
   verifiedBlockNumber: number | null
@@ -84,6 +121,6 @@ export function classifyConsensusStatus(
     status: WARNING_CONSENSUS_ERROR_CODES.has(consensusVerification.error_code ?? "")
       ? "warning"
       : "error",
-    detail: consensusVerification.error ?? fallbackSummary,
+    detail: getConsensusFailureDetail(consensusVerification, fallbackSummary),
   };
 }

@@ -52,7 +52,9 @@ describe("classifyConsensusStatus", () => {
       "fallback summary"
     );
     expect(status.status).toBe("warning");
-    expect(status.detail).toContain("unsupported network");
+    expect(status.detail).toBe(
+      "Consensus verification is not available for this network/mode combination."
+    );
   });
 
   it("returns error for consensus mismatches", () => {
@@ -66,6 +68,23 @@ describe("classifyConsensusStatus", () => {
       "fallback summary"
     );
     expect(status.status).toBe("error");
+    expect(status.detail).toBe(
+      "Consensus-verified state root does not match the package state root."
+    );
+  });
+
+  it("falls back to verifier error text for unknown error codes", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("beacon"),
+      makeConsensusVerification({
+        valid: false,
+        error: "unexpected verifier edge case",
+        error_code: "some-new-error-code",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("error");
+    expect(status.detail).toBe("unexpected verifier edge case");
   });
 
   it("keeps OP Stack success wording explicit about non-equivalence", () => {
