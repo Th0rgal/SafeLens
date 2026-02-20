@@ -10,18 +10,22 @@ const VALID_BLOCK = {
   timestamp: "0x64",
 };
 
-function mockRpcResult(result: unknown) {
+function mockRpcResponses(...results: unknown[]) {
   vi.stubGlobal(
     "fetch",
-    vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          result,
-        })
+    vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: results.shift(),
+            })
+          )
+        )
       )
-    )
   );
 }
 
@@ -32,7 +36,7 @@ describe("fetchExecutionConsensusProof", () => {
   });
 
   it("normalizes OP Mainnet network metadata to optimism", async () => {
-    mockRpcResult(VALID_BLOCK);
+    mockRpcResponses("0xa", VALID_BLOCK);
 
     const proof = await fetchExecutionConsensusProof(10, "opstack", {
       rpcUrl: "https://example.invalid/rpc",
@@ -45,7 +49,7 @@ describe("fetchExecutionConsensusProof", () => {
   });
 
   it("rejects malformed block hash fields from RPC", async () => {
-    mockRpcResult({
+    mockRpcResponses("0x2105", {
       ...VALID_BLOCK,
       hash: "0x1234",
     });
@@ -58,7 +62,7 @@ describe("fetchExecutionConsensusProof", () => {
   });
 
   it("rejects missing stateRoot from RPC", async () => {
-    mockRpcResult({
+    mockRpcResponses("0xe708", {
       ...VALID_BLOCK,
       stateRoot: undefined,
     });
@@ -73,15 +77,26 @@ describe("fetchExecutionConsensusProof", () => {
   it("surfaces JSON-RPC errors", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            error: { code: -32000, message: "upstream failed" },
-          })
+      vi
+        .fn()
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: "0xa",
+            })
+          )
         )
-      )
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              error: { code: -32000, message: "upstream failed" },
+            })
+          )
+        )
     );
 
     await expect(
@@ -89,5 +104,25 @@ describe("fetchExecutionConsensusProof", () => {
         rpcUrl: "https://example.invalid/rpc",
       })
     ).rejects.toThrow("RPC error -32000 for eth_getBlockByNumber: upstream failed");
+  });
+
+  it("rejects RPC endpoints whose eth_chainId does not match requested chain", async () => {
+    mockRpcResponses("0xa", VALID_BLOCK);
+
+    await expect(
+      fetchExecutionConsensusProof(8453, "opstack", {
+        rpcUrl: "https://example.invalid/rpc",
+      })
+    ).rejects.toThrow("RPC eth_chainId mismatch: expected 8453, received 10.");
+  });
+
+  it("rejects malformed eth_chainId values from RPC", async () => {
+    mockRpcResponses("base");
+
+    await expect(
+      fetchExecutionConsensusProof(8453, "opstack", {
+        rpcUrl: "https://example.invalid/rpc",
+      })
+    ).rejects.toThrow("Invalid hex quantity for eth_chainId");
   });
 });

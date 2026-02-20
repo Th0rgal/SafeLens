@@ -136,6 +136,15 @@ export async function fetchExecutionConsensusProof(
       `Execution consensus envelopes require blockTag='finalized'; received '${blockTag}'.`
     );
   }
+
+  const rpcChainIdHex = await requestJsonRpc<string>(rpcUrl, "eth_chainId", []);
+  const rpcChainId = parseHexQuantity(rpcChainIdHex, "eth_chainId");
+  if (rpcChainId !== chainId) {
+    throw new Error(
+      `RPC eth_chainId mismatch: expected ${chainId}, received ${rpcChainId}.`
+    );
+  }
+
   const block = await requestJsonRpc<ExecutionBlockHeader>(rpcUrl, "eth_getBlockByNumber", [
     blockTag,
     false,
