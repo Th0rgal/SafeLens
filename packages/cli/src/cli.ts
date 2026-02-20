@@ -27,6 +27,7 @@ import {
   resolveAddress,
   setGlobalDescriptors,
   summarizeSimulationEvents,
+  buildCoreExecutionSafetyFields,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -276,16 +277,18 @@ function printVerificationText(
 
   // ── Execution Safety (Core) ────────────────────────────────────────
   console.log("");
-  const method = evidence.dataDecoded?.method ?? "Unknown";
+  const coreExecutionRows: Array<[string, string]> = buildCoreExecutionSafetyFields(evidence).map((field) => {
+    if (field.id === "target") {
+      return [
+        field.label,
+        `${formatAddressWithName(field.value, settings, evidence.chainId)} ${trustBadge("self-verified")}`,
+      ];
+    }
+    const value = field.monospace ? code(field.value) : field.value;
+    return [field.label, `${value} ${trustBadge("self-verified")}`];
+  });
   console.log(box(
-    table([
-      ["Signatures", `${code(`${evidence.confirmations.length}/${evidence.confirmationsRequired}`)} ${trustBadge("self-verified")}`],
-      ["Method", `${method} ${trustBadge("self-verified")}`],
-      ["Target", `${formatAddressWithName(evidence.transaction.to, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
-      ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
-      ["Value (wei)", `${code(evidence.transaction.value)} ${trustBadge("self-verified")}`],
-      ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
-    ], 18),
+    table(coreExecutionRows, 18),
     "Execution Safety"
   ));
 

@@ -23,6 +23,14 @@ export type {
   ConsensusTrustDecisionReason,
   ConsensusVerifierErrorCode,
 } from "./consensus-trust";
+export type {
+  CoreExecutionSafetyField,
+  CoreExecutionSafetyFieldId,
+} from "./execution-safety";
+export {
+  CORE_EXECUTION_SAFETY_FIELD_IDS,
+  buildCoreExecutionSafetyFields,
+} from "./execution-safety";
 
 export type SignatureCheckSummary = {
   total: number;

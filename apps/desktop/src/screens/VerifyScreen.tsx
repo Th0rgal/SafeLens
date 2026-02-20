@@ -9,6 +9,7 @@ import {
   getChainName,
   verifyEvidencePackage,
   applyConsensusVerificationToReport,
+  buildCoreExecutionSafetyFields,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
@@ -773,41 +774,7 @@ function ExecutionSafetyPanel({
     simulationVerification,
     getSimulationUnavailableReason(evidence)
   );
-  const method = evidence.dataDecoded?.method ?? "Unknown";
-  const coreExecutionDetails: Array<{ id: string; label: string; value: string; monospace?: boolean }> = [
-    {
-      id: "core-signatures",
-      label: "Signatures",
-      value: `${evidence.confirmations.length}/${evidence.confirmationsRequired}`,
-    },
-    {
-      id: "core-method",
-      label: "Method",
-      value: method,
-    },
-    {
-      id: "core-target",
-      label: "Target",
-      value: evidence.transaction.to,
-      monospace: true,
-    },
-    {
-      id: "core-operation",
-      label: "Operation",
-      value: evidence.transaction.operation === 0 ? "Call" : "DelegateCall",
-    },
-    {
-      id: "core-value",
-      label: "Value (wei)",
-      value: evidence.transaction.value,
-      monospace: true,
-    },
-    {
-      id: "core-nonce",
-      label: "Nonce",
-      value: String(evidence.transaction.nonce),
-    },
-  ];
+  const coreExecutionDetails = buildCoreExecutionSafetyFields(evidence);
 
   return (
     <Card>
