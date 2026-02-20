@@ -182,6 +182,15 @@ function evaluateConsensusTrustDecision(
       reason: "invalid-proof-payload",
     };
   }
+  if (
+    consensusVerification?.error_code === "envelope-state-root-mismatch" ||
+    consensusVerification?.error_code === "envelope-block-number-mismatch"
+  ) {
+    return {
+      trusted: false,
+      reason: "invalid-proof-payload",
+    };
+  }
   if (consensusVerification?.error_code === "invalid-expected-state-root") {
     return {
       trusted: false,

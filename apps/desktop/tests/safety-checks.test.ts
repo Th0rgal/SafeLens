@@ -146,6 +146,23 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBe("state-root-mismatch");
   });
 
+  it("maps envelope linkage mismatch codes to explicit integrity details", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("opstack"),
+      makeConsensusVerification({
+        valid: false,
+        error: "Envelope block number does not match package consensusProof.blockNumber.",
+        error_code: "envelope-block-number-mismatch",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("error");
+    expect(status.detail).toBe(
+      "Consensus envelope block number does not match the package consensus proof."
+    );
+    expect(status.reasonCode).toBe("envelope-block-number-mismatch");
+  });
+
   it("falls back to verifier error text for unknown error codes", () => {
     const status = classifyConsensusStatus(
       makeEvidence("beacon"),

@@ -37,6 +37,10 @@ const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
     "Consensus envelope is not finalized. Regenerate evidence at a finalized block.",
   "state-root-mismatch":
     "Consensus-verified state root does not match the package state root.",
+  "envelope-state-root-mismatch":
+    "Consensus envelope state root does not match the package consensus proof.",
+  "envelope-block-number-mismatch":
+    "Consensus envelope block number does not match the package consensus proof.",
   "invalid-proof-payload":
     "Consensus proof payload is invalid or malformed.",
   "invalid-expected-state-root":

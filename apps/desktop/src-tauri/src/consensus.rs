@@ -308,6 +308,8 @@ const ERR_FINALITY_VERIFICATION_FAILED: &str = "finality-verification-failed";
 const ERR_MISSING_EXECUTION_PAYLOAD: &str = "missing-execution-payload";
 const ERR_INVALID_EXPECTED_STATE_ROOT: &str = "invalid-expected-state-root";
 const ERR_STATE_ROOT_MISMATCH: &str = "state-root-mismatch";
+const ERR_ENVELOPE_STATE_ROOT_MISMATCH: &str = "envelope-state-root-mismatch";
+const ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH: &str = "envelope-block-number-mismatch";
 const ERR_INVALID_PROOF_PAYLOAD: &str = "invalid-proof-payload";
 const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
 const ERR_NON_FINALIZED_CONSENSUS_ENVELOPE: &str = "non-finalized-consensus-envelope";
@@ -524,8 +526,7 @@ fn verify_execution_envelope(
         None => {
             return fail_result(
                 ERR_INVALID_PROOF_PAYLOAD,
-                "packageChainId is required for non-beacon consensus envelope verification."
-                    .into(),
+                "packageChainId is required for non-beacon consensus envelope verification.".into(),
             )
         }
     };
@@ -573,9 +574,7 @@ fn verify_execution_envelope(
         };
     }
 
-    let expected_networks = mode
-        .expected_networks(envelope_chain_id)
-        .unwrap_or(&[]);
+    let expected_networks = mode.expected_networks(envelope_chain_id).unwrap_or(&[]);
     let network_matches = expected_networks.is_empty()
         || expected_networks
             .iter()
@@ -762,7 +761,7 @@ fn verify_execution_envelope(
     });
     if !package_root_matches {
         return fail_result(
-            ERR_INVALID_PROOF_PAYLOAD,
+            ERR_ENVELOPE_STATE_ROOT_MISMATCH,
             "Envelope state root does not match package consensusProof.stateRoot.".into(),
         );
     }
@@ -779,7 +778,7 @@ fn verify_execution_envelope(
     });
     if !package_block_matches {
         return fail_result(
-            ERR_INVALID_PROOF_PAYLOAD,
+            ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH,
             "Envelope block number does not match package consensusProof.blockNumber.".into(),
         );
     }
@@ -1268,8 +1267,9 @@ fn expected_current_slot_for_network(
 mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
-        verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_INVALID_PROOF_PAYLOAD, ERR_LINEA_VERIFIER_PENDING,
+        verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
+        ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_STATE_ROOT_MISMATCH,
+        ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD, ERR_LINEA_VERIFIER_PENDING,
         ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_OPSTACK_VERIFIER_PENDING,
         ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
         ERR_UNSUPPORTED_NETWORK,
@@ -1636,6 +1636,70 @@ mod tests {
                 .is_some_and(|error| error.starts_with("Invalid proofPayload.block.hash:")),
             "unexpected error: {:?}",
             result.error
+        );
+    }
+
+    #[test]
+    fn returns_explicit_state_root_mismatch_code_for_package_envelope_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_STATE_ROOT_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match package consensusProof.stateRoot.")
+        );
+    }
+
+    #[test]
+    fn returns_explicit_block_number_mismatch_code_for_package_envelope_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope block number does not match package consensusProof.blockNumber.")
         );
     }
 
