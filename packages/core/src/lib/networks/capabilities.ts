@@ -1,4 +1,10 @@
-export const CONSENSUS_NETWORKS = ["mainnet", "sepolia", "gnosis"] as const;
+export const CONSENSUS_NETWORKS = [
+  "mainnet",
+  "sepolia",
+  "holesky",
+  "hoodi",
+  "gnosis",
+] as const;
 
 export type ConsensusNetwork = (typeof CONSENSUS_NETWORKS)[number];
 
@@ -64,6 +70,46 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
       defaultBeaconRpcUrl: "https://lodestar-sepolia.chainsafe.io",
     },
     enabledInSafeAddressSearch: true,
+  },
+  {
+    chainId: 17000,
+    chainPrefix: "hol",
+    chainName: "Holesky",
+    safeApiUrl: "https://safe-transaction-holesky.safe.global",
+    defaultRpcUrl: "https://ethereum-holesky-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    consensus: {
+      network: "holesky",
+      genesisRoot:
+        "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1",
+      genesisTime: 1695902400,
+      secondsPerSlot: 12,
+      slotsPerEpoch: 32,
+      epochsPerSyncCommitteePeriod: 256,
+      defaultBeaconRpcUrl: "https://ethereum-holesky-beacon-api.publicnode.com",
+    },
+    enabledInSafeAddressSearch: false,
+  },
+  {
+    chainId: 560048,
+    chainPrefix: "hdi",
+    chainName: "Hoodi",
+    safeApiUrl: "https://safe-transaction-hoodi.safe.global",
+    defaultRpcUrl: "https://ethereum-hoodi-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    consensus: {
+      network: "hoodi",
+      genesisRoot:
+        "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f",
+      genesisTime: 1742213400,
+      secondsPerSlot: 12,
+      slotsPerEpoch: 32,
+      epochsPerSyncCommitteePeriod: 256,
+      defaultBeaconRpcUrl: "https://ethereum-hoodi-beacon-api.publicnode.com",
+    },
+    enabledInSafeAddressSearch: false,
   },
   {
     chainId: 137,

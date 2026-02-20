@@ -73,6 +73,8 @@ struct NetworkConfig {
 enum ConsensusNetwork {
     Mainnet,
     Sepolia,
+    Holesky,
+    Hoodi,
     Gnosis,
 }
 
@@ -191,13 +193,91 @@ fn gnosis_config() -> NetworkConfig {
     }
 }
 
+fn holesky_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
+        genesis_time: 1695902400,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("01017000"),
+            },
+            altair: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("02017000"),
+            },
+            bellatrix: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("03017000"),
+            },
+            capella: Fork {
+                epoch: 256,
+                fork_version: fixed_bytes!("04017000"),
+            },
+            deneb: Fork {
+                epoch: 29696,
+                fork_version: fixed_bytes!("05017000"),
+            },
+            electra: Fork {
+                epoch: 115968,
+                fork_version: fixed_bytes!("06017000"),
+            },
+            fulu: Fork {
+                epoch: 165120,
+                fork_version: fixed_bytes!("07017000"),
+            },
+        },
+    }
+}
+
+fn hoodi_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
+        genesis_time: 1742213400,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("10000910"),
+            },
+            altair: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("20000910"),
+            },
+            bellatrix: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("30000910"),
+            },
+            capella: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("40000910"),
+            },
+            deneb: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("50000910"),
+            },
+            electra: Fork {
+                epoch: 2048,
+                fork_version: fixed_bytes!("60000910"),
+            },
+            fulu: Fork {
+                epoch: 50688,
+                fork_version: fixed_bytes!("70000910"),
+            },
+        },
+    }
+}
+
 fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
     match network {
         "mainnet" => Ok(ConsensusNetwork::Mainnet),
         "sepolia" => Ok(ConsensusNetwork::Sepolia),
+        "holesky" => Ok(ConsensusNetwork::Holesky),
+        "hoodi" => Ok(ConsensusNetwork::Hoodi),
         "gnosis" | "xdai" => Ok(ConsensusNetwork::Gnosis),
         _ => Err(format!(
-            "Unsupported network for consensus verification: {}. Only mainnet, sepolia, and gnosis are currently supported.",
+            "Unsupported network for consensus verification: {}. Only mainnet, sepolia, holesky, hoodi, and gnosis are currently supported.",
             network
         )),
     }
@@ -219,6 +299,8 @@ fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
     match network {
         ConsensusNetwork::Mainnet => mainnet_config(),
         ConsensusNetwork::Sepolia => sepolia_config(),
+        ConsensusNetwork::Holesky => holesky_config(),
+        ConsensusNetwork::Hoodi => hoodi_config(),
         ConsensusNetwork::Gnosis => gnosis_config(),
     }
 }
@@ -633,6 +715,31 @@ mod tests {
     }
 
     #[test]
+    fn supports_holesky_network_config() {
+        let config =
+            get_network_config(parse_network("holesky").expect("holesky must be supported"));
+        assert_eq!(config.genesis_time, 1695902400);
+        assert_eq!(config.seconds_per_slot, 12);
+        assert_eq!(config.forks.capella.epoch, 256);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"
+        );
+    }
+
+    #[test]
+    fn supports_hoodi_network_config() {
+        let config = get_network_config(parse_network("hoodi").expect("hoodi must be supported"));
+        assert_eq!(config.genesis_time, 1742213400);
+        assert_eq!(config.seconds_per_slot, 12);
+        assert_eq!(config.forks.electra.epoch, 2048);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"
+        );
+    }
+
+    #[test]
     fn supports_xdai_alias_for_gnosis() {
         let network = parse_network("xdai").expect("xdai alias must resolve");
         assert!(matches!(network, ConsensusNetwork::Gnosis));
@@ -640,7 +747,7 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_networks() {
-        let err = parse_network("holesky").expect_err("holesky should fail in desktop verifier");
+        let err = parse_network("polygon").expect_err("polygon should fail in desktop verifier");
         assert!(
             err.contains("Unsupported network for consensus verification"),
             "unexpected error: {err}"
@@ -662,7 +769,7 @@ mod tests {
             bootstrap: "{}".to_string(),
             updates: vec![],
             finality_update: "{}".to_string(),
-            network: "holesky".to_string(),
+            network: "polygon".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
             expected_state_root:

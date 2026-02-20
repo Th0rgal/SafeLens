@@ -239,7 +239,7 @@ describe("consensus proof network schema", () => {
       bootstrap: "{}",
       updates: [],
       finalityUpdate: "{}",
-      network: "holesky",
+      network: "polygon",
       stateRoot:
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       blockNumber: 1,

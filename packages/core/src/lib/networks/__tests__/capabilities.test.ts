@@ -13,8 +13,14 @@ describe("network capability matrix", () => {
   });
 
   it("exposes consensus support only where verification paths exist", () => {
-    expect(CONSENSUS_SUPPORTED_CHAIN_IDS).toEqual([1, 11155111, 100]);
-    expect(CONSENSUS_NETWORKS).toEqual(["mainnet", "sepolia", "gnosis"]);
+    expect(CONSENSUS_SUPPORTED_CHAIN_IDS).toEqual([1, 11155111, 17000, 560048, 100]);
+    expect(CONSENSUS_NETWORKS).toEqual([
+      "mainnet",
+      "sepolia",
+      "holesky",
+      "hoodi",
+      "gnosis",
+    ]);
   });
 
   it("keeps legacy goerli parsing but marks unsupported enrichment features", () => {
