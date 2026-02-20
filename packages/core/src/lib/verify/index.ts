@@ -168,6 +168,7 @@ function buildReportSources(
     simulationTrust: options.evidence.simulation?.trust,
     consensusVerified: consensusDecision.trusted,
     consensusTrustDecisionReason: consensusDecision.reason,
+    consensusMode: options.evidence.consensusProof?.consensusMode ?? "beacon",
   }));
 }
 

@@ -309,7 +309,7 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
       (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
     );
     expect(consensusSource?.trust).toBe("consensus-verified");
-    expect(consensusSource?.summary).toContain("verified against Ethereum consensus");
+    expect(consensusSource?.summary).toContain("verified against Beacon consensus");
     expect(upgraded.consensusTrustDecisionReason).toBeNull();
   });
 

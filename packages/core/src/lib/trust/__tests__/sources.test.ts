@@ -184,4 +184,38 @@ describe("buildVerificationSources", () => {
       CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
     );
   });
+
+  it("uses mode-aware wording for unverified OP Stack consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: false,
+      consensusMode: "opstack",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain("Consensus proof (OP Stack) included");
+    expect(consensusSource?.detail).toContain("contains OP Stack consensus data");
+  });
+
+  it("uses mode-aware wording for verified Linea consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: true,
+      consensusMode: "linea",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain("verified against Linea consensus");
+    expect(consensusSource?.detail).toContain("verified against Linea consensus data");
+  });
 });
