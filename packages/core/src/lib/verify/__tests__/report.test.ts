@@ -350,6 +350,40 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
   });
 
+  it("uses explicit unsupported reason for pending consensus verifier modes", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: enriched.onchainPolicyProof.stateRoot,
+        verified_block_number: enriched.onchainPolicyProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 0,
+        error: "Verifier mode not implemented",
+        error_code: "unsupported-consensus-mode",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "unsupported-consensus-mode"
+    );
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain(
+      "not yet implemented in desktop verifier"
+    );
+  });
+
   it("keeps consensus source rpc-sourced when verified state root does not match onchain proof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

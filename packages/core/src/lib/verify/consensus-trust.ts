@@ -5,6 +5,8 @@
  * logic and report/rendering surfaces. Keep them machine-readable and stable.
  */
 export const CONSENSUS_TRUST_DECISION_REASONS = [
+  // Consensus mode is recognized but verifier support is intentionally pending.
+  "unsupported-consensus-mode",
   // Local desktop consensus verification did not succeed yet.
   "missing-or-invalid-consensus-result",
   // Required payload artifacts are missing.
@@ -27,6 +29,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
   Exclude<ConsensusTrustDecisionReason, null>,
   string
 > = {
+  "unsupported-consensus-mode":
+    "consensus mode is included but not yet implemented in desktop verifier",
   "missing-or-invalid-consensus-result":
     "local consensus verification has not succeeded",
   "missing-consensus-or-policy-proof":

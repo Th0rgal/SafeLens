@@ -101,6 +101,12 @@ function evaluateConsensusTrustDecision(
       reason: "missing-consensus-or-policy-proof",
     };
   }
+  if (consensusVerification?.error_code === "unsupported-consensus-mode") {
+    return {
+      trusted: false,
+      reason: "unsupported-consensus-mode",
+    };
+  }
   if (!consensusVerification?.valid) {
     return {
       trusted: false,
