@@ -129,6 +129,23 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBe("unsupported-network");
   });
 
+  it("returns error for envelope network metadata mismatches", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("opstack"),
+      makeConsensusVerification({
+        valid: false,
+        error: "Package network metadata mismatch",
+        error_code: "envelope-network-mismatch",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("error");
+    expect(status.detail).toBe(
+      "Package network metadata does not match the consensus envelope chain metadata."
+    );
+    expect(status.reasonCode).toBe("envelope-network-mismatch");
+  });
+
   it("returns error for consensus mismatches", () => {
     const status = classifyConsensusStatus(
       makeEvidence("beacon"),

@@ -27,6 +27,8 @@ const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
     "This package uses a consensus mode the desktop verifier does not support.",
   "unsupported-network":
     "Consensus verification is not available for this network/mode combination.",
+  "envelope-network-mismatch":
+    "Package network metadata does not match the consensus envelope chain metadata.",
   "opstack-consensus-verifier-pending":
     "OP Stack envelope integrity checks passed, but full cryptographic consensus verification is not available yet.",
   "linea-consensus-verifier-pending":

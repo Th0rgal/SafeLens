@@ -859,6 +859,38 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
   });
 
+  it("maps explicit envelope-network-mismatch error code to invalid-proof-payload trust reason", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: null,
+        verified_block_number: null,
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: "Package network metadata mismatch.",
+        error_code: "envelope-network-mismatch",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe("invalid-proof-payload");
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain(
+      "payload is malformed or failed integrity validation"
+    );
+  });
+
   it("keeps consensus source rpc-sourced when verified block number does not match onchain proof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

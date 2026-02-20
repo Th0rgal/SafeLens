@@ -146,6 +146,12 @@ function evaluateConsensusTrustDecision(
       reason: "unsupported-network",
     };
   }
+  if (consensusVerification?.error_code === "envelope-network-mismatch") {
+    return {
+      trusted: false,
+      reason: "invalid-proof-payload",
+    };
+  }
   if (consensusVerification?.error_code === "opstack-consensus-verifier-pending") {
     return {
       trusted: false,

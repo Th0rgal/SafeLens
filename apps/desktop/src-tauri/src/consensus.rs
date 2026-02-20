@@ -295,6 +295,7 @@ fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
 }
 
 const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
+const ERR_ENVELOPE_NETWORK_MISMATCH: &str = "envelope-network-mismatch";
 const ERR_UNSUPPORTED_CONSENSUS_MODE: &str = "unsupported-consensus-mode";
 const ERR_OPSTACK_VERIFIER_PENDING: &str = "opstack-consensus-verifier-pending";
 const ERR_LINEA_VERIFIER_PENDING: &str = "linea-consensus-verifier-pending";
@@ -607,7 +608,7 @@ fn verify_execution_envelope(
                 envelope_chain_id,
                 mode.display_name()
             )),
-            error_code: Some(ERR_UNSUPPORTED_NETWORK.into()),
+            error_code: Some(ERR_ENVELOPE_NETWORK_MISMATCH.into()),
             checks,
         };
     }
@@ -1269,10 +1270,10 @@ mod tests {
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
         ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_STATE_ROOT_MISMATCH,
-        ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD, ERR_LINEA_VERIFIER_PENDING,
-        ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_OPSTACK_VERIFIER_PENDING,
-        ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
-        ERR_UNSUPPORTED_NETWORK,
+        ERR_ENVELOPE_NETWORK_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
+        ERR_LINEA_VERIFIER_PENDING, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
+        ERR_OPSTACK_VERIFIER_PENDING, ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH,
+        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1993,7 +1994,10 @@ mod tests {
         });
 
         assert!(!result.valid);
-        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
         assert_eq!(
             result.error.as_deref(),
             Some(
@@ -2092,7 +2096,10 @@ mod tests {
         });
 
         assert!(!result.valid);
-        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
         assert_eq!(
             result.error.as_deref(),
             Some(
@@ -2127,7 +2134,10 @@ mod tests {
         });
 
         assert!(!result.valid);
-        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
         assert_eq!(
             result.error.as_deref(),
             Some(
