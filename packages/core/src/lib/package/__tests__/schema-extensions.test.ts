@@ -4,6 +4,7 @@ import {
   evidenceExportContractSchema,
   consensusProofSchema,
   findLegacyPendingConsensusExportReason,
+  getExportContractReasonLabel,
   onchainPolicyProofSchema,
   simulationSchema,
   trustClassificationSchema,
@@ -294,6 +295,26 @@ describe("export contract schema", () => {
     ).toBeNull();
     expect(findLegacyPendingConsensusExportReason([])).toBeNull();
     expect(findLegacyPendingConsensusExportReason(undefined)).toBeNull();
+  });
+
+  it("returns a non-empty label for every export reason", () => {
+    const reasons = [
+      "missing-consensus-proof",
+      "unsupported-consensus-mode",
+      "consensus-mode-disabled-by-feature-flag",
+      "opstack-consensus-verifier-pending",
+      "linea-consensus-verifier-pending",
+      "missing-onchain-policy-proof",
+      "missing-rpc-url",
+      "consensus-proof-fetch-failed",
+      "policy-proof-fetch-failed",
+      "simulation-fetch-failed",
+      "missing-simulation",
+    ] as const;
+
+    for (const reason of reasons) {
+      expect(getExportContractReasonLabel(reason).trim().length).toBeGreaterThan(0);
+    }
   });
 });
 

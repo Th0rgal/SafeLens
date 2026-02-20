@@ -233,6 +233,28 @@ export const exportContractReasonSchema = z.enum([
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
 
+export const EXPORT_CONTRACT_REASON_LABELS: Record<ExportContractReason, string> = {
+  "missing-consensus-proof": "Consensus proof was not included.",
+  "unsupported-consensus-mode":
+    "Consensus verification mode for this network is not implemented yet.",
+  "consensus-mode-disabled-by-feature-flag":
+    "Consensus verification mode for this network is currently disabled by rollout feature flag.",
+  "opstack-consensus-verifier-pending":
+    "OP Stack envelope checks are included, but full cryptographic consensus verification is still pending.",
+  "linea-consensus-verifier-pending":
+    "Linea envelope checks are included, but full cryptographic consensus verification is still pending.",
+  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
+  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
+  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
+  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
+  "simulation-fetch-failed": "Simulation fetch failed.",
+  "missing-simulation": "Simulation result was not included.",
+};
+
+export function getExportContractReasonLabel(reason: ExportContractReason): string {
+  return EXPORT_CONTRACT_REASON_LABELS[reason];
+}
+
 export const LEGACY_PENDING_CONSENSUS_EXPORT_REASONS = [
   "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending",

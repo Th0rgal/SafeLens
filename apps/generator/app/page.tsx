@@ -19,9 +19,9 @@ import {
   UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
   decodeSimulationEvents,
   buildGenerationSources,
+  getExportContractReasonLabel,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
-  type ExportContractReason,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
@@ -34,24 +34,6 @@ const lineaConsensusEnabled = process.env[ENABLE_LINEA_CONSENSUS_ENV] === "1";
 type PendingTx = SafeTransaction & { _chainId: number };
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
-  "missing-consensus-proof": "Consensus proof was not included.",
-  "unsupported-consensus-mode":
-    "Consensus verification mode for this network is not implemented yet.",
-  "consensus-mode-disabled-by-feature-flag":
-    "Consensus verification mode for this network is currently disabled by rollout feature flag.",
-  "opstack-consensus-verifier-pending":
-    "OP Stack envelope checks are included, but full cryptographic consensus verification is still pending.",
-  "linea-consensus-verifier-pending":
-    "Linea envelope checks are included, but full cryptographic consensus verification is still pending.",
-  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
-  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
-  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
-  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
-  "simulation-fetch-failed": "Simulation fetch failed.",
-  "missing-simulation": "Simulation result was not included.",
-};
-
 function extractAddress(input: string): string | null {
   const trimmed = input.trim();
   if (ADDRESS_RE.test(trimmed)) return trimmed;
@@ -438,7 +420,7 @@ export default function AnalyzePage() {
                 <AlertDescription>
                   This package is not fully verifiable. Reasons:
                   {evidence.exportContract.reasons.map((reason) => (
-                    <div key={reason}>- {EXPORT_REASON_LABELS[reason] ?? reason}</div>
+                    <div key={reason}>- {getExportContractReasonLabel(reason)}</div>
                   ))}
                 </AlertDescription>
               </Alert>
