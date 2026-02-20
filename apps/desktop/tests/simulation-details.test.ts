@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { EvidencePackage, SimulationVerificationResult } from "@safelens/core";
-import { buildSimulationDetailRows } from "../src/lib/simulation-details";
+import {
+  buildSimulationDetailRows,
+  SIMULATION_DETAIL_FIXED_ROW_IDS,
+} from "../src/lib/simulation-details";
 
 const SAFE = "0x1234567890abcdef1234567890abcdef12345678";
 const TRANSFER_TOPIC =
@@ -145,5 +148,30 @@ describe("buildSimulationDetailRows", () => {
     expect(transferRow).toBeDefined();
     expect(transferRow!.label).toContain("Sent");
     expect(transferRow!.value).toContain("DAI");
+  });
+
+  it("emits only supported simulation detail row ids", () => {
+    const rows = buildSimulationDetailRows(
+      {
+        chainId: 1,
+        safeAddress: SAFE,
+        simulation: { logs: [] } as EvidencePackage["simulation"],
+      },
+      makeVerification({
+        valid: false,
+        checks: [{ id: "s1", label: "Has logs", passed: false }],
+        errors: ["missing required call trace"],
+      }),
+      "Simulation was skipped because no RPC URL was configured during package generation."
+    );
+
+    const fixedIds = new Set<string>(SIMULATION_DETAIL_FIXED_ROW_IDS);
+    for (const row of rows) {
+      const isTransferId = /^simulation-transfer-\d+$/.test(row.id);
+      expect(
+        fixedIds.has(row.id) || isTransferId,
+        `Unexpected simulation row id: ${row.id}`
+      ).toBe(true);
+    }
   });
 });

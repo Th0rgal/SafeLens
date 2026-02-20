@@ -1,8 +1,24 @@
 import { summarizeSimulationEvents } from "@safelens/core";
 import type { EvidencePackage, SimulationVerificationResult } from "@safelens/core";
 
+export const SIMULATION_DETAIL_FIXED_ROW_IDS = [
+  "simulation-status",
+  "simulation-unavailable-reason",
+  "simulation-checks-passed",
+  "simulation-events-detected",
+  "simulation-transfers",
+  "simulation-approvals",
+  "simulation-first-error",
+] as const;
+
+type SimulationDetailFixedRowId =
+  (typeof SIMULATION_DETAIL_FIXED_ROW_IDS)[number];
+export type SimulationDetailRowId =
+  | SimulationDetailFixedRowId
+  | `simulation-transfer-${number}`;
+
 export type SimulationDetailRow = {
-  id: string;
+  id: SimulationDetailRowId;
   label: string;
   value: string;
 };
