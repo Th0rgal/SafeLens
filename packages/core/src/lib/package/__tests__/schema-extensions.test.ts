@@ -181,6 +181,9 @@ describe("trust classification schema", () => {
   it("accepts all valid trust levels", () => {
     const levels = [
       "consensus-verified",
+      "consensus-verified-beacon",
+      "consensus-verified-opstack",
+      "consensus-verified-linea",
       "proof-verified",
       "self-verified",
       "rpc-sourced",

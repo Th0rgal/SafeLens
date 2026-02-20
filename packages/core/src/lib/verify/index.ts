@@ -62,7 +62,8 @@ export type EvidenceVerificationReport = {
   consensusVerification?: ConsensusVerificationResult;
   /**
    * Deterministic reason why consensus trust did or did not upgrade.
-   * null means consensus trust upgraded to "consensus-verified".
+   * null means consensus trust upgraded to a mode-specific
+   * "consensus-verified-*" trust level.
    */
   consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
 };
@@ -87,9 +88,9 @@ type ConsensusTrustDecision = {
 /**
  * Trust upgrade boundary for consensus verification.
  *
- * We only upgrade to "consensus-verified" when the local consensus verifier
- * proves the same execution payload root + block number that the independent
- * onchain policy proof is anchored to.
+ * We only upgrade to mode-specific "consensus-verified-*" trust when the
+ * local consensus verifier proves the same execution payload root + block
+ * number that the independent onchain policy proof is anchored to.
  */
 function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,

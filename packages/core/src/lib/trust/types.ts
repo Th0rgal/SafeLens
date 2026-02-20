@@ -20,6 +20,21 @@ export const TRUST_CONFIG: Record<TrustLevel, TrustConfig> = {
     color: "text-green-400",
     icon: "ShieldCheck",
   },
+  "consensus-verified-beacon": {
+    label: "Consensus-verified (Beacon)",
+    color: "text-green-400",
+    icon: "ShieldCheck",
+  },
+  "consensus-verified-opstack": {
+    label: "Consensus-verified (OP Stack)",
+    color: "text-green-400",
+    icon: "ShieldCheck",
+  },
+  "consensus-verified-linea": {
+    label: "Consensus-verified (Linea)",
+    color: "text-green-400",
+    icon: "ShieldCheck",
+  },
   "proof-verified": {
     label: "Proof-verified",
     color: "text-blue-400",

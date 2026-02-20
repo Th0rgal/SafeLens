@@ -63,7 +63,11 @@ export type SafeTransaction = z.infer<typeof safeTransactionSchema>;
 
 // Trust classification for evidence sections
 export const trustClassificationSchema = z.enum([
+  // Kept for backward compatibility with previously exported reports.
   "consensus-verified",
+  "consensus-verified-beacon",
+  "consensus-verified-opstack",
+  "consensus-verified-linea",
   "proof-verified",
   "self-verified",
   "rpc-sourced",

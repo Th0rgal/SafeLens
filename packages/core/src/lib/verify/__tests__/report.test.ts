@@ -313,7 +313,7 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     const consensusSource = upgraded.sources.find(
       (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
     );
-    expect(consensusSource?.trust).toBe("consensus-verified");
+    expect(consensusSource?.trust).toBe("consensus-verified-beacon");
     expect(consensusSource?.summary).toContain("verified against Beacon consensus");
     expect(upgraded.consensusTrustDecisionReason).toBeNull();
   });

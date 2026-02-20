@@ -202,6 +202,23 @@ describe("buildVerificationSources", () => {
     expect(consensusSource?.detail).toContain("contains OP Stack consensus data");
   });
 
+  it("uses mode-specific trust for verified OP Stack consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: true,
+      consensusMode: "opstack",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.trust).toBe("consensus-verified-opstack");
+    expect(consensusSource?.summary).toContain("verified against OP Stack consensus");
+  });
+
   it("uses mode-aware wording for verified Linea consensus proofs", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
@@ -215,6 +232,7 @@ describe("buildVerificationSources", () => {
     }));
 
     const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.trust).toBe("consensus-verified-linea");
     expect(consensusSource?.summary).toContain("verified against Linea consensus");
     expect(consensusSource?.detail).toContain("verified against Linea consensus data");
   });

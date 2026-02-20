@@ -146,6 +146,13 @@ export function buildVerificationSources(
     },
   };
   const consensusDisplay = consensusDisplayByMode[consensusMode];
+  const consensusVerifiedTrustByMode: Record<ConsensusMode, TrustLevel> = {
+    beacon: "consensus-verified-beacon",
+    opstack: "consensus-verified-opstack",
+    linea: "consensus-verified-linea",
+  };
+  const verifiedConsensusTrust =
+    consensusVerifiedTrustByMode[consensusMode] ?? "consensus-verified";
 
   return [
     {
@@ -278,7 +285,7 @@ export function buildVerificationSources(
       ? {
           id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
           title: "Consensus verification",
-          trust: context.consensusVerified ? ("consensus-verified" as TrustLevel) : ("rpc-sourced" as TrustLevel),
+          trust: context.consensusVerified ? verifiedConsensusTrust : ("rpc-sourced" as TrustLevel),
           summary: context.consensusVerified
             ? `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}.`
             : consensusFailureReason
