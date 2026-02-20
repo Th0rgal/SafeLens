@@ -202,7 +202,7 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
   });
 
-  it("keeps export partial when consensus artifact mode is not verifier-supported", () => {
+  it("keeps export partial with OP Stack pending-verifier reason when envelope artifact exists", () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const evidence = {
       ...base,
@@ -262,7 +262,8 @@ describe("finalizeEvidenceExport", () => {
 
     expect(finalized.exportContract?.mode).toBe("partial");
     expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
-    expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.reasons).toContain("opstack-consensus-verifier-pending");
+    expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
     expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
   });
 });

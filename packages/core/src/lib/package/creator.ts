@@ -214,9 +214,9 @@ export function finalizeEvidenceExport(
 ): EvidencePackage {
   const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
   const consensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
-  // Desktop verification currently implements beacon consensus mode only.
-  const hasVerifierSupportedConsensusProof =
-    hasConsensusProofArtifact && consensusMode === "beacon";
+  // Beacon is fully verifier-backed; non-beacon modes remain partial and
+  // emit deterministic pending-verifier reasons for trust signaling.
+  const hasVerifierSupportedConsensusProof = hasConsensusProofArtifact && consensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();
@@ -234,7 +234,13 @@ export function finalizeEvidenceExport(
       );
     }
   } else if (!hasVerifierSupportedConsensusProof) {
-    reasons.add("unsupported-consensus-mode");
+    if (consensusMode === "opstack") {
+      reasons.add("opstack-consensus-verifier-pending");
+    } else if (consensusMode === "linea") {
+      reasons.add("linea-consensus-verifier-pending");
+    } else {
+      reasons.add("unsupported-consensus-mode");
+    }
   }
 
   if (!hasOnchainPolicyProof) {

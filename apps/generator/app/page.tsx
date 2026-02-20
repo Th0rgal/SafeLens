@@ -36,6 +36,10 @@ const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
   "missing-consensus-proof": "Consensus proof was not included.",
   "unsupported-consensus-mode":
     "Consensus verification mode for this network is not implemented yet.",
+  "opstack-consensus-verifier-pending":
+    "OP Stack envelope checks are included, but full cryptographic consensus verification is still pending.",
+  "linea-consensus-verifier-pending":
+    "Linea envelope checks are included, but full cryptographic consensus verification is still pending.",
   "missing-onchain-policy-proof": "On-chain policy proof was not included.",
   "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
   "consensus-proof-fetch-failed": "Consensus proof fetch failed.",

@@ -202,6 +202,8 @@ export type Simulation = z.infer<typeof simulationSchema>;
 export const exportContractReasonSchema = z.enum([
   "missing-consensus-proof",
   "unsupported-consensus-mode",
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
   "missing-onchain-policy-proof",
   "missing-rpc-url",
   "consensus-proof-fetch-failed",

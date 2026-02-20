@@ -233,6 +233,24 @@ describe("export contract schema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts mode-specific pending verifier reasons", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "partial",
+      status: "partial",
+      isFullyVerifiable: false,
+      reasons: [
+        "opstack-consensus-verifier-pending",
+        "linea-consensus-verifier-pending",
+      ],
+      artifacts: {
+        consensusProof: true,
+        onchainPolicyProof: true,
+        simulation: true,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("consensus proof network schema", () => {
