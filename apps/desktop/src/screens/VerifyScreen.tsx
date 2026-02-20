@@ -8,6 +8,7 @@ import {
   parseEvidencePackage,
   getChainName,
   verifyEvidencePackage,
+  applyConsensusVerificationToReport,
   decodeSimulationEvents,
 } from "@safelens/core";
 import type { DecodedEvent } from "@safelens/core";
@@ -59,6 +60,10 @@ export default function VerifyScreen() {
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
   const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
+  const [consensusSourceTrust, setConsensusSourceTrust] = useState<TrustLevel>("rpc-sourced");
+  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>(
+    "Consensus proof included but not yet verified (requires desktop app)."
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -75,6 +80,8 @@ export default function VerifyScreen() {
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
       setConsensusVerification(undefined);
+      setConsensusSourceTrust("rpc-sourced");
+      setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
       return;
     }
 
@@ -86,6 +93,8 @@ export default function VerifyScreen() {
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
     setConsensusVerification(undefined);
+    setConsensusSourceTrust("rpc-sourced");
+    setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
 
     let cancelled = false;
 
@@ -105,21 +114,40 @@ export default function VerifyScreen() {
         setHashMatch(report.hashMatch);
         setPolicyProof(report.policyProof);
         setSimulationVerification(report.simulationVerification);
+        const initialConsensusSource = report.sources.find((source) => source.id === "consensus-proof");
+        if (initialConsensusSource) {
+          setConsensusSourceTrust(initialConsensusSource.trust);
+          setConsensusSourceSummary(initialConsensusSource.summary);
+        }
 
         // If consensus proof is present, verify via Tauri backend (BLS verification)
         if (currentEvidence.consensusProof) {
           const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
           if (!expectedStateRoot) {
+            const missingRootResult: ConsensusVerificationResult = {
+              valid: false,
+              verified_state_root: null,
+              verified_block_number: null,
+              state_root_matches: false,
+              sync_committee_participants: 0,
+              error: "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
+              checks: [],
+            };
+            const upgradedReport = applyConsensusVerificationToReport(
+              report,
+              currentEvidence,
+              {
+                settings: config ?? null,
+                consensusVerification: missingRootResult,
+              }
+            );
             if (!cancelled) {
-              setConsensusVerification({
-                valid: false,
-                verified_state_root: null,
-                verified_block_number: null,
-                state_root_matches: false,
-                sync_committee_participants: 0,
-                error: "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
-                checks: [],
-              });
+              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
+              setConsensusVerification(missingRootResult);
+              if (consensusSource) {
+                setConsensusSourceTrust(consensusSource.trust);
+                setConsensusSourceSummary(consensusSource.summary);
+              }
             }
             return;
           }
@@ -134,20 +162,47 @@ export default function VerifyScreen() {
               "verify_consensus_proof",
               { input: consensusInput }
             );
+            const upgradedReport = applyConsensusVerificationToReport(
+              report,
+              currentEvidence,
+              {
+                settings: config ?? null,
+                consensusVerification: consensusResult,
+              }
+            );
             if (!cancelled) {
+              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(consensusResult);
+              if (consensusSource) {
+                setConsensusSourceTrust(consensusSource.trust);
+                setConsensusSourceSummary(consensusSource.summary);
+              }
             }
           } catch (err) {
+            const failedResult: ConsensusVerificationResult = {
+              valid: false,
+              verified_state_root: null,
+              verified_block_number: null,
+              state_root_matches: false,
+              sync_committee_participants: 0,
+              error: err instanceof Error ? err.message : String(err),
+              checks: [],
+            };
+            const upgradedReport = applyConsensusVerificationToReport(
+              report,
+              currentEvidence,
+              {
+                settings: config ?? null,
+                consensusVerification: failedResult,
+              }
+            );
             if (!cancelled) {
-              setConsensusVerification({
-                valid: false,
-                verified_state_root: null,
-                verified_block_number: null,
-                state_root_matches: false,
-                sync_committee_participants: 0,
-                error: err instanceof Error ? err.message : String(err),
-                checks: [],
-              });
+              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
+              setConsensusVerification(failedResult);
+              if (consensusSource) {
+                setConsensusSourceTrust(consensusSource.trust);
+                setConsensusSourceSummary(consensusSource.summary);
+              }
             }
           }
         }
@@ -485,14 +540,14 @@ export default function VerifyScreen() {
               <CardHeader>
                 <div className="flex items-center gap-2">
                   <CardTitle>Consensus Verification</CardTitle>
-                  <TrustBadge level={consensusVerification?.valid ? "consensus-verified" : "rpc-sourced"} />
+                  <TrustBadge level={consensusSourceTrust} />
                 </div>
                 <CardDescription>
                   {!consensusVerification
                     ? "Verifying consensus proof via BLS sync committee signatures..."
                     : consensusVerification.valid
                       ? `State root verified against Ethereum consensus (${consensusVerification.sync_committee_participants}/512 validators)`
-                      : consensusVerification.error ?? "Consensus verification failed"}
+                      : consensusVerification.error ?? consensusSourceSummary}
                 </CardDescription>
               </CardHeader>
               <CardContent>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { verifyEvidencePackage } from "..";
+import { applyConsensusVerificationToReport, verifyEvidencePackage } from "..";
 import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
@@ -252,6 +252,64 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(check).toBeDefined();
     expect(check!.passed).toBe(false);
+  });
+
+  it("upgrades consensus source trust after successful consensus verification", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root: enriched.onchainPolicyProof.stateRoot,
+        verified_block_number: enriched.onchainPolicyProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 512,
+        error: null,
+        checks: [],
+      },
+    });
+
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("consensus-verified");
+    expect(consensusSource?.summary).toContain("verified against Ethereum consensus");
+  });
+
+  it("keeps consensus source rpc-sourced when consensus verification fails", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: null,
+        verified_block_number: null,
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: "BLS verification failed",
+        checks: [],
+      },
+    });
+
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("rpc-sourced");
+    expect(consensusSource?.summary).toContain("not yet verified");
   });
 });
 

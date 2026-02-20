@@ -59,6 +59,55 @@ export interface VerifyEvidenceOptions {
   settings?: SettingsConfig | null;
 }
 
+interface BuildReportSourcesOptions {
+  evidence: EvidencePackage;
+  settings?: SettingsConfig | null;
+  signatureSummary: SignatureCheckSummary;
+  policyProof?: PolicyProofVerificationResult;
+  consensusVerification?: ConsensusVerificationResult;
+}
+
+function buildReportSources(
+  options: BuildReportSourcesOptions
+): ReturnType<typeof buildVerificationSources> {
+  return buildVerificationSources(createVerificationSourceContext({
+    hasSettings: Boolean(options.settings),
+    hasUnsupportedSignatures: options.signatureSummary.unsupported > 0,
+    hasDecodedData: Boolean(options.evidence.dataDecoded),
+    hasOnchainPolicyProof: Boolean(options.evidence.onchainPolicyProof),
+    hasSimulation: Boolean(options.evidence.simulation),
+    hasConsensusProof: Boolean(options.evidence.consensusProof),
+    // After successful local Merkle verification, upgrade trust from
+    // "rpc-sourced" to "proof-verified" — the proof was cryptographically
+    // validated against the state root, not just fetched from an RPC.
+    onchainPolicyProofTrust: options.policyProof?.valid
+      ? "proof-verified"
+      : options.evidence.onchainPolicyProof?.trust,
+    simulationTrust: options.evidence.simulation?.trust,
+    consensusVerified: Boolean(options.consensusVerification?.valid),
+  }));
+}
+
+export function applyConsensusVerificationToReport(
+  report: EvidenceVerificationReport,
+  evidence: EvidencePackage,
+  options: VerifyEvidenceOptions & {
+    consensusVerification: ConsensusVerificationResult;
+  }
+): EvidenceVerificationReport {
+  return {
+    ...report,
+    consensusVerification: options.consensusVerification,
+    sources: buildReportSources({
+      evidence,
+      settings: options.settings,
+      signatureSummary: report.signatures.summary,
+      policyProof: report.policyProof,
+      consensusVerification: options.consensusVerification,
+    }),
+  };
+}
+
 export async function verifyEvidencePackage(
   evidence: EvidencePackage,
   options: VerifyEvidenceOptions = {}
@@ -142,7 +191,6 @@ export async function verifyEvidencePackage(
   // cryptographically proven.  A mismatch with the evidence-level
   // confirmationsRequired means the evidence lies about how many
   // signatures are needed.
-  let thresholdMismatch = false;
   if (
     policyProof?.valid &&
     evidence.onchainPolicyProof?.decodedPolicy?.threshold != null
@@ -150,7 +198,6 @@ export async function verifyEvidencePackage(
     const provenThreshold =
       evidence.onchainPolicyProof.decodedPolicy.threshold;
     if (evidence.confirmationsRequired !== provenThreshold) {
-      thresholdMismatch = true;
       policyProof.checks.push({
         id: "threshold-vs-confirmations",
         label: "confirmationsRequired matches proven threshold",
@@ -203,25 +250,12 @@ export async function verifyEvidencePackage(
   return {
     proposer,
     targetWarnings,
-    sources: buildVerificationSources(createVerificationSourceContext({
-      hasSettings: Boolean(settings),
-      hasUnsupportedSignatures: summary.unsupported > 0,
-      hasDecodedData: Boolean(evidence.dataDecoded),
-      hasOnchainPolicyProof: Boolean(evidence.onchainPolicyProof),
-      hasSimulation: Boolean(evidence.simulation),
-      hasConsensusProof: Boolean(evidence.consensusProof),
-      // After successful local Merkle verification, upgrade trust from
-      // "rpc-sourced" to "proof-verified" — the proof was cryptographically
-      // validated against the state root, not just fetched from an RPC.
-      onchainPolicyProofTrust: policyProof?.valid
-        ? "proof-verified"
-        : evidence.onchainPolicyProof?.trust,
-      simulationTrust: evidence.simulation?.trust,
-      // consensusVerified will be set to true by the desktop app after
-      // Tauri backend verifies the BLS signatures. It stays false here
-      // because the core verifier runs in JS and can't do BLS verification.
-      consensusVerified: false,
-    })),
+    sources: buildReportSources({
+      evidence,
+      settings,
+      signatureSummary: summary,
+      policyProof,
+    }),
     signatures: {
       list: signatureList,
       byOwner,
