@@ -34,7 +34,17 @@ import {
   getSimulationUnavailableReason,
 } from "@/lib/simulation-unavailable";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ChevronDown } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
+import type {
+  EvidencePackage,
+  SignatureCheckResult,
+  TransactionWarning,
+  TrustLevel,
+  SafeTxHashDetails,
+  PolicyProofVerificationResult,
+  SimulationVerificationResult,
+  ConsensusVerificationResult,
+  WarningLevel,
+} from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
 
 type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
@@ -47,11 +57,18 @@ type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer
     : never
   : never;
 
-const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
+type WarningStyle = {
+  border: string;
+  bg: string;
+  text: string;
+  Icon: typeof AlertTriangle;
+};
+
+const WARNING_STYLES = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
   danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
-};
+} satisfies Record<WarningLevel, WarningStyle>;
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
   const style = WARNING_STYLES[warning.level];
