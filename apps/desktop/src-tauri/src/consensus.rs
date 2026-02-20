@@ -333,6 +333,15 @@ impl ExecutionConsensusMode {
             Self::Linea => "Linea",
         }
     }
+
+    fn supports_chain_id(self, chain_id: u64) -> bool {
+        match self {
+            // Initial OP Stack rollout scope in #19.
+            Self::OpStack => matches!(chain_id, 10 | 8453),
+            // Initial Linea rollout scope in #20.
+            Self::Linea => chain_id == 59144,
+        }
+    }
 }
 
 fn parse_execution_consensus_mode(mode: &str) -> Result<ExecutionConsensusMode, String> {
@@ -489,7 +498,7 @@ fn verify_execution_envelope(
         detail: Some(format!("Mode: {}", mode.as_str())),
     });
 
-    let payload_network = match payload.get("chainId").and_then(Value::as_u64) {
+    let envelope_chain_id = match payload.get("chainId").and_then(Value::as_u64) {
         Some(chain_id) => {
             if let Some(package_chain_id) = input.package_chain_id {
                 let chain_id_matches = chain_id == package_chain_id;
@@ -509,7 +518,7 @@ fn verify_execution_envelope(
                     );
                 }
             }
-            chain_id.to_string()
+            chain_id
         }
         None => {
             return fail_result(
@@ -522,8 +531,36 @@ fn verify_execution_envelope(
         id: "envelope-network".into(),
         label: "Envelope network metadata present".into(),
         passed: true,
-        detail: Some(payload_network),
+        detail: Some(envelope_chain_id.to_string()),
     });
+
+    let chain_id_is_supported = mode.supports_chain_id(envelope_chain_id);
+    checks.push(ConsensusCheck {
+        id: "envelope-supported-network".into(),
+        label: "Envelope chainId is supported for this consensus mode".into(),
+        passed: chain_id_is_supported,
+        detail: Some(format!(
+            "mode={}, chainId={}",
+            mode.as_str(),
+            envelope_chain_id
+        )),
+    });
+    if !chain_id_is_supported {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some(format!(
+                "Unsupported chainId for {} consensus verification: {}.",
+                mode.display_name(),
+                envelope_chain_id
+            )),
+            error_code: Some(ERR_UNSUPPORTED_NETWORK.into()),
+            checks,
+        };
+    }
 
     let envelope_block_tag = match payload.get("blockTag").and_then(Value::as_str) {
         Some(block_tag) => block_tag,
@@ -1719,5 +1756,71 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_opstack_envelope_for_unsupported_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":42161,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(42161),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Unsupported chainId for OP Stack consensus verification: 42161.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-supported-network" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_linea_envelope_for_unsupported_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59141,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59141),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Unsupported chainId for Linea consensus verification: 59141.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-supported-network" && !check.passed));
     }
 }
