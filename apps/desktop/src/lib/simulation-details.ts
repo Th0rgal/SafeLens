@@ -1,4 +1,4 @@
-import { decodeSimulationEvents } from "@safelens/core";
+import { summarizeSimulationEvents } from "@safelens/core";
 import type { EvidencePackage, SimulationVerificationResult } from "@safelens/core";
 
 export type SimulationDetailRow = {
@@ -45,74 +45,53 @@ export function buildSimulationDetailRows(
     value: `${checksPassed}/${checksTotal}`,
   });
 
-  const decodedEvents = decodeSimulationEvents(
+  const summary = summarizeSimulationEvents(
     evidence.simulation.logs ?? [],
     evidence.safeAddress,
-    evidence.chainId
+    evidence.chainId,
+    { maxTransferPreviews: 5 }
   );
-  const transfersOut = decodedEvents.filter(
-    (event) => event.kind === "transfer" && event.direction === "send"
-  ).length;
-  const transfersIn = decodedEvents.filter(
-    (event) => event.kind === "transfer" && event.direction === "receive"
-  ).length;
-  const approvals = decodedEvents.filter((event) => event.kind === "approval");
 
-  if (decodedEvents.length > 0) {
+  if (summary.totalEvents > 0) {
     rows.push({
       id: "simulation-events-detected",
       label: "Token events",
-      value: `${decodedEvents.length}`,
+      value: `${summary.totalEvents}`,
     });
   }
 
-  if (transfersOut > 0 || transfersIn > 0) {
+  if (summary.transfersOut > 0 || summary.transfersIn > 0) {
     rows.push({
       id: "simulation-transfers",
       label: "Token transfers",
-      value: `${transfersOut} out, ${transfersIn} in`,
+      value: `${summary.transfersOut} out, ${summary.transfersIn} in`,
     });
   }
 
-  const transfers = decodedEvents.filter((event) => event.kind === "transfer");
-  transfers.slice(0, 5).forEach((event, index) => {
+  summary.transferPreviews.forEach((event, index) => {
     const directionLabel =
       event.direction === "send"
         ? "Sent"
         : event.direction === "receive"
           ? "Received"
           : "Transfer";
-    const counterparty =
-      event.direction === "send"
-        ? event.to
-        : event.direction === "receive"
-          ? event.from
-          : event.to;
-    const targetLabel =
-      event.direction === "send"
-        ? "to"
-        : event.direction === "receive"
-          ? "from"
-          : "at";
+    const targetLabel = event.counterpartyRole;
     const tokenLabel = event.tokenSymbol ? "" : ` (${compactAddress(event.token)})`;
     rows.push({
       id: `simulation-transfer-${index + 1}`,
       label: `${directionLabel} ${index + 1}`,
-      value: `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(counterparty)}`,
+      value: `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(event.counterparty)}`,
     });
   });
 
-  if (approvals.length > 0) {
-    const unlimitedApprovals = approvals.filter((event) =>
-      event.amountFormatted.toLowerCase().includes("unlimited")
-    ).length;
+  if (summary.approvals > 0) {
     rows.push({
       id: "simulation-approvals",
       label: "Token approvals",
       value:
-        unlimitedApprovals > 0
-          ? `${approvals.length} (${unlimitedApprovals} unlimited)`
-          : `${approvals.length}`,
+        summary.unlimitedApprovals > 0
+          ? `${summary.approvals} (${summary.unlimitedApprovals} unlimited)`
+          : `${summary.approvals}`,
     });
   }
 

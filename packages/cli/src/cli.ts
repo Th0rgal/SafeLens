@@ -26,7 +26,7 @@ import {
   computeSafeTxHashDetailed,
   resolveAddress,
   setGlobalDescriptors,
-  decodeSimulationEvents,
+  summarizeSimulationEvents,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -337,52 +337,33 @@ function printVerificationText(
         simRows.push(["Block timestamp", evidence.simulation.blockTimestamp]);
       }
 
-      const decodedEvents = decodeSimulationEvents(
+      const summary = summarizeSimulationEvents(
         evidence.simulation.logs ?? [],
         evidence.safeAddress,
-        evidence.chainId
+        evidence.chainId,
+        { maxTransferPreviews: 5 }
       );
-      if (decodedEvents.length > 0) {
-        const transfersOut = decodedEvents.filter(
-          (event) => event.kind === "transfer" && event.direction === "send"
-        ).length;
-        const transfersIn = decodedEvents.filter(
-          (event) => event.kind === "transfer" && event.direction === "receive"
-        ).length;
-        const transferEvents = decodedEvents.filter((event) => event.kind === "transfer");
-        const approvals = decodedEvents.filter((event) => event.kind === "approval").length;
-
-        simRows.push(["Token events", String(decodedEvents.length)]);
-        if (transfersOut > 0 || transfersIn > 0) {
-          simRows.push(["Token transfers", `${transfersOut} out, ${transfersIn} in`]);
+      if (summary.totalEvents > 0) {
+        simRows.push(["Token events", String(summary.totalEvents)]);
+        if (summary.transfersOut > 0 || summary.transfersIn > 0) {
+          simRows.push(["Token transfers", `${summary.transfersOut} out, ${summary.transfersIn} in`]);
         }
-        transferEvents.slice(0, 5).forEach((event, index) => {
+        summary.transferPreviews.forEach((event, index) => {
           const directionLabel =
             event.direction === "send"
               ? "Sent"
               : event.direction === "receive"
                 ? "Received"
                 : "Transfer";
-          const counterparty =
-            event.direction === "send"
-              ? event.to
-              : event.direction === "receive"
-                ? event.from
-                : event.to;
-          const targetLabel =
-            event.direction === "send"
-              ? "to"
-              : event.direction === "receive"
-                ? "from"
-                : "at";
+          const targetLabel = event.counterpartyRole;
           const tokenLabel = event.tokenSymbol ? "" : ` (${compactAddress(event.token)})`;
           simRows.push([
             `${directionLabel} ${index + 1}`,
-            `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(counterparty)}`,
+            `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(event.counterparty)}`,
           ]);
         });
-        if (approvals > 0) {
-          simRows.push(["Token approvals", String(approvals)]);
+        if (summary.approvals > 0) {
+          simRows.push(["Token approvals", String(summary.approvals)]);
         }
       }
     }
