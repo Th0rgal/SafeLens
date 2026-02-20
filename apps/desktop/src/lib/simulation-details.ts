@@ -9,6 +9,11 @@ export type SimulationDetailRow = {
 
 type SimulationEvidence = Pick<EvidencePackage, "chainId" | "safeAddress" | "simulation">;
 
+function compactAddress(address: string): string {
+  if (!address.startsWith("0x") || address.length < 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 export function buildSimulationDetailRows(
   evidence: SimulationEvidence,
   simulationVerification: SimulationVerificationResult | undefined,
@@ -68,6 +73,34 @@ export function buildSimulationDetailRows(
       value: `${transfersOut} out, ${transfersIn} in`,
     });
   }
+
+  const transfers = decodedEvents.filter((event) => event.kind === "transfer");
+  transfers.slice(0, 5).forEach((event, index) => {
+    const directionLabel =
+      event.direction === "send"
+        ? "Sent"
+        : event.direction === "receive"
+          ? "Received"
+          : "Transfer";
+    const counterparty =
+      event.direction === "send"
+        ? event.to
+        : event.direction === "receive"
+          ? event.from
+          : event.to;
+    const targetLabel =
+      event.direction === "send"
+        ? "to"
+        : event.direction === "receive"
+          ? "from"
+          : "at";
+    const tokenLabel = event.tokenSymbol ? "" : ` (${compactAddress(event.token)})`;
+    rows.push({
+      id: `simulation-transfer-${index + 1}`,
+      label: `${directionLabel} ${index + 1}`,
+      value: `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(counterparty)}`,
+    });
+  });
 
   if (approvals.length > 0) {
     const unlimitedApprovals = approvals.filter((event) =>

@@ -175,6 +175,11 @@ function formatAddressWithName(
   return `\x1b[38;5;214m${address}\x1b[0m`; // Orange color (256-color mode)
 }
 
+function compactAddress(address: string): string {
+  if (!address.startsWith("0x") || address.length < 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
   if (warnings.length === 0) return "";
 
@@ -269,16 +274,19 @@ function printVerificationText(
     "🔐 Hash Verification"
   ));
 
-  // ── Transaction Details ─────────────────────────────────────────────
+  // ── Execution Safety (Core) ────────────────────────────────────────
   console.log("");
+  const method = evidence.dataDecoded?.method ?? "Unknown";
   console.log(box(
     table([
-      ["Target Contract", `${formatAddressWithName(evidence.transaction.to, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
-      ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
+      ["Signatures", `${code(`${evidence.confirmations.length}/${evidence.confirmationsRequired}`)} ${trustBadge("self-verified")}`],
+      ["Method", `${method} ${trustBadge("self-verified")}`],
+      ["Target", `${formatAddressWithName(evidence.transaction.to, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
       ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
+      ["Value (wei)", `${code(evidence.transaction.value)} ${trustBadge("self-verified")}`],
       ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
     ], 18),
-    "Transaction Details"
+    "Execution Safety"
   ));
 
   // ── Warnings ────────────────────────────────────────────────────────
@@ -341,12 +349,38 @@ function printVerificationText(
         const transfersIn = decodedEvents.filter(
           (event) => event.kind === "transfer" && event.direction === "receive"
         ).length;
+        const transferEvents = decodedEvents.filter((event) => event.kind === "transfer");
         const approvals = decodedEvents.filter((event) => event.kind === "approval").length;
 
         simRows.push(["Token events", String(decodedEvents.length)]);
         if (transfersOut > 0 || transfersIn > 0) {
           simRows.push(["Token transfers", `${transfersOut} out, ${transfersIn} in`]);
         }
+        transferEvents.slice(0, 5).forEach((event, index) => {
+          const directionLabel =
+            event.direction === "send"
+              ? "Sent"
+              : event.direction === "receive"
+                ? "Received"
+                : "Transfer";
+          const counterparty =
+            event.direction === "send"
+              ? event.to
+              : event.direction === "receive"
+                ? event.from
+                : event.to;
+          const targetLabel =
+            event.direction === "send"
+              ? "to"
+              : event.direction === "receive"
+                ? "from"
+                : "at";
+          const tokenLabel = event.tokenSymbol ? "" : ` (${compactAddress(event.token)})`;
+          simRows.push([
+            `${directionLabel} ${index + 1}`,
+            `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(counterparty)}`,
+          ]);
+        });
         if (approvals > 0) {
           simRows.push(["Token approvals", String(approvals)]);
         }

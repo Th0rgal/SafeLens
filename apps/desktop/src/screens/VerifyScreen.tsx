@@ -773,6 +773,41 @@ function ExecutionSafetyPanel({
     simulationVerification,
     getSimulationUnavailableReason(evidence)
   );
+  const method = evidence.dataDecoded?.method ?? "Unknown";
+  const coreExecutionDetails: Array<{ id: string; label: string; value: string; monospace?: boolean }> = [
+    {
+      id: "core-signatures",
+      label: "Signatures",
+      value: `${evidence.confirmations.length}/${evidence.confirmationsRequired}`,
+    },
+    {
+      id: "core-method",
+      label: "Method",
+      value: method,
+    },
+    {
+      id: "core-target",
+      label: "Target",
+      value: evidence.transaction.to,
+      monospace: true,
+    },
+    {
+      id: "core-operation",
+      label: "Operation",
+      value: evidence.transaction.operation === 0 ? "Call" : "DelegateCall",
+    },
+    {
+      id: "core-value",
+      label: "Value (wei)",
+      value: evidence.transaction.value,
+      monospace: true,
+    },
+    {
+      id: "core-nonce",
+      label: "Nonce",
+      value: String(evidence.transaction.nonce),
+    },
+  ];
 
   return (
     <Card>
@@ -828,6 +863,25 @@ function ExecutionSafetyPanel({
             </div>
           );
         })}
+        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+          <div className="text-xs font-medium text-muted">Core execution details</div>
+          <div className="mt-2 space-y-1.5">
+            {coreExecutionDetails.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                <span className="text-muted">{item.label}</span>
+                <span
+                  className={
+                    item.monospace
+                      ? "max-w-[70%] break-all font-mono text-[11px] text-right"
+                      : "max-w-[70%] text-right"
+                  }
+                >
+                  {item.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
             Checks: {passedChecks} passed, {warningChecks} warning

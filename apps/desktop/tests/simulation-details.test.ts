@@ -119,4 +119,31 @@ describe("buildSimulationDetailRows", () => {
       ])
     );
   });
+
+  it("includes explicit transfer rows with token symbol when available", () => {
+    const logs = [
+      {
+        address: "0x6b175474e89094c44da98b954eedeac495271d0f",
+        topics: [TRANSFER_TOPIC, pad32(SAFE), pad32("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")],
+        data: uint256Hex(250n * 10n ** 18n),
+      },
+    ] as NonNullable<EvidencePackage["simulation"]>["logs"];
+
+    const rows = buildSimulationDetailRows(
+      {
+        chainId: 1,
+        safeAddress: SAFE,
+        simulation: { logs } as EvidencePackage["simulation"],
+      },
+      makeVerification({
+        checks: [{ id: "s1", label: "Has logs", passed: true }],
+      }),
+      "unavailable"
+    );
+
+    const transferRow = rows.find((row) => row.id === "simulation-transfer-1");
+    expect(transferRow).toBeDefined();
+    expect(transferRow!.label).toContain("Sent");
+    expect(transferRow!.value).toContain("DAI");
+  });
 });
