@@ -81,6 +81,32 @@ function parseHex32(value: unknown, fieldName: string): `0x${string}` {
   return value as `0x${string}`;
 }
 
+function resolveExecutionCapability(
+  chainId: number,
+  consensusMode: ExecutionConsensusMode
+) {
+  const capability = getNetworkCapability(chainId);
+  if (!capability?.consensusMode) {
+    throw new Error(
+      `No consensus verification path is configured for chain ID ${chainId}.`
+    );
+  }
+
+  if (capability.consensusMode === "beacon") {
+    throw new Error(
+      `Chain ${chainId} uses beacon consensus mode; execution envelope mode '${consensusMode}' is invalid.`
+    );
+  }
+
+  if (capability.consensusMode !== consensusMode) {
+    throw new Error(
+      `Consensus mode mismatch for chain ${chainId}: expected '${capability.consensusMode}', received '${consensusMode}'.`
+    );
+  }
+
+  return capability;
+}
+
 async function requestJsonRpc<T>(
   rpcUrl: string,
   method: string,
@@ -122,7 +148,7 @@ export async function fetchExecutionConsensusProof(
   consensusMode: ExecutionConsensusMode,
   options: FetchExecutionConsensusProofOptions = {}
 ): Promise<ConsensusProof> {
-  const capability = getNetworkCapability(chainId);
+  const capability = resolveExecutionCapability(chainId, consensusMode);
   const rpcUrl = options.rpcUrl ?? capability?.defaultRpcUrl;
   if (!rpcUrl) {
     throw new Error(

@@ -125,4 +125,24 @@ describe("fetchExecutionConsensusProof", () => {
       })
     ).rejects.toThrow("Invalid hex quantity for eth_chainId");
   });
+
+  it("rejects execution mode mismatches for configured chains", async () => {
+    await expect(
+      fetchExecutionConsensusProof(10, "linea", {
+        rpcUrl: "https://example.invalid/rpc",
+      })
+    ).rejects.toThrow(
+      "Consensus mode mismatch for chain 10: expected 'opstack', received 'linea'."
+    );
+  });
+
+  it("rejects execution envelopes for beacon-only chains", async () => {
+    await expect(
+      fetchExecutionConsensusProof(17000, "opstack", {
+        rpcUrl: "https://example.invalid/rpc",
+      })
+    ).rejects.toThrow(
+      "Chain 17000 uses beacon consensus mode; execution envelope mode 'opstack' is invalid."
+    );
+  });
 });
