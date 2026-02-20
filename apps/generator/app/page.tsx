@@ -25,6 +25,7 @@ import {
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
+import { summarizeConsensusProof } from "@/lib/consensus-proof-summary";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
@@ -512,24 +513,8 @@ export default function AnalyzePage() {
                 <div className="col-span-2">
                   <div className="font-medium text-muted">Consensus Proof</div>
                   {(() => {
-                    const proof = evidence.consensusProof;
-                    const consensusMode = proof.consensusMode ?? "beacon";
-                    if (consensusMode === "beacon") {
-                      const updates = Array.isArray((proof as { updates?: unknown }).updates)
-                        ? (proof as { updates: unknown[] }).updates
-                        : [];
-                      return (
-                        <div className="text-xs text-green-400">
-                          Included ({proof.network}, block {proof.blockNumber}, {updates.length} sync committee update{updates.length !== 1 ? "s" : ""})
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="text-xs text-orange-400">
-                        Included ({proof.network}, block {proof.blockNumber}, mode {consensusMode} package envelope only)
-                      </div>
-                    );
+                    const summary = summarizeConsensusProof(evidence.consensusProof);
+                    return <div className={`text-xs ${summary.toneClassName}`}>{summary.text}</div>;
                   })()}
                 </div>
               )}
