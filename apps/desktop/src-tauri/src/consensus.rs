@@ -47,6 +47,8 @@ pub struct ConsensusVerificationResult {
     pub sync_committee_participants: u64,
     /// Human-readable error if verification failed.
     pub error: Option<String>,
+    /// Machine-readable error code for deterministic trust-boundary handling.
+    pub error_code: Option<String>,
     /// Individual check results.
     pub checks: Vec<ConsensusCheck>,
 }
@@ -201,6 +203,18 @@ fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
     }
 }
 
+const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
+const ERR_INVALID_CHECKPOINT: &str = "invalid-checkpoint-hash";
+const ERR_INVALID_BOOTSTRAP: &str = "invalid-bootstrap-json";
+const ERR_BOOTSTRAP_VERIFICATION_FAILED: &str = "bootstrap-verification-failed";
+const ERR_INVALID_UPDATE: &str = "invalid-update-json";
+const ERR_UPDATE_VERIFICATION_FAILED: &str = "update-verification-failed";
+const ERR_INVALID_FINALITY_UPDATE: &str = "invalid-finality-update-json";
+const ERR_FINALITY_VERIFICATION_FAILED: &str = "finality-verification-failed";
+const ERR_MISSING_EXECUTION_PAYLOAD: &str = "missing-execution-payload";
+const ERR_INVALID_EXPECTED_STATE_ROOT: &str = "invalid-expected-state-root";
+const ERR_STATE_ROOT_MISMATCH: &str = "state-root-mismatch";
+
 fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
     match network {
         ConsensusNetwork::Mainnet => mainnet_config(),
@@ -245,7 +259,7 @@ impl ConsensusSpec for GnosisConsensusSpec {
 pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
     let network = match parse_network(&input.network) {
         Ok(network) => network,
-        Err(err) => return fail_result(err),
+        Err(err) => return fail_result(ERR_UNSUPPORTED_NETWORK, err),
     };
 
     if matches!(network, ConsensusNetwork::Gnosis) {
@@ -259,13 +273,15 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     network: ConsensusNetwork,
 ) -> ConsensusVerificationResult {
     let mut checks = Vec::new();
-    let mut error = None;
 
     // Parse the checkpoint
     let checkpoint = match parse_b256(&input.checkpoint) {
         Ok(c) => c,
         Err(e) => {
-            return fail_result(format!("Invalid checkpoint hash: {}", e));
+            return fail_result(
+                ERR_INVALID_CHECKPOINT,
+                format!("Invalid checkpoint hash: {}", e),
+            );
         }
     };
 
@@ -276,7 +292,10 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     let bootstrap: Bootstrap<S> = match serde_json::from_str(&input.bootstrap) {
         Ok(b) => b,
         Err(e) => {
-            return fail_result(format!("Failed to parse bootstrap: {}", e));
+            return fail_result(
+                ERR_INVALID_BOOTSTRAP,
+                format!("Failed to parse bootstrap: {}", e),
+            );
         }
     };
 
@@ -307,6 +326,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
                 state_root_matches: false,
                 sync_committee_participants: 0,
                 error: Some(format!("Bootstrap verification failed: {}", e)),
+                error_code: Some(ERR_BOOTSTRAP_VERIFICATION_FAILED.into()),
                 checks,
             };
         }
@@ -339,14 +359,24 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
         let update: Update<S> = match serde_json::from_str(update_json) {
             Ok(u) => u,
             Err(e) => {
-                error = Some(format!("Failed to parse update {}: {}", i, e));
+                let error = Some(format!("Failed to parse update {}: {}", i, e));
+                let error_code = Some(ERR_INVALID_UPDATE.into());
                 checks.push(ConsensusCheck {
                     id: format!("update-{}", i),
                     label: format!("Sync committee update #{}", i + 1),
                     passed: false,
                     detail: Some(format!("Parse error: {}", e)),
                 });
-                break;
+                return ConsensusVerificationResult {
+                    valid: false,
+                    verified_state_root: None,
+                    verified_block_number: None,
+                    state_root_matches: false,
+                    sync_committee_participants: 0,
+                    error,
+                    error_code,
+                    checks,
+                };
             }
         };
 
@@ -362,28 +392,26 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
                 update_count += 1;
             }
             Err(e) => {
-                error = Some(format!("Update {} verification failed: {}", i, e));
+                let error = Some(format!("Update {} verification failed: {}", i, e));
+                let error_code = Some(ERR_UPDATE_VERIFICATION_FAILED.into());
                 checks.push(ConsensusCheck {
                     id: format!("update-{}", i),
                     label: format!("Sync committee update #{}", i + 1),
                     passed: false,
                     detail: Some(format!("Verification failed: {}", e)),
                 });
-                break;
+                return ConsensusVerificationResult {
+                    valid: false,
+                    verified_state_root: None,
+                    verified_block_number: None,
+                    state_root_matches: false,
+                    sync_committee_participants: 0,
+                    error,
+                    error_code,
+                    checks,
+                };
             }
         }
-    }
-
-    if error.is_some() {
-        return ConsensusVerificationResult {
-            valid: false,
-            verified_state_root: None,
-            verified_block_number: None,
-            state_root_matches: false,
-            sync_committee_participants: 0,
-            error,
-            checks,
-        };
     }
 
     if update_count > 0 {
@@ -402,7 +430,10 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     let finality_update: FinalityUpdate<S> = match serde_json::from_str(&input.finality_update) {
         Ok(f) => f,
         Err(e) => {
-            return fail_result(format!("Failed to parse finality update: {}", e));
+            return fail_result(
+                ERR_INVALID_FINALITY_UPDATE,
+                format!("Failed to parse finality update: {}", e),
+            );
         }
     };
 
@@ -442,6 +473,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
                 state_root_matches: false,
                 sync_committee_participants: participants,
                 error: Some(format!("Finality verification failed: {}", e)),
+                error_code: Some(ERR_FINALITY_VERIFICATION_FAILED.into()),
                 checks,
             };
         }
@@ -455,6 +487,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
         Ok(exec) => exec,
         Err(_) => {
             return fail_result(
+                ERR_MISSING_EXECUTION_PAYLOAD,
                 "Finalized header does not contain an execution payload (pre-Capella).".into(),
             );
         }
@@ -467,10 +500,13 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     let expected_state_root = match parse_b256(&input.expected_state_root) {
         Ok(root) => format!("{:#x}", root),
         Err(e) => {
-            return fail_result(format!(
-                "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
-                e
-            ));
+            return fail_result(
+                ERR_INVALID_EXPECTED_STATE_ROOT,
+                format!(
+                    "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
+                    e
+                ),
+            );
         }
     };
     let state_root_matches = verified_state_root.eq_ignore_ascii_case(&expected_state_root);
@@ -515,11 +551,16 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
         state_root_matches,
         sync_committee_participants: participants,
         error: mismatch_error,
+        error_code: if state_root_matches {
+            None
+        } else {
+            Some(ERR_STATE_ROOT_MISMATCH.into())
+        },
         checks,
     }
 }
 
-fn fail_result(error: String) -> ConsensusVerificationResult {
+fn fail_result(error_code: &str, error: String) -> ConsensusVerificationResult {
     ConsensusVerificationResult {
         valid: false,
         verified_state_root: None,
@@ -527,6 +568,7 @@ fn fail_result(error: String) -> ConsensusVerificationResult {
         state_root_matches: false,
         sync_committee_participants: 0,
         error: Some(error),
+        error_code: Some(error_code.into()),
         checks: vec![],
     }
 }
@@ -556,7 +598,8 @@ fn expected_current_slot_for_network(
 mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
-        ConsensusNetwork,
+        verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
+        ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -609,5 +652,44 @@ mod tests {
         let now = UNIX_EPOCH + Duration::from_secs(100);
         assert_eq!(expected_current_slot_for_network(now, 0, 5), 20);
         assert_eq!(expected_current_slot_for_network(now, 0, 12), 8);
+    }
+
+    #[test]
+    fn returns_machine_readable_error_code_for_unsupported_network() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            bootstrap: "{}".to_string(),
+            updates: vec![],
+            finality_update: "{}".to_string(),
+            network: "holesky".to_string(),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 0,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+    }
+
+    #[test]
+    fn returns_machine_readable_error_code_for_invalid_checkpoint() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: "0x1234".to_string(),
+            bootstrap: "{}".to_string(),
+            updates: vec![],
+            finality_update: "{}".to_string(),
+            network: "mainnet".to_string(),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 0,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_INVALID_CHECKPOINT));
     }
 }

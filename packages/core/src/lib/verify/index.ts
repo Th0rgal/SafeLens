@@ -39,6 +39,7 @@ export type ConsensusVerificationResult = {
   state_root_matches: boolean;
   sync_committee_participants: number;
   error: string | null;
+  error_code?: string | null;
   checks: Array<{
     id: string;
     label: string;

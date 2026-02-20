@@ -131,6 +131,7 @@ export default function VerifyScreen() {
               state_root_matches: false,
               sync_committee_participants: 0,
               error: "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
+              error_code: "missing-policy-state-root",
               checks: [],
             };
             const upgradedReport = applyConsensusVerificationToReport(
@@ -186,6 +187,7 @@ export default function VerifyScreen() {
               state_root_matches: false,
               sync_committee_participants: 0,
               error: err instanceof Error ? err.message : String(err),
+              error_code: "tauri-invoke-failed",
               checks: [],
             };
             const upgradedReport = applyConsensusVerificationToReport(
