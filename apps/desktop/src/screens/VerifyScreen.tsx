@@ -358,6 +358,7 @@ export default function VerifyScreen() {
   const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>(
     "Consensus proof included but not yet verified (requires desktop app)."
   );
+  const [showSafetyDetails, setShowSafetyDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -376,6 +377,7 @@ export default function VerifyScreen() {
       setConsensusVerification(undefined);
       setConsensusSourceTrust("rpc-sourced");
       setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+      setShowSafetyDetails(false);
       return;
     }
 
@@ -389,6 +391,7 @@ export default function VerifyScreen() {
     setConsensusVerification(undefined);
     setConsensusSourceTrust("rpc-sourced");
     setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+    setShowSafetyDetails(false);
 
     let cancelled = false;
 
@@ -657,332 +660,338 @@ export default function VerifyScreen() {
             checks={safetyChecks}
             hashMatch={hashMatch}
             networkSupport={networkSupport}
+            showDetails={showSafetyDetails}
+            onToggleDetails={() => setShowSafetyDetails((value) => !value)}
           />
 
-          <InterpretationCard
-            dataDecoded={evidence.dataDecoded}
-            txTo={evidence.transaction.to}
-            txOperation={evidence.transaction.operation}
-            txData={evidence.transaction.data}
-            chainId={evidence.chainId}
-            txValue={evidence.transaction.value}
-            txFrom={evidence.safeAddress}
-            context={{
-              currentThreshold: evidence.confirmationsRequired,
-              chainId: evidence.chainId,
-            }}
-            disabledInterpreters={config?.disabledInterpreters}
-          />
+          {showSafetyDetails && (
+            <>
+              <InterpretationCard
+                dataDecoded={evidence.dataDecoded}
+                txTo={evidence.transaction.to}
+                txOperation={evidence.transaction.operation}
+                txData={evidence.transaction.data}
+                chainId={evidence.chainId}
+                txValue={evidence.transaction.value}
+                txFrom={evidence.safeAddress}
+                context={{
+                  currentThreshold: evidence.confirmationsRequired,
+                  chainId: evidence.chainId,
+                }}
+                disabledInterpreters={config?.disabledInterpreters}
+              />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Chain <TrustBadge level="self-verified" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
-                    {networkSupport && (
-                      <span
-                        title={networkSupport.helperText ?? "Fully supported: consensus verification and simulation are available."}
-                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${
-                          networkSupport.isFullySupported
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                            : "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                        }`}
-                      >
-                        {networkSupport.badgeText}
-                      </span>
-                    )}
-                  </div>
-                  {networkSupport?.helperText && (
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-300">
-                      <AlertTriangle className="h-3 w-3 shrink-0" />
-                      <span>{networkSupport.helperText}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Safe Address <TrustBadge level="self-verified" />
-                  </div>
-                  <AddressDisplay address={evidence.safeAddress} chainId={evidence.chainId} />
-                </div>
-
-                {proposer && (
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                      <UserRound className="h-3.5 w-3.5" />
-                      Proposed by
-                    </div>
-                    <AddressDisplay address={proposer} chainId={evidence.chainId} />
-                  </div>
-                )}
-
-                <div className="md:col-span-2">
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Safe TX Hash <TrustBadge level="self-verified" />
-                  </div>
-                  <HashVerificationDetails
-                    safeTxHash={evidence.safeTxHash}
-                    details={hashDetails}
-                  />
-                  {!hashMatch && (
-                    <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      <span>
-                        Hash mismatch: the stored safeTxHash does not match the recomputed hash.
-                        The transaction data may have been tampered with.
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {evidence.ethereumTxHash && (
-                  <div className="md:col-span-2">
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                      Ethereum TX Hash <TrustBadge level="api-sourced" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs">{evidence.ethereumTxHash}</code>
-                      <button
-                        onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
-                        className="text-xs text-accent hover:text-accent-hover"
-                      >
-                        {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CardTitle>Signatures</CardTitle>
-                <TrustBadge level={signaturesTrustLevel} />
-              </div>
-              <CardDescription>
-                {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {evidence.confirmations.map((conf, i) => {
-                  const sigResult = sigResults[conf.owner];
-                  return (
-                    <div key={i} className="rounded-md border border-border/15 glass-subtle p-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-muted">Owner {i + 1}</span>
-                          {sigResult ? (
-                            sigResult.status === "valid" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-emerald-400" title="Signature verified locally">
-                                <ShieldCheck className="h-3 w-3" />
-                                Verified
-                              </span>
-                            ) : sigResult.status === "invalid" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-400" title={`Recovered: ${sigResult.recoveredSigner}`}>
-                                <AlertTriangle className="h-3 w-3" />
-                                Invalid
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-400" title={sigResult.reason}>
-                                <HelpCircle className="h-3 w-3" />
-                                {sigResult.reason}
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-xs text-muted">Verifying…</span>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Transaction Overview</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                        Chain <TrustBadge level="self-verified" />
                       </div>
-                      <AddressDisplay address={conf.owner} chainId={evidence.chainId} />
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
-                          Show signature
-                        </summary>
-                        <code className="mt-1 block break-all text-xs text-muted">
-                          {conf.signature}
-                        </code>
-                      </details>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {policyProof && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>On-Chain Policy Proof</CardTitle>
-                  <TrustBadge level={policyProof.valid ? "proof-verified" : "rpc-sourced"} />
-                </div>
-                <CardDescription>
-                  {policyProof.valid
-                    ? "All policy fields cryptographically verified against state root"
-                    : `Proof verification failed: ${policyProof.errors.length} error(s)`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {policyProof.checks.map((check) => (
-                    <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                      <span className="text-sm font-medium">{check.label}</span>
                       <div className="flex items-center gap-2">
-                        {check.passed ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                            <ShieldCheck className="h-3 w-3" />
-                            Pass
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                            <AlertTriangle className="h-3 w-3" />
-                            Fail
+                        <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
+                        {networkSupport && (
+                          <span
+                            title={networkSupport.helperText ?? "Fully supported: consensus verification and simulation are available."}
+                            className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${
+                              networkSupport.isFullySupported
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                                : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                            }`}
+                          >
+                            {networkSupport.badgeText}
                           </span>
                         )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-                {policyProof.errors.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    {policyProof.errors.map((err, i) => (
-                      <div key={i} className="text-xs text-red-400">{err}</div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {simulationVerification ? (
-            <SimulationCard
-              evidence={evidence}
-              simulationVerification={simulationVerification}
-            />
-          ) : (
-            <SimulationUnavailableCard evidence={evidence} />
-          )}
-
-          {(consensusVerification || evidence?.consensusProof) && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>{`Consensus Verification (${consensusModeDisplay.label})`}</CardTitle>
-                  <TrustBadge level={consensusSourceTrust} />
-                </div>
-                <CardDescription>
-                  {!consensusVerification
-                    ? consensusModeDisplay.loadingText
-                    : consensusVerification.valid
-                      ? consensusModeDisplay.successText(consensusVerification.sync_committee_participants)
-                      : consensusVerification.error ?? consensusSourceSummary}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {consensusVerification ? (
-                  <div className="space-y-1.5">
-                    {consensusVerification.checks.map((check) => (
-                      <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                        <span className="text-sm font-medium">{check.label}</span>
-                        <div className="flex items-center gap-2">
-                          {check.detail && (
-                            <span className="text-xs text-muted">{check.detail}</span>
-                          )}
-                          {check.passed ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                              <ShieldCheck className="h-3 w-3" />
-                              Pass
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                              <AlertTriangle className="h-3 w-3" />
-                              Fail
-                            </span>
-                          )}
+                      {networkSupport?.helperText && (
+                        <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-300">
+                          <AlertTriangle className="h-3 w-3 shrink-0" />
+                          <span>{networkSupport.helperText}</span>
                         </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                        Safe Address <TrustBadge level="self-verified" />
                       </div>
-                    ))}
-                    {consensusVerification.verified_state_root && (
-                      <div className="mt-2 rounded-md border border-border/15 glass-subtle px-3 py-2">
-                        <div className="text-xs text-muted">Verified State Root</div>
-                        <div className="font-mono text-xs break-all">{consensusVerification.verified_state_root}</div>
+                      <AddressDisplay address={evidence.safeAddress} chainId={evidence.chainId} />
+                    </div>
+
+                    {proposer && (
+                      <div>
+                        <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                          <UserRound className="h-3.5 w-3.5" />
+                          Proposed by
+                        </div>
+                        <AddressDisplay address={proposer} chainId={evidence.chainId} />
+                      </div>
+                    )}
+
+                    <div className="md:col-span-2">
+                      <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                        Safe TX Hash <TrustBadge level="self-verified" />
+                      </div>
+                      <HashVerificationDetails
+                        safeTxHash={evidence.safeTxHash}
+                        details={hashDetails}
+                      />
+                      {!hashMatch && (
+                        <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                          <span>
+                            Hash mismatch: the stored safeTxHash does not match the recomputed hash.
+                            The transaction data may have been tampered with.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {evidence.ethereumTxHash && (
+                      <div className="md:col-span-2">
+                        <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
+                          Ethereum TX Hash <TrustBadge level="api-sourced" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs">{evidence.ethereumTxHash}</code>
+                          <button
+                            onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
+                            className="text-xs text-accent hover:text-accent-hover"
+                          >
+                            {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="text-sm text-muted animate-pulse">Running BLS verification...</div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Transaction Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 font-medium text-muted">
-                    Target Contract <TrustBadge level="self-verified" />
-                  </span>
-                  <AddressDisplay address={evidence.transaction.to} chainId={evidence.chainId} />
-                </div>
-                {targetWarnings.map((w, i) => (
-                  <WarningBanner key={i} warning={w} />
-                ))}
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-2 font-medium text-muted">
-                    Value <TrustBadge level="self-verified" />
-                  </span>
-                  <code className="text-xs">{evidence.transaction.value} wei</code>
-                </div>
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-2 font-medium text-muted">
-                    Operation <TrustBadge level="self-verified" />
-                  </span>
-                  <span>{evidence.transaction.operation === 0 ? "Call" : "DelegateCall"}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="flex items-center gap-2 font-medium text-muted">
-                    Nonce <TrustBadge level="self-verified" />
-                  </span>
-                  <span>{evidence.transaction.nonce}</span>
-                </div>
-                {evidence.dataDecoded && (
-                  <CallArray
-                    dataDecoded={evidence.dataDecoded}
-                    txTo={evidence.transaction.to}
-                    txValue={evidence.transaction.value}
-                    txOperation={evidence.transaction.operation}
-                    txData={evidence.transaction.data}
-                  />
-                )}
-                {evidence.transaction.data && (
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 font-medium text-muted">
-                      Calldata <TrustBadge level="self-verified" />
-                    </div>
-                    <code className="block break-all rounded-md border border-border/15 glass-subtle p-2 text-xs">
-                      {evidence.transaction.data}
-                    </code>
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Signatures</CardTitle>
+                    <TrustBadge level={signaturesTrustLevel} />
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  <CardDescription>
+                    {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {evidence.confirmations.map((conf, i) => {
+                      const sigResult = sigResults[conf.owner];
+                      return (
+                        <div key={i} className="rounded-md border border-border/15 glass-subtle p-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-muted">Owner {i + 1}</span>
+                              {sigResult ? (
+                                sigResult.status === "valid" ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400" title="Signature verified locally">
+                                    <ShieldCheck className="h-3 w-3" />
+                                    Verified
+                                  </span>
+                                ) : sigResult.status === "invalid" ? (
+                                  <span className="inline-flex items-center gap-1 text-xs text-red-400" title={`Recovered: ${sigResult.recoveredSigner}`}>
+                                    <AlertTriangle className="h-3 w-3" />
+                                    Invalid
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs text-amber-400" title={sigResult.reason}>
+                                    <HelpCircle className="h-3 w-3" />
+                                    {sigResult.reason}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-xs text-muted">Verifying…</span>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
+                          </div>
+                          <AddressDisplay address={conf.owner} chainId={evidence.chainId} />
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
+                              Show signature
+                            </summary>
+                            <code className="mt-1 block break-all text-xs text-muted">
+                              {conf.signature}
+                            </code>
+                          </details>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {policyProof && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>On-Chain Policy Proof</CardTitle>
+                      <TrustBadge level={policyProof.valid ? "proof-verified" : "rpc-sourced"} />
+                    </div>
+                    <CardDescription>
+                      {policyProof.valid
+                        ? "All policy fields cryptographically verified against state root"
+                        : `Proof verification failed: ${policyProof.errors.length} error(s)`}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-1.5">
+                      {policyProof.checks.map((check) => (
+                        <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                          <span className="text-sm font-medium">{check.label}</span>
+                          <div className="flex items-center gap-2">
+                            {check.passed ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                                <ShieldCheck className="h-3 w-3" />
+                                Pass
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                                <AlertTriangle className="h-3 w-3" />
+                                Fail
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {policyProof.errors.length > 0 && (
+                      <div className="mt-3 space-y-1">
+                        {policyProof.errors.map((err, i) => (
+                          <div key={i} className="text-xs text-red-400">{err}</div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {simulationVerification ? (
+                <SimulationCard
+                  evidence={evidence}
+                  simulationVerification={simulationVerification}
+                />
+              ) : (
+                <SimulationUnavailableCard evidence={evidence} />
+              )}
+
+              {(consensusVerification || evidence?.consensusProof) && (
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{`Consensus Verification (${consensusModeDisplay.label})`}</CardTitle>
+                      <TrustBadge level={consensusSourceTrust} />
+                    </div>
+                    <CardDescription>
+                      {!consensusVerification
+                        ? consensusModeDisplay.loadingText
+                        : consensusVerification.valid
+                          ? consensusModeDisplay.successText(consensusVerification.sync_committee_participants)
+                          : consensusVerification.error ?? consensusSourceSummary}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {consensusVerification ? (
+                      <div className="space-y-1.5">
+                        {consensusVerification.checks.map((check) => (
+                          <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
+                            <span className="text-sm font-medium">{check.label}</span>
+                            <div className="flex items-center gap-2">
+                              {check.detail && (
+                                <span className="text-xs text-muted">{check.detail}</span>
+                              )}
+                              {check.passed ? (
+                                <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                                  <ShieldCheck className="h-3 w-3" />
+                                  Pass
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-xs text-red-400">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Fail
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {consensusVerification.verified_state_root && (
+                          <div className="mt-2 rounded-md border border-border/15 glass-subtle px-3 py-2">
+                            <div className="text-xs text-muted">Verified State Root</div>
+                            <div className="font-mono text-xs break-all">{consensusVerification.verified_state_root}</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted animate-pulse">Running BLS verification...</div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Transaction Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-2 font-medium text-muted">
+                        Target Contract <TrustBadge level="self-verified" />
+                      </span>
+                      <AddressDisplay address={evidence.transaction.to} chainId={evidence.chainId} />
+                    </div>
+                    {targetWarnings.map((w, i) => (
+                      <WarningBanner key={i} warning={w} />
+                    ))}
+                    <div className="flex justify-between">
+                      <span className="flex items-center gap-2 font-medium text-muted">
+                        Value <TrustBadge level="self-verified" />
+                      </span>
+                      <code className="text-xs">{evidence.transaction.value} wei</code>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="flex items-center gap-2 font-medium text-muted">
+                        Operation <TrustBadge level="self-verified" />
+                      </span>
+                      <span>{evidence.transaction.operation === 0 ? "Call" : "DelegateCall"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="flex items-center gap-2 font-medium text-muted">
+                        Nonce <TrustBadge level="self-verified" />
+                      </span>
+                      <span>{evidence.transaction.nonce}</span>
+                    </div>
+                    {evidence.dataDecoded && (
+                      <CallArray
+                        dataDecoded={evidence.dataDecoded}
+                        txTo={evidence.transaction.to}
+                        txValue={evidence.transaction.value}
+                        txOperation={evidence.transaction.operation}
+                        txData={evidence.transaction.data}
+                      />
+                    )}
+                    {evidence.transaction.data && (
+                      <div>
+                        <div className="mb-1 flex items-center gap-2 font-medium text-muted">
+                          Calldata <TrustBadge level="self-verified" />
+                        </div>
+                        <code className="block break-all rounded-md border border-border/15 glass-subtle p-2 text-xs">
+                          {evidence.transaction.data}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -1183,11 +1192,15 @@ function ExecutionSafetyPanel({
   checks,
   hashMatch,
   networkSupport,
+  showDetails,
+  onToggleDetails,
 }: {
   evidence: EvidencePackage;
   checks: SafetyCheck[];
   hashMatch: boolean;
   networkSupport: ReturnType<typeof getNetworkSupportStatus> | null;
+  showDetails: boolean;
+  onToggleDetails: () => void;
 }) {
   const hasError = !hashMatch || checks.some((check) => check.status === "error");
   const hasWarning = checks.some((check) => check.status === "warning");
@@ -1256,6 +1269,13 @@ function ExecutionSafetyPanel({
             {networkSupport.helperText && <span className="text-amber-300">{networkSupport.helperText}</span>}
           </div>
         )}
+        <button
+          onClick={onToggleDetails}
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
+        >
+          <ChevronDown className={`h-3 w-3 transition-transform ${showDetails ? "rotate-180" : ""}`} />
+          {showDetails ? "Hide details" : "Show details"}
+        </button>
       </CardContent>
     </Card>
   );
