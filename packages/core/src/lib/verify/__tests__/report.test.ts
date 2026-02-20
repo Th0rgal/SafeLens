@@ -370,6 +370,34 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
   });
+
+  it("keeps consensus source rpc-sourced when onchain policy proof is missing", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root: makeOnchainProof().stateRoot,
+        verified_block_number: makeOnchainProof().blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 512,
+        error: null,
+        checks: [],
+      },
+    });
+
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("rpc-sourced");
+    expect(consensusSource?.summary).toContain("not yet verified");
+  });
 });
 
 // ── Simulation helpers ──────────────────────────────────────────────

@@ -67,21 +67,55 @@ interface BuildReportSourcesOptions {
   consensusVerification?: ConsensusVerificationResult;
 }
 
-function isConsensusVerificationTrusted(
+type ConsensusTrustDecision = {
+  trusted: boolean;
+  reason:
+    | "missing-or-invalid-consensus-result"
+    | "missing-consensus-or-policy-proof"
+    | "missing-verified-root-or-block"
+    | "state-root-mismatch-flag"
+    | "state-root-mismatch-policy-proof"
+    | "block-number-mismatch-policy-proof"
+    | null;
+};
+
+/**
+ * Trust upgrade boundary for consensus verification.
+ *
+ * We only upgrade to "consensus-verified" when the local consensus verifier
+ * proves the same execution payload root + block number that the independent
+ * onchain policy proof is anchored to.
+ */
+function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
-): boolean {
+): ConsensusTrustDecision {
   if (!consensusVerification?.valid) {
-    return false;
+    return {
+      trusted: false,
+      reason: "missing-or-invalid-consensus-result",
+    };
   }
   if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
-    return false;
+    return {
+      trusted: false,
+      reason: "missing-consensus-or-policy-proof",
+    };
   }
 
   const verifiedStateRoot = consensusVerification.verified_state_root;
   const verifiedBlockNumber = consensusVerification.verified_block_number;
   if (!verifiedStateRoot || verifiedBlockNumber == null) {
-    return false;
+    return {
+      trusted: false,
+      reason: "missing-verified-root-or-block",
+    };
+  }
+  if (!consensusVerification.state_root_matches) {
+    return {
+      trusted: false,
+      reason: "state-root-mismatch-flag",
+    };
   }
 
   const expectedStateRoot = evidence.onchainPolicyProof.stateRoot;
@@ -89,12 +123,30 @@ function isConsensusVerificationTrusted(
   const rootMatches =
     verifiedStateRoot.toLowerCase() === expectedStateRoot.toLowerCase();
   const blockMatches = verifiedBlockNumber === expectedBlockNumber;
-  return consensusVerification.state_root_matches && rootMatches && blockMatches;
+  if (!rootMatches) {
+    return {
+      trusted: false,
+      reason: "state-root-mismatch-policy-proof",
+    };
+  }
+  if (!blockMatches) {
+    return {
+      trusted: false,
+      reason: "block-number-mismatch-policy-proof",
+    };
+  }
+
+  return { trusted: true, reason: null };
 }
 
 function buildReportSources(
   options: BuildReportSourcesOptions
 ): ReturnType<typeof buildVerificationSources> {
+  const consensusDecision = evaluateConsensusTrustDecision(
+    options.evidence,
+    options.consensusVerification
+  );
+
   return buildVerificationSources(createVerificationSourceContext({
     hasSettings: Boolean(options.settings),
     hasUnsupportedSignatures: options.signatureSummary.unsupported > 0,
@@ -109,10 +161,7 @@ function buildReportSources(
       ? "proof-verified"
       : options.evidence.onchainPolicyProof?.trust,
     simulationTrust: options.evidence.simulation?.trust,
-    consensusVerified: isConsensusVerificationTrusted(
-      options.evidence,
-      options.consensusVerification
-    ),
+    consensusVerified: consensusDecision.trusted,
   }));
 }
 
