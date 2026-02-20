@@ -1,7 +1,15 @@
 import type { PolicyProofVerificationResult } from "@safelens/core";
 
+export const POLICY_DETAIL_ROW_IDS = [
+  "policy-verification-status",
+  "policy-checks-passed",
+  "policy-first-error",
+] as const;
+
+export type PolicyDetailRowId = (typeof POLICY_DETAIL_ROW_IDS)[number];
+
 export type PolicyDetailRow = {
-  id: string;
+  id: PolicyDetailRowId;
   label: string;
   value: string;
 };

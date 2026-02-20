@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { PolicyProofVerificationResult } from "@safelens/core";
-import { buildPolicyDetailRows } from "../src/lib/policy-details";
+import {
+  buildPolicyDetailRows,
+  POLICY_DETAIL_ROW_IDS,
+} from "../src/lib/policy-details";
 
 function makePolicyProof(
   overrides: Partial<PolicyProofVerificationResult>
@@ -68,5 +71,19 @@ describe("buildPolicyDetailRows", () => {
         value: "threshold mismatch",
       },
     ]);
+  });
+
+  it("emits only supported policy detail row ids", () => {
+    const rows = buildPolicyDetailRows(
+      makePolicyProof({
+        valid: false,
+        checks: [{ id: "owners", label: "Owners match", passed: false }],
+        errors: ["owners mismatch"],
+      })
+    );
+
+    for (const row of rows) {
+      expect(POLICY_DETAIL_ROW_IDS).toContain(row.id);
+    }
   });
 });
