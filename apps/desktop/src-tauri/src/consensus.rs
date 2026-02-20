@@ -391,6 +391,31 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         }
     };
 
+    let envelope_schema = match payload.get("schema").and_then(Value::as_str) {
+        Some(schema) => schema,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.schema is missing or not a string.".into(),
+            )
+        }
+    };
+    if envelope_schema != "execution-block-header-v1" {
+        return fail_result(
+            ERR_INVALID_PROOF_PAYLOAD,
+            format!(
+                "Unsupported proofPayload.schema '{}'; expected 'execution-block-header-v1'.",
+                envelope_schema
+            ),
+        );
+    }
+    checks.push(ConsensusCheck {
+        id: "envelope-schema".into(),
+        label: "Envelope schema is supported".into(),
+        passed: true,
+        detail: Some(envelope_schema.to_string()),
+    });
+
     let payload_mode = match payload.get("consensusMode").and_then(Value::as_str) {
         Some(mode) => mode,
         None => {
@@ -462,8 +487,8 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         }
     };
 
-    let envelope_state_root = match block.get("stateRoot").and_then(Value::as_str) {
-        Some(state_root) => state_root.to_string(),
+    let envelope_state_root_raw = match block.get("stateRoot").and_then(Value::as_str) {
+        Some(state_root) => state_root,
         None => {
             return fail_result(
                 ERR_INVALID_PROOF_PAYLOAD,
@@ -471,6 +496,62 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
             )
         }
     };
+    let envelope_state_root = match parse_b256(envelope_state_root_raw) {
+        Ok(root) => format!("{:#x}", root),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.stateRoot: {}", error),
+            )
+        }
+    };
+
+    let envelope_block_hash_raw = match block.get("hash").and_then(Value::as_str) {
+        Some(hash) => hash,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.hash is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_block_hash = match parse_b256(envelope_block_hash_raw) {
+        Ok(hash) => format!("{:#x}", hash),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.hash: {}", error),
+            )
+        }
+    };
+
+    let envelope_parent_hash_raw = match block.get("parentHash").and_then(Value::as_str) {
+        Some(hash) => hash,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.parentHash is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_parent_hash = match parse_b256(envelope_parent_hash_raw) {
+        Ok(hash) => format!("{:#x}", hash),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.parentHash: {}", error),
+            )
+        }
+    };
+    checks.push(ConsensusCheck {
+        id: "envelope-header-hashes".into(),
+        label: "Envelope block hash fields are valid 32-byte hex values".into(),
+        passed: true,
+        detail: Some(format!(
+            "hash={}, parentHash={}",
+            envelope_block_hash, envelope_parent_hash
+        )),
+    });
 
     let envelope_number_hex = match block.get("number").and_then(Value::as_str) {
         Some(number) => number,
@@ -1066,7 +1147,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1089,6 +1170,14 @@ mod tests {
         assert!(result
             .checks
             .iter()
+            .any(|check| check.id == "envelope-schema" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-header-hashes" && check.passed));
+        assert!(result
+            .checks
+            .iter()
             .any(|check| check.id == "envelope-state-root" && check.passed));
     }
 
@@ -1102,7 +1191,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1120,6 +1209,74 @@ mod tests {
         assert_eq!(
             result.error.as_deref(),
             Some("Envelope chainId does not match package chainId.")
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_unsupported_schema() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v0\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Unsupported proofPayload.schema 'execution-block-header-v0'; expected 'execution-block-header-v1'."
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_invalid_block_hash() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0x1234\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.hash:")),
+            "unexpected error: {:?}",
+            result.error
         );
     }
 }
