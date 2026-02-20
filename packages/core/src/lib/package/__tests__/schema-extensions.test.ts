@@ -220,7 +220,11 @@ describe("export contract schema", () => {
       mode: "partial",
       status: "partial",
       isFullyVerifiable: false,
-      reasons: ["missing-rpc-url", "missing-onchain-policy-proof"],
+      reasons: [
+        "missing-rpc-url",
+        "missing-onchain-policy-proof",
+        "unsupported-consensus-mode",
+      ],
       artifacts: {
         consensusProof: true,
         onchainPolicyProof: false,

@@ -196,6 +196,7 @@ export interface FinalizeExportContractOptions {
   rpcProvided: boolean;
   consensusProofAttempted: boolean;
   consensusProofFailed: boolean;
+  consensusProofUnsupportedMode?: boolean;
   onchainPolicyProofAttempted: boolean;
   onchainPolicyProofFailed: boolean;
   simulationAttempted: boolean;
@@ -219,6 +220,8 @@ export function finalizeEvidenceExport(
   if (!hasConsensusProof) {
     if (!options.consensusProofAttempted) {
       reasons.add("missing-consensus-proof");
+    } else if (options.consensusProofUnsupportedMode) {
+      reasons.add("unsupported-consensus-mode");
     } else {
       reasons.add(
         options.consensusProofFailed

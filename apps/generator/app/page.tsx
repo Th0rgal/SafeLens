@@ -16,6 +16,7 @@ import {
   enrichWithSimulation,
   enrichWithConsensusProof,
   finalizeEvidenceExport,
+  UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
   decodeSimulationEvents,
   buildGenerationSources,
   TRUST_CONFIG,
@@ -33,6 +34,8 @@ type PendingTx = SafeTransaction & { _chainId: number };
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
   "missing-consensus-proof": "Consensus proof was not included.",
+  "unsupported-consensus-mode":
+    "Consensus verification mode for this network is not implemented yet.",
   "missing-onchain-policy-proof": "On-chain policy proof was not included.",
   "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
   "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
@@ -69,6 +72,7 @@ export default function AnalyzePage() {
     const trimmedRpc = rpcUrl.trim();
     const rpcProvided = Boolean(trimmedRpc);
     let consensusProofFailed = false;
+    let consensusProofUnsupportedMode = false;
     let onchainPolicyProofFailed = false;
     let simulationFailed = false;
     let onchainPolicyProofAttempted = false;
@@ -80,6 +84,14 @@ export default function AnalyzePage() {
       enriched = await enrichWithConsensusProof(enriched);
     } catch (err) {
       consensusProofFailed = true;
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
+      ) {
+        consensusProofUnsupportedMode = true;
+      }
       console.warn("Failed to fetch consensus proof:", err);
       setConsensusWarning(
         `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
@@ -117,6 +129,7 @@ export default function AnalyzePage() {
       rpcProvided,
       consensusProofAttempted: true,
       consensusProofFailed,
+      consensusProofUnsupportedMode,
       onchainPolicyProofAttempted,
       onchainPolicyProofFailed,
       simulationAttempted,
@@ -489,9 +502,26 @@ export default function AnalyzePage() {
               {evidence.consensusProof && (
                 <div className="col-span-2">
                   <div className="font-medium text-muted">Consensus Proof</div>
-                  <div className="text-xs text-green-400">
-                    Included ({evidence.consensusProof.network}, block {evidence.consensusProof.blockNumber}, {evidence.consensusProof.updates.length} sync committee update{evidence.consensusProof.updates.length !== 1 ? "s" : ""})
-                  </div>
+                  {(() => {
+                    const proof = evidence.consensusProof;
+                    const consensusMode = proof.consensusMode ?? "beacon";
+                    if (consensusMode === "beacon") {
+                      const updates = Array.isArray((proof as { updates?: unknown }).updates)
+                        ? (proof as { updates: unknown[] }).updates
+                        : [];
+                      return (
+                        <div className="text-xs text-green-400">
+                          Included ({proof.network}, block {proof.blockNumber}, {updates.length} sync committee update{updates.length !== 1 ? "s" : ""})
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="text-xs text-orange-400">
+                        Included ({proof.network}, block {proof.blockNumber}, mode {consensusMode} package envelope only)
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

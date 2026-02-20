@@ -184,4 +184,21 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).toContain("consensus-proof-fetch-failed");
     expect(finalized.exportContract?.reasons).toContain("missing-onchain-policy-proof");
   });
+
+  it("records unsupported consensus mode explicitly", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      consensusProofUnsupportedMode: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+  });
 });

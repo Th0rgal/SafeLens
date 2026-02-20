@@ -200,6 +200,7 @@ export type Simulation = z.infer<typeof simulationSchema>;
 // Generator export contract status (explicit full vs partial package mode)
 export const exportContractReasonSchema = z.enum([
   "missing-consensus-proof",
+  "unsupported-consensus-mode",
   "missing-onchain-policy-proof",
   "missing-rpc-url",
   "consensus-proof-fetch-failed",
