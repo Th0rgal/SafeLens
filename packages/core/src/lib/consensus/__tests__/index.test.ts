@@ -7,6 +7,31 @@ import {
 import * as beaconApi from "../beacon-api";
 import * as executionApi from "../execution-api";
 
+function mockExecutionRpc(chainIdHex: `0x${string}`, block: Record<string, string>) {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: chainIdHex,
+        })
+      )
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: block,
+        })
+      )
+    );
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("consensus mode routing", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -14,26 +39,15 @@ describe("consensus mode routing", () => {
   });
 
   it("returns an execution-header envelope for opstack chains", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            result: {
-              number: "0x10",
-              hash: "0x2222222222222222222222222222222222222222222222222222222222222222",
-              parentHash:
-                "0x3333333333333333333333333333333333333333333333333333333333333333",
-              stateRoot:
-                "0x1111111111111111111111111111111111111111111111111111111111111111",
-              timestamp: "0x5",
-            },
-          })
-        )
-      )
-    );
+    const fetchMock = mockExecutionRpc("0xa", {
+      number: "0x10",
+      hash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+      parentHash:
+        "0x3333333333333333333333333333333333333333333333333333333333333333",
+      stateRoot:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+      timestamp: "0x5",
+    });
 
     const proof = await fetchConsensusProof(10, {
       rpcUrl: "https://example.invalid/rpc",
@@ -48,29 +62,25 @@ describe("consensus mode routing", () => {
         "0x1111111111111111111111111111111111111111111111111111111111111111",
     });
     expect("proofPayload" in proof).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(
+      JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string).method
+    ).toBe("eth_chainId");
+    expect(
+      JSON.parse((fetchMock.mock.calls[1]?.[1] as RequestInit).body as string).method
+    ).toBe("eth_getBlockByNumber");
   });
 
   it("returns an execution-header envelope for base", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            result: {
-              number: "0x20",
-              hash: "0x4444444444444444444444444444444444444444444444444444444444444444",
-              parentHash:
-                "0x5555555555555555555555555555555555555555555555555555555555555555",
-              stateRoot:
-                "0x6666666666666666666666666666666666666666666666666666666666666666",
-              timestamp: "0xa",
-            },
-          })
-        )
-      )
-    );
+    mockExecutionRpc("0x2105", {
+      number: "0x20",
+      hash: "0x4444444444444444444444444444444444444444444444444444444444444444",
+      parentHash:
+        "0x5555555555555555555555555555555555555555555555555555555555555555",
+      stateRoot:
+        "0x6666666666666666666666666666666666666666666666666666666666666666",
+      timestamp: "0xa",
+    });
 
     const proof = await fetchConsensusProof(8453, {
       rpcUrl: "https://example.invalid/rpc",
@@ -88,26 +98,15 @@ describe("consensus mode routing", () => {
   });
 
   it("returns an execution-header envelope for linea chains", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: 1,
-            result: {
-              number: "0x2a",
-              hash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-              parentHash:
-                "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-              stateRoot:
-                "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-              timestamp: "0x64",
-            },
-          })
-        )
-      )
-    );
+    mockExecutionRpc("0xe708", {
+      number: "0x2a",
+      hash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      parentHash:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      stateRoot:
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      timestamp: "0x64",
+    });
 
     const proof = await fetchConsensusProof(59144, {
       rpcUrl: "https://example.invalid/rpc",
