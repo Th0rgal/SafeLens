@@ -53,6 +53,43 @@ describe("buildConsensusDetailRows", () => {
     expect(rows[2]?.monospace).toBe(true);
   });
 
+  it("uses envelope labels for unverified OP Stack consensus rows", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"] },
+      makeVerification({
+        valid: false,
+        error_code: "opstack-consensus-verifier-pending",
+        verified_block_number: 123,
+        verified_state_root: `0x${"a".repeat(64)}`,
+      })
+    );
+
+    expect(rows.find((row) => row.id === "consensus-finalized-block")?.label).toBe(
+      "Envelope block"
+    );
+    expect(rows.find((row) => row.id === "consensus-state-root")?.label).toBe(
+      "Envelope state root"
+    );
+  });
+
+  it("keeps verified wording for successful beacon consensus rows", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "beacon" } as EvidencePackage["consensusProof"] },
+      makeVerification({
+        valid: true,
+        verified_block_number: 123,
+        verified_state_root: `0x${"b".repeat(64)}`,
+      })
+    );
+
+    expect(rows.find((row) => row.id === "consensus-finalized-block")?.label).toBe(
+      "Finalized block"
+    );
+    expect(rows.find((row) => row.id === "consensus-state-root")?.label).toBe(
+      "Verified state root"
+    );
+  });
+
   it("includes participant count only for beacon mode", () => {
     const rows = buildConsensusDetailRows(
       { consensusProof: { consensusMode: "beacon" } as EvidencePackage["consensusProof"] },

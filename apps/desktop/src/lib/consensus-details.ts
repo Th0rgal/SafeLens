@@ -18,6 +18,14 @@ function getConsensusModeLabel(mode: string | undefined): string {
   }
 }
 
+function isUnverifiedNonBeaconConsensus(
+  evidence: Pick<EvidencePackage, "consensusProof">,
+  consensusVerification: ConsensusVerificationResult
+): boolean {
+  const mode = evidence.consensusProof?.consensusMode;
+  return mode !== "beacon" && consensusVerification.valid !== true;
+}
+
 export function buildConsensusDetailRows(
   evidence: Pick<EvidencePackage, "consensusProof">,
   consensusVerification: ConsensusVerificationResult | undefined
@@ -43,10 +51,15 @@ export function buildConsensusDetailRows(
     return rows;
   }
 
+  const usesEnvelopeLabels = isUnverifiedNonBeaconConsensus(
+    evidence,
+    consensusVerification
+  );
+
   if (consensusVerification.verified_block_number != null) {
     rows.push({
       id: "consensus-finalized-block",
-      label: "Finalized block",
+      label: usesEnvelopeLabels ? "Envelope block" : "Finalized block",
       value: String(consensusVerification.verified_block_number),
     });
   }
@@ -65,7 +78,7 @@ export function buildConsensusDetailRows(
   if (consensusVerification.verified_state_root) {
     rows.push({
       id: "consensus-state-root",
-      label: "Verified state root",
+      label: usesEnvelopeLabels ? "Envelope state root" : "Verified state root",
       value: consensusVerification.verified_state_root,
       monospace: true,
     });

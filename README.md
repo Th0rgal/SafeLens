@@ -149,6 +149,7 @@ Generator rollout flags:
 - If a consensus proof is present but verifier output is not yet available, `ExecutionSafetyPanel` now maps `opstack-consensus-verifier-pending`/`linea-consensus-verifier-pending` export reasons to explicit warning detail + reason code instead of generic "still running" copy.
 - Core trust evaluation now treats `*-consensus-verifier-pending` export reasons as a pre-verification fallback only; once a real consensus verification result is provided and passes root/block linkage, trust upgrades to mode-specific `consensus-verified-opstack`/`consensus-verified-linea`.
 - Consensus mode/block/participants/state-root details now render inside `ExecutionSafetyPanel` expanded view; the separate standalone consensus card was removed to keep consensus signaling in one top-level safety component.
+- Consensus detail rows now avoid "Verified ..." wording for non-beacon results with `valid=false`; these render as "Envelope block/state root" until cryptographic verification is actually successful.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
 - Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.
 
