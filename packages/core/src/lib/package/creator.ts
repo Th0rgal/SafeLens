@@ -212,12 +212,16 @@ export function finalizeEvidenceExport(
   evidence: EvidencePackage,
   options: FinalizeExportContractOptions
 ): EvidencePackage {
-  const hasConsensusProof = Boolean(evidence.consensusProof);
+  const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
+  const consensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
+  // Desktop verification currently implements beacon consensus mode only.
+  const hasVerifierSupportedConsensusProof =
+    hasConsensusProofArtifact && consensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();
 
-  if (!hasConsensusProof) {
+  if (!hasConsensusProofArtifact) {
     if (!options.consensusProofAttempted) {
       reasons.add("missing-consensus-proof");
     } else if (options.consensusProofUnsupportedMode) {
@@ -229,6 +233,8 @@ export function finalizeEvidenceExport(
           : "missing-consensus-proof"
       );
     }
+  } else if (!hasVerifierSupportedConsensusProof) {
+    reasons.add("unsupported-consensus-mode");
   }
 
   if (!hasOnchainPolicyProof) {
@@ -256,14 +262,14 @@ export function finalizeEvidenceExport(
   }
 
   const isFullyVerifiable =
-    hasConsensusProof && hasOnchainPolicyProof && hasSimulation;
+    hasVerifierSupportedConsensusProof && hasOnchainPolicyProof && hasSimulation;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",
     isFullyVerifiable,
     reasons: Array.from(reasons),
     artifacts: {
-      consensusProof: hasConsensusProof,
+      consensusProof: hasConsensusProofArtifact,
       onchainPolicyProof: hasOnchainPolicyProof,
       simulation: hasSimulation,
     },

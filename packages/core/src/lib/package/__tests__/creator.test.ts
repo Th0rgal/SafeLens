@@ -201,4 +201,68 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
     expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
   });
+
+  it("keeps export partial when consensus artifact mode is not verifier-supported", () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidence = {
+      ...base,
+      onchainPolicyProof: {
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        accountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        decodedPolicy: {
+          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+          threshold: 1,
+          nonce: 0,
+          modules: [],
+          guard: "0x0000000000000000000000000000000000000000",
+          fallbackHandler: "0x0000000000000000000000000000000000000000",
+          singleton: "0x0000000000000000000000000000000000000000",
+        },
+        trust: "rpc-sourced" as const,
+      },
+      consensusProof: {
+        consensusMode: "opstack" as const,
+        network: "optimism",
+        proofPayload: "{\"kind\":\"envelope-only\"}",
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        blockNumber: 1,
+      },
+      simulation: {
+        success: true,
+        returnData: "0x",
+        gasUsed: "1",
+        logs: [],
+        blockNumber: 1,
+        trust: "rpc-sourced" as const,
+      },
+    };
+
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: true,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: true,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.mode).toBe("partial");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
+    expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
+  });
 });
