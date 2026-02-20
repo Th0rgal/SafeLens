@@ -28,7 +28,7 @@ type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer
     ? T & {
         expectedStateRoot: string;
         packageChainId: number;
-        packagePackagedAt?: string;
+        packagePackagedAt: string;
       }
     : never
   : never;

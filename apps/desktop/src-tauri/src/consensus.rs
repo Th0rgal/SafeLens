@@ -603,7 +603,21 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         Ok(number) => number,
         Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
     };
-    let envelope_block_timestamp = block.get("timestamp").and_then(Value::as_str);
+    let envelope_block_timestamp_raw = match block.get("timestamp").and_then(Value::as_str) {
+        Some(timestamp) => timestamp,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.timestamp is missing or invalid RFC3339 timestamp.".into(),
+            )
+        }
+    };
+    let envelope_block_timestamp =
+        match parse_rfc3339_timestamp(envelope_block_timestamp_raw, "proofPayload.block.timestamp")
+        {
+            Ok(timestamp) => timestamp,
+            Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+        };
 
     let package_root_matches = envelope_state_root.eq_ignore_ascii_case(&input.state_root);
     checks.push(ConsensusCheck {
@@ -679,56 +693,54 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         };
     }
 
-    if let (Some(block_timestamp_raw), Some(packaged_at_raw)) = (
-        envelope_block_timestamp,
-        input.package_packaged_at.as_deref(),
-    ) {
-        let block_timestamp =
-            match parse_rfc3339_timestamp(block_timestamp_raw, "proofPayload.block.timestamp") {
-                Ok(timestamp) => timestamp,
-                Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
-            };
-        let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
-            Ok(timestamp) => timestamp,
-            Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
-        };
-
-        if packaged_at < block_timestamp {
-            return fail_result(
+    let packaged_at_raw =
+        match input.package_packaged_at.as_deref() {
+            Some(packaged_at) => packaged_at,
+            None => return fail_result(
                 ERR_INVALID_PROOF_PAYLOAD,
-                format!(
-                    "packagePackagedAt ({}) is earlier than proofPayload.block.timestamp ({}).",
-                    packaged_at_raw, block_timestamp_raw
-                ),
-            );
-        }
+                "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
+                    .into(),
+            ),
+        };
+    let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
+        Ok(timestamp) => timestamp,
+        Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+    };
 
-        let age_seconds = packaged_at - block_timestamp;
-        let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
-        checks.push(ConsensusCheck {
-            id: "envelope-freshness".into(),
-            label: "Envelope block timestamp is fresh at packaging time".into(),
-            passed: is_fresh,
-            detail: Some(format!(
-                "Age at packaging: {}s (max {}s).",
-                age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
-            )),
-        });
-        if !is_fresh {
-            return ConsensusVerificationResult {
-                valid: false,
-                verified_state_root: Some(envelope_state_root),
-                verified_block_number: Some(envelope_block_number),
-                state_root_matches: true,
-                sync_committee_participants: 0,
-                error: Some(
-                    "Consensus envelope block timestamp is stale relative to package timestamp."
-                        .into(),
-                ),
-                error_code: Some(ERR_STALE_CONSENSUS_ENVELOPE.into()),
-                checks,
-            };
-        }
+    if packaged_at < envelope_block_timestamp {
+        return fail_result(
+            ERR_INVALID_PROOF_PAYLOAD,
+            format!(
+                "packagePackagedAt ({}) is earlier than proofPayload.block.timestamp ({}).",
+                packaged_at_raw, envelope_block_timestamp_raw
+            ),
+        );
+    }
+
+    let age_seconds = packaged_at - envelope_block_timestamp;
+    let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
+    checks.push(ConsensusCheck {
+        id: "envelope-freshness".into(),
+        label: "Envelope block timestamp is fresh at packaging time".into(),
+        passed: is_fresh,
+        detail: Some(format!(
+            "Age at packaging: {}s (max {}s).",
+            age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
+        )),
+    });
+    if !is_fresh {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: true,
+            sync_committee_participants: 0,
+            error: Some(
+                "Consensus envelope block timestamp is stale relative to package timestamp.".into(),
+            ),
+            error_code: Some(ERR_STALE_CONSENSUS_ENVELOPE.into()),
+            checks,
+        };
     }
 
     ConsensusVerificationResult {
@@ -1259,7 +1271,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1267,7 +1279,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
             package_chain_id: Some(10),
-            package_packaged_at: None,
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
         });
 
         assert!(!result.valid);
@@ -1304,7 +1316,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1406,7 +1418,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1498,5 +1510,37 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_without_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("proofPayload.block.timestamp is missing or invalid RFC3339 timestamp.")
+        );
     }
 }
