@@ -48,6 +48,8 @@ interface EnvelopePayload {
   };
 }
 
+const HEX_32_BYTE_RE = /^0x[0-9a-fA-F]{64}$/;
+
 function resolveEnvelopeNetwork(chainId: number, fallbackNetwork: string): string {
   // Keep OP Mainnet envelope metadata aligned with desktop verifier contract.
   // "oeth" is a Safe URL prefix, while consensus envelope metadata uses
@@ -59,8 +61,8 @@ function resolveEnvelopeNetwork(chainId: number, fallbackNetwork: string): strin
   return fallbackNetwork;
 }
 
-function parseHexQuantity(value: string, fieldName: string): number {
-  if (!/^0x[0-9a-fA-F]+$/.test(value)) {
+function parseHexQuantity(value: unknown, fieldName: string): number {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]+$/.test(value)) {
     throw new Error(`Invalid hex quantity for ${fieldName}: ${value}`);
   }
 
@@ -70,6 +72,13 @@ function parseHexQuantity(value: string, fieldName: string): number {
   }
 
   return parsed;
+}
+
+function parseHex32(value: unknown, fieldName: string): `0x${string}` {
+  if (typeof value !== "string" || !HEX_32_BYTE_RE.test(value)) {
+    throw new Error(`Invalid 32-byte hex value for ${fieldName}: ${value}`);
+  }
+  return value as `0x${string}`;
 }
 
 async function requestJsonRpc<T>(
@@ -134,6 +143,9 @@ export async function fetchExecutionConsensusProof(
 
   const blockNumber = parseHexQuantity(block.number, "block.number");
   const timestamp = parseHexQuantity(block.timestamp, "block.timestamp");
+  const blockHash = parseHex32(block.hash, "block.hash");
+  const parentHash = parseHex32(block.parentHash, "block.parentHash");
+  const stateRoot = parseHex32(block.stateRoot, "block.stateRoot");
 
   const envelopePayload: EnvelopePayload = {
     schema: "execution-block-header-v1",
@@ -142,9 +154,9 @@ export async function fetchExecutionConsensusProof(
     blockTag,
     block: {
       number: block.number,
-      hash: block.hash,
-      parentHash: block.parentHash,
-      stateRoot: block.stateRoot,
+      hash: blockHash,
+      parentHash,
+      stateRoot,
       timestamp: new Date(timestamp * 1000).toISOString(),
     },
   };
@@ -155,7 +167,7 @@ export async function fetchExecutionConsensusProof(
       chainId,
       capability?.chainPrefix ?? String(chainId)
     ),
-    stateRoot: block.stateRoot,
+    stateRoot,
     blockNumber,
     proofPayload: JSON.stringify(envelopePayload),
   };
