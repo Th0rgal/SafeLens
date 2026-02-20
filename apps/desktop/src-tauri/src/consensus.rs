@@ -34,6 +34,7 @@ pub struct ConsensusProofInput {
     pub expected_state_root: String,
     #[allow(dead_code)]
     pub block_number: u64,
+    pub package_chain_id: Option<u64>,
 }
 
 fn default_consensus_mode() -> String {
@@ -416,12 +417,33 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
     });
 
     let payload_network = match payload.get("chainId").and_then(Value::as_u64) {
-        Some(chain_id) => chain_id.to_string(),
-        None => payload
-            .get("network")
-            .and_then(Value::as_str)
-            .unwrap_or("unknown")
-            .to_string(),
+        Some(chain_id) => {
+            if let Some(package_chain_id) = input.package_chain_id {
+                let chain_id_matches = chain_id == package_chain_id;
+                checks.push(ConsensusCheck {
+                    id: "envelope-chain-id".into(),
+                    label: "Envelope chainId matches package chainId".into(),
+                    passed: chain_id_matches,
+                    detail: Some(format!(
+                        "Envelope: {}, package: {}",
+                        chain_id, package_chain_id
+                    )),
+                });
+                if !chain_id_matches {
+                    return fail_result(
+                        ERR_INVALID_PROOF_PAYLOAD,
+                        "Envelope chainId does not match package chainId.".into(),
+                    );
+                }
+            }
+            chain_id.to_string()
+        }
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.chainId is missing or invalid.".into(),
+            )
+        }
     };
     checks.push(ConsensusCheck {
         id: "envelope-network".into(),
@@ -908,7 +930,7 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1005,6 +1027,7 @@ mod tests {
             expected_state_root:
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 0,
+            package_chain_id: None,
         });
 
         assert!(!result.valid);
@@ -1026,6 +1049,7 @@ mod tests {
             expected_state_root:
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 0,
+            package_chain_id: None,
         });
 
         assert!(!result.valid);
@@ -1049,6 +1073,7 @@ mod tests {
             expected_state_root:
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
+            package_chain_id: Some(10),
         });
 
         assert!(!result.valid);
@@ -1065,5 +1090,36 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-state-root" && check.passed));
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_chain_id_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(8453),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope chainId does not match package chainId.")
+        );
     }
 }
