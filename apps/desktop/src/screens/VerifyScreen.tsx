@@ -35,6 +35,34 @@ const WARNING_STYLES: Record<string, { border: string; bg: string; text: string;
   danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
 };
 
+const SIMULATION_REASON_LABELS = {
+  "missing-rpc-url": "Simulation was skipped because no RPC URL was configured during package generation.",
+  "simulation-fetch-failed": "Simulation could not be fetched during package generation.",
+  "missing-simulation": "No simulation result was included in this package.",
+} as const;
+
+type SimulationReasonCode = keyof typeof SIMULATION_REASON_LABELS;
+const SIMULATION_REASON_CODES: SimulationReasonCode[] = [
+  "missing-rpc-url",
+  "simulation-fetch-failed",
+  "missing-simulation",
+];
+
+function getSimulationUnavailableReason(evidence: EvidencePackage): string {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+  const matchedReason = SIMULATION_REASON_CODES.find((code) =>
+    exportReasons.includes(code)
+  );
+  if (matchedReason) return SIMULATION_REASON_LABELS[matchedReason];
+
+  const capability = getNetworkCapability(evidence.chainId);
+  if (capability && !capability.supportsSimulation) {
+    return "Simulation is not available for this network in SafeLens yet.";
+  }
+
+  return "No simulation result is available in this evidence package.";
+}
+
 function getNetworkSupportStatus(chainId: number): {
   isFullySupported: boolean;
   badgeText: string;
@@ -600,11 +628,13 @@ export default function VerifyScreen() {
             </Card>
           )}
 
-          {simulationVerification && (
+          {simulationVerification ? (
             <SimulationCard
               evidence={evidence}
               simulationVerification={simulationVerification}
             />
+          ) : (
+            <SimulationUnavailableCard evidence={evidence} />
           )}
 
           {(consensusVerification || evidence?.consensusProof) && (
@@ -868,6 +898,25 @@ function SimulationCard({
             )}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function SimulationUnavailableCard({ evidence }: { evidence: EvidencePackage }) {
+  const reason = getSimulationUnavailableReason(evidence);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Transaction Simulation</CardTitle>
+        <CardDescription>Simulation unavailable</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/20 bg-amber-500/8 px-3 py-2 text-xs text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{reason}</span>
+        </div>
       </CardContent>
     </Card>
   );
