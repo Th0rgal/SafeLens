@@ -44,8 +44,34 @@ export type ConsensusTrustDecisionReason =
   | (typeof CONSENSUS_TRUST_DECISION_REASONS)[number]
   | null;
 
+export const CONSENSUS_VERIFIER_ERROR_CODES = [
+  "unsupported-consensus-mode",
+  "unsupported-network",
+  "envelope-network-mismatch",
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
+  "state-root-mismatch",
+  "stale-consensus-envelope",
+  "non-finalized-consensus-envelope",
+  "invalid-checkpoint-hash",
+  "invalid-bootstrap-json",
+  "bootstrap-verification-failed",
+  "invalid-update-json",
+  "update-verification-failed",
+  "invalid-finality-update-json",
+  "finality-verification-failed",
+  "missing-execution-payload",
+  "invalid-proof-payload",
+  "envelope-state-root-mismatch",
+  "envelope-block-number-mismatch",
+  "invalid-expected-state-root",
+] as const;
+
+export type ConsensusVerifierErrorCode =
+  (typeof CONSENSUS_VERIFIER_ERROR_CODES)[number];
+
 const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
-  Record<string, Exclude<ConsensusTrustDecisionReason, null>>
+  Record<ConsensusVerifierErrorCode, Exclude<ConsensusTrustDecisionReason, null>>
 > = {
   "unsupported-consensus-mode": "unsupported-consensus-mode",
   "unsupported-network": "unsupported-network",
@@ -70,6 +96,10 @@ const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
   "envelope-block-number-mismatch": "invalid-proof-payload",
   "invalid-expected-state-root": "invalid-expected-state-root",
 };
+
+const CONSENSUS_VERIFIER_ERROR_CODE_SET: ReadonlySet<string> = new Set(
+  CONSENSUS_VERIFIER_ERROR_CODES
+);
 
 const WARNING_CONSENSUS_TRUST_REASONS = new Set<
   Exclude<ConsensusTrustDecisionReason, null>
@@ -141,11 +171,21 @@ export function summarizeConsensusTrustDecisionReason(
 export function mapConsensusVerifierErrorCodeToTrustReason(
   errorCode: string | null | undefined
 ): Exclude<ConsensusTrustDecisionReason, null> | null {
-  if (!errorCode) {
+  if (!isConsensusVerifierErrorCode(errorCode)) {
     return null;
   }
 
-  return CONSENSUS_ERROR_CODE_TO_TRUST_REASON[errorCode] ?? null;
+  return CONSENSUS_ERROR_CODE_TO_TRUST_REASON[errorCode];
+}
+
+export function isConsensusVerifierErrorCode(
+  value: string | null | undefined
+): value is ConsensusVerifierErrorCode {
+  if (!value) {
+    return false;
+  }
+
+  return CONSENSUS_VERIFIER_ERROR_CODE_SET.has(value);
 }
 
 export function isWarningConsensusTrustDecisionReason(

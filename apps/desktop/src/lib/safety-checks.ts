@@ -1,7 +1,9 @@
 import {
+  isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
   type ConsensusVerificationResult,
+  type ConsensusVerifierErrorCode,
   type EvidencePackage,
 } from "@safelens/core";
 
@@ -21,7 +23,13 @@ export type SafetyAttentionItem = {
   reasonCode?: string;
 };
 
-const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
+type ConsensusFailureDetailCode =
+  | ConsensusVerifierErrorCode
+  | "consensus-mode-disabled-by-feature-flag";
+
+const CONSENSUS_ERROR_DETAILS: Partial<
+  Record<ConsensusFailureDetailCode, string>
+> = {
   "consensus-mode-disabled-by-feature-flag":
     "Consensus verification for this mode is disabled in this build.",
   "unsupported-consensus-mode":
@@ -102,9 +110,19 @@ function getConsensusFailureDetail(
   consensusVerification: ConsensusVerificationResult,
   fallbackSummary: string
 ): string {
-  const mapped = consensusVerification.error_code
-    ? CONSENSUS_ERROR_DETAILS[consensusVerification.error_code]
-    : undefined;
+  const mapped = (() => {
+    const errorCode = consensusVerification.error_code;
+    if (!errorCode) {
+      return undefined;
+    }
+    if (isConsensusVerifierErrorCode(errorCode)) {
+      return CONSENSUS_ERROR_DETAILS[errorCode];
+    }
+    if (errorCode === "consensus-mode-disabled-by-feature-flag") {
+      return CONSENSUS_ERROR_DETAILS["consensus-mode-disabled-by-feature-flag"];
+    }
+    return undefined;
+  })();
   if (mapped) {
     return mapped;
   }

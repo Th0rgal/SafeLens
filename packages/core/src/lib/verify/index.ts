@@ -12,12 +12,17 @@ import {
   type ConsensusTrustDecisionReason,
 } from "./consensus-trust";
 export {
+  CONSENSUS_VERIFIER_ERROR_CODES,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
   summarizeConsensusTrustDecisionReason,
 } from "./consensus-trust";
-export type { ConsensusTrustDecisionReason } from "./consensus-trust";
+export type {
+  ConsensusTrustDecisionReason,
+  ConsensusVerifierErrorCode,
+} from "./consensus-trust";
 
 export type SignatureCheckSummary = {
   total: number;

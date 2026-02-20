@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONSENSUS_VERIFIER_ERROR_CODES,
+  isConsensusVerifierErrorCode,
   CONSENSUS_TRUST_DECISION_REASONS,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
   isWarningConsensusTrustDecisionReason,
@@ -83,6 +85,15 @@ describe("consensus trust reason contract", () => {
     expect(mapConsensusVerifierErrorCodeToTrustReason("some-new-code")).toBeNull();
     expect(mapConsensusVerifierErrorCodeToTrustReason(undefined)).toBeNull();
     expect(mapConsensusVerifierErrorCodeToTrustReason(null)).toBeNull();
+  });
+
+  it("exposes a deterministic verifier error-code type guard", () => {
+    for (const code of CONSENSUS_VERIFIER_ERROR_CODES) {
+      expect(isConsensusVerifierErrorCode(code)).toBe(true);
+    }
+    expect(isConsensusVerifierErrorCode("some-new-code")).toBe(false);
+    expect(isConsensusVerifierErrorCode(undefined)).toBe(false);
+    expect(isConsensusVerifierErrorCode(null)).toBe(false);
   });
 
   it("classifies warning-vs-error trust reasons deterministically", () => {
