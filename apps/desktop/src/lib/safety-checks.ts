@@ -6,12 +6,22 @@ import {
   type ConsensusVerificationResult,
   type ConsensusVerifierErrorCode,
   type EvidencePackage,
+  type PolicyProofVerificationResult,
+  type SimulationVerificationResult,
 } from "@safelens/core";
+import {
+  getSimulationUnavailableReason,
+  getSimulationUnavailableReasonCode,
+} from "./simulation-unavailable";
 
 export type SafetyStatus = "check" | "warning" | "error";
+export type SafetyCheckId =
+  | "policy-authentic"
+  | "chain-state-finalized"
+  | "simulation-outcome";
 
 export type SafetyCheck = {
-  id: string;
+  id: SafetyCheckId;
   label: string;
   status: SafetyStatus;
   detail: string;
@@ -149,6 +159,51 @@ function getConsensusSuccessDetail(
     : "Consensus verification passed.";
 }
 
+export function classifyPolicyStatus(
+  evidence: EvidencePackage,
+  policyProof: PolicyProofVerificationResult | undefined
+): SafetyCheck {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+
+  if (!evidence.onchainPolicyProof) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "warning",
+      detail: "No on-chain policy proof was included in this evidence package.",
+      reasonCode: exportReasons.includes("missing-onchain-policy-proof")
+        ? "missing-onchain-policy-proof"
+        : undefined,
+    };
+  }
+
+  if (!policyProof) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "warning",
+      detail: "Policy proof verification is still running.",
+    };
+  }
+
+  if (policyProof.valid) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "check",
+      detail: "All policy fields matched the on-chain proof.",
+    };
+  }
+
+  return {
+    id: "policy-authentic",
+    label: "Policy is authentic",
+    status: "error",
+    detail: policyProof.errors[0] ?? "Policy proof verification failed.",
+    reasonCode: "policy-proof-verification-failed",
+  };
+}
+
 export function classifyConsensusStatus(
   evidence: EvidencePackage,
   consensusVerification: ConsensusVerificationResult | undefined,
@@ -200,6 +255,51 @@ export function classifyConsensusStatus(
     status: getConsensusFailureStatus(consensusVerification),
     detail: getConsensusFailureDetail(consensusVerification, fallbackSummary),
     reasonCode: consensusVerification.error_code ?? undefined,
+  };
+}
+
+export function classifySimulationStatus(
+  evidence: EvidencePackage,
+  simulationVerification: SimulationVerificationResult | undefined
+): SafetyCheck {
+  if (!simulationVerification || !evidence.simulation) {
+    const reasonCode = getSimulationUnavailableReasonCode(evidence);
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "warning",
+      detail: getSimulationUnavailableReason(evidence),
+      reasonCode: reasonCode ?? undefined,
+    };
+  }
+
+  if (!simulationVerification.valid) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "error",
+      detail:
+        simulationVerification.errors[0] ??
+        "Simulation structure checks failed.",
+      reasonCode: "simulation-verification-failed",
+    };
+  }
+
+  if (simulationVerification.executionReverted) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "warning",
+      detail: "Simulation ran but the transaction reverted.",
+      reasonCode: "simulation-execution-reverted",
+    };
+  }
+
+  return {
+    id: "simulation-outcome",
+    label: "Simulation outcome",
+    status: "check",
+    detail: "Simulation ran successfully.",
   };
 }
 

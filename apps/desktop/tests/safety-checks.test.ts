@@ -1,8 +1,15 @@
 import { describe, expect, it } from "bun:test";
-import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
+import type {
+  ConsensusVerificationResult,
+  EvidencePackage,
+  PolicyProofVerificationResult,
+  SimulationVerificationResult,
+} from "@safelens/core";
 import {
   buildSafetyAttentionItems,
   classifyConsensusStatus,
+  classifyPolicyStatus,
+  classifySimulationStatus,
   type SafetyCheck,
 } from "../src/lib/safety-checks";
 
@@ -282,6 +289,104 @@ describe("classifyConsensusStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toContain("Linea");
     expect(status.detail).toContain("not equivalent to Beacon finality");
+  });
+});
+
+describe("classifyPolicyStatus", () => {
+  it("uses explicit missing policy proof reason when export contract includes it", () => {
+    const status = classifyPolicyStatus(
+      {
+        exportContract: {
+          reasons: ["missing-onchain-policy-proof"],
+        },
+      } as EvidencePackage,
+      undefined
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("missing-onchain-policy-proof");
+    expect(status.detail).toBe(
+      "No on-chain policy proof was included in this evidence package."
+    );
+  });
+
+  it("returns check when policy proof validation succeeded", () => {
+    const status = classifyPolicyStatus(
+      {
+        onchainPolicyProof: {} as EvidencePackage["onchainPolicyProof"],
+      } as EvidencePackage,
+      { valid: true, errors: [] } as PolicyProofVerificationResult
+    );
+
+    expect(status.status).toBe("check");
+    expect(status.detail).toBe("All policy fields matched the on-chain proof.");
+  });
+
+  it("returns error when policy proof validation failed", () => {
+    const status = classifyPolicyStatus(
+      {
+        onchainPolicyProof: {} as EvidencePackage["onchainPolicyProof"],
+      } as EvidencePackage,
+      {
+        valid: false,
+        errors: ["owner set mismatch"],
+      } as PolicyProofVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("policy-proof-verification-failed");
+    expect(status.detail).toBe("owner set mismatch");
+  });
+});
+
+describe("classifySimulationStatus", () => {
+  it("returns deterministic missing simulation reason from export contract", () => {
+    const status = classifySimulationStatus(
+      {
+        exportContract: {
+          reasons: ["missing-simulation"],
+        },
+      } as EvidencePackage,
+      undefined
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("missing-simulation");
+    expect(status.detail).toContain("included in this package");
+  });
+
+  it("returns error when simulation verification fails", () => {
+    const status = classifySimulationStatus(
+      {
+        simulation: {} as EvidencePackage["simulation"],
+      } as EvidencePackage,
+      {
+        valid: false,
+        executionReverted: false,
+        errors: ["invalid simulation log shape"],
+      } as SimulationVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("simulation-verification-failed");
+    expect(status.detail).toBe("invalid simulation log shape");
+  });
+
+  it("returns warning when simulation reverted", () => {
+    const status = classifySimulationStatus(
+      {
+        simulation: {} as EvidencePackage["simulation"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: true,
+        errors: [],
+      } as SimulationVerificationResult
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("simulation-execution-reverted");
+    expect(status.detail).toBe("Simulation ran but the transaction reverted.");
   });
 });
 

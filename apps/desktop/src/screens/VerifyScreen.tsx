@@ -19,7 +19,9 @@ import { HashVerificationDetails } from "@/components/hash-verification-details"
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import {
   buildSafetyAttentionItems,
+  classifyPolicyStatus,
   classifyConsensusStatus,
+  classifySimulationStatus,
   type SafetyCheck,
   type SafetyStatus,
 } from "@/lib/safety-checks";
@@ -30,7 +32,6 @@ import { buildPolicyDetailRows } from "@/lib/policy-details";
 import { buildSimulationDetailRows } from "@/lib/simulation-details";
 import {
   getSimulationUnavailableReason,
-  getSimulationUnavailableReasonCode,
 } from "@/lib/simulation-unavailable";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
@@ -61,96 +62,6 @@ function WarningBanner({ warning, className }: { warning: TransactionWarning; cl
       <span>{warning.message}</span>
     </div>
   );
-}
-
-function classifyPolicyStatus(
-  evidence: EvidencePackage,
-  policyProof: PolicyProofVerificationResult | undefined
-): SafetyCheck {
-  const exportReasons = evidence.exportContract?.reasons ?? [];
-
-  if (!evidence.onchainPolicyProof) {
-    return {
-      id: "policy-authentic",
-      label: "Policy is authentic",
-      status: "warning",
-      detail: "No on-chain policy proof was included in this evidence package.",
-      reasonCode: exportReasons.includes("missing-onchain-policy-proof")
-        ? "missing-onchain-policy-proof"
-        : undefined,
-    };
-  }
-
-  if (!policyProof) {
-    return {
-      id: "policy-authentic",
-      label: "Policy is authentic",
-      status: "warning",
-      detail: "Policy proof verification is still running.",
-    };
-  }
-
-  if (policyProof.valid) {
-    return {
-      id: "policy-authentic",
-      label: "Policy is authentic",
-      status: "check",
-      detail: "All policy fields matched the on-chain proof.",
-    };
-  }
-
-  return {
-    id: "policy-authentic",
-    label: "Policy is authentic",
-    status: "error",
-    detail: policyProof.errors[0] ?? "Policy proof verification failed.",
-    reasonCode: "policy-proof-verification-failed",
-  };
-}
-
-function classifySimulationStatus(
-  evidence: EvidencePackage,
-  simulationVerification: SimulationVerificationResult | undefined
-): SafetyCheck {
-  if (!simulationVerification || !evidence.simulation) {
-    const reasonCode = getSimulationUnavailableReasonCode(evidence);
-    return {
-      id: "simulation-outcome",
-      label: "Simulation outcome",
-      status: "warning",
-      detail: getSimulationUnavailableReason(evidence),
-      reasonCode: reasonCode ?? undefined,
-    };
-  }
-
-  if (!simulationVerification.valid) {
-    return {
-      id: "simulation-outcome",
-      label: "Simulation outcome",
-      status: "error",
-      detail:
-        simulationVerification.errors[0] ??
-        "Simulation structure checks failed.",
-      reasonCode: "simulation-verification-failed",
-    };
-  }
-
-  if (simulationVerification.executionReverted) {
-    return {
-      id: "simulation-outcome",
-      label: "Simulation outcome",
-      status: "warning",
-      detail: "Simulation ran but the transaction reverted.",
-      reasonCode: "simulation-execution-reverted",
-    };
-  }
-
-  return {
-    id: "simulation-outcome",
-    label: "Simulation outcome",
-    status: "check",
-    detail: "Simulation ran successfully.",
-  };
 }
 
 export default function VerifyScreen() {
