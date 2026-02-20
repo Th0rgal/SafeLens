@@ -180,6 +180,12 @@ function evaluateConsensusTrustDecision(
       reason: "invalid-proof-payload",
     };
   }
+  if (consensusVerification?.error_code === "invalid-expected-state-root") {
+    return {
+      trusted: false,
+      reason: "invalid-expected-state-root",
+    };
+  }
   if (
     consensusVerification &&
     !consensusVerification.state_root_matches &&

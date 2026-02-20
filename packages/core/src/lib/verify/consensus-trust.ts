@@ -22,6 +22,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "non-finalized-consensus-envelope",
   // Consensus envelope payload is malformed or fails structural integrity checks.
   "invalid-proof-payload",
+  // On-chain policy proof did not provide a parseable expected state root.
+  "invalid-expected-state-root",
   // Required payload artifacts are missing.
   "missing-consensus-or-policy-proof",
   // Verifier did not emit required root+block outputs.
@@ -60,6 +62,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "consensus envelope did not use a finalized execution header",
   "invalid-proof-payload":
     "consensus envelope payload is malformed or failed integrity validation",
+  "invalid-expected-state-root":
+    "on-chain policy proof state root is invalid and cannot be verified",
   "missing-consensus-or-policy-proof":
     "required consensus or on-chain policy proof is missing",
   "missing-verified-root-or-block":
