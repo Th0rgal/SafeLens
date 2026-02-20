@@ -1,3 +1,5 @@
+import type { TrustLevel } from "@safelens/core";
+
 /**
  * CLI output formatting utilities with ANSI colors
  * No external dependencies - uses built-in Node.js ANSI escape codes
@@ -65,7 +67,7 @@ export function badge(text: string, variant: "info" | "warning" | "critical" | "
   }
 }
 
-export function trustBadge(level: string): string {
+export function trustBadge(level: TrustLevel): string {
   switch (level) {
     case "consensus-verified":
     case "consensus-verified-beacon":
@@ -82,9 +84,9 @@ export function trustBadge(level: string): string {
       return colors.yellow("⚠");
     case "user-provided":
       return colors.gray("👤");
-    default:
-      return colors.gray("?");
   }
+  const exhaustive: never = level;
+  return exhaustive;
 }
 
 export function severityBadge(severity: "info" | "warning" | "critical"): string {

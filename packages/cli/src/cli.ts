@@ -3,6 +3,7 @@ import {
   type EvidencePackage,
   type EvidenceVerificationReport,
   type SettingsConfig,
+  type TrustLevel,
   parseSafeUrlFlexible,
   fetchSafeTransaction,
   fetchPendingTransactions,
@@ -116,7 +117,7 @@ function createVerifyPayload(
   };
 }
 
-function formatTrustLevel(trust: string): string {
+function formatTrustLevel(trust: TrustLevel): string {
   switch (trust) {
     case "consensus-verified":
       return colors.green("🛡 consensus-verified");
@@ -136,9 +137,9 @@ function formatTrustLevel(trust: string): string {
       return colors.yellow("⚠ api-sourced");
     case "user-provided":
       return colors.gray("👤 user-provided");
-    default:
-      return colors.gray(`? ${trust}`);
   }
+  const exhaustive: never = trust;
+  return exhaustive;
 }
 
 function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
