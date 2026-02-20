@@ -67,6 +67,31 @@ interface BuildReportSourcesOptions {
   consensusVerification?: ConsensusVerificationResult;
 }
 
+function isConsensusVerificationTrusted(
+  evidence: EvidencePackage,
+  consensusVerification?: ConsensusVerificationResult
+): boolean {
+  if (!consensusVerification?.valid) {
+    return false;
+  }
+  if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
+    return false;
+  }
+
+  const verifiedStateRoot = consensusVerification.verified_state_root;
+  const verifiedBlockNumber = consensusVerification.verified_block_number;
+  if (!verifiedStateRoot || verifiedBlockNumber == null) {
+    return false;
+  }
+
+  const expectedStateRoot = evidence.onchainPolicyProof.stateRoot;
+  const expectedBlockNumber = evidence.onchainPolicyProof.blockNumber;
+  const rootMatches =
+    verifiedStateRoot.toLowerCase() === expectedStateRoot.toLowerCase();
+  const blockMatches = verifiedBlockNumber === expectedBlockNumber;
+  return consensusVerification.state_root_matches && rootMatches && blockMatches;
+}
+
 function buildReportSources(
   options: BuildReportSourcesOptions
 ): ReturnType<typeof buildVerificationSources> {
@@ -84,7 +109,10 @@ function buildReportSources(
       ? "proof-verified"
       : options.evidence.onchainPolicyProof?.trust,
     simulationTrust: options.evidence.simulation?.trust,
-    consensusVerified: Boolean(options.consensusVerification?.valid),
+    consensusVerified: isConsensusVerificationTrusted(
+      options.evidence,
+      options.consensusVerification
+    ),
   }));
 }
 

@@ -311,6 +311,65 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
   });
+
+  it("keeps consensus source rpc-sourced when verified state root does not match onchain proof", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root:
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        verified_block_number: enriched.onchainPolicyProof.blockNumber,
+        state_root_matches: false,
+        sync_committee_participants: 512,
+        error: "state root mismatch",
+        checks: [],
+      },
+    });
+
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("rpc-sourced");
+    expect(consensusSource?.summary).toContain("not yet verified");
+  });
+
+  it("keeps consensus source rpc-sourced when verified block number does not match onchain proof", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root: enriched.onchainPolicyProof.stateRoot,
+        verified_block_number: enriched.onchainPolicyProof.blockNumber + 1,
+        state_root_matches: true,
+        sync_committee_participants: 512,
+        error: "block mismatch",
+        checks: [],
+      },
+    });
+
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("rpc-sourced");
+    expect(consensusSource?.summary).toContain("not yet verified");
+  });
 });
 
 // ── Simulation helpers ──────────────────────────────────────────────
