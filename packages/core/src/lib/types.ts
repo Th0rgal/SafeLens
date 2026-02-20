@@ -137,29 +137,50 @@ export const stateDiffEntrySchema = z.object({
 
 export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
 
-// Consensus proof section (Phase 4 — Helios light client verification)
-// Contains beacon chain light client data that allows offline BLS verification
-// of the state root against Ethereum consensus.
-export const consensusProofSchema = z.object({
+const consensusProofBaseSchema = z.object({
   /** Consensus verifier mode. Beacon is currently implemented in desktop verifier. */
   consensusMode: consensusModeSchema.optional(),
-  /** Beacon block root used as the bootstrap checkpoint */
-  checkpoint: hashSchema,
-  /** JSON-serialized light client bootstrap (sync committee + beacon header) */
-  bootstrap: z.string(),
-  /** JSON-serialized light client updates (sync committee period transitions) */
-  updates: z.array(z.string()),
-  /** JSON-serialized light client finality update (BLS-signed finalized header) */
-  finalityUpdate: z.string(),
-  /** Network identifier for selecting the correct fork config and genesis root */
-  network: z.enum(CONSENSUS_NETWORKS),
-  /** The EVM execution state root extracted from the finalized header */
+  /** The EVM execution state root extracted from a finalized or verified execution payload. */
   stateRoot: hashSchema,
-  /** Block number of the finalized execution payload */
+  /** Block number for the execution payload associated with `stateRoot`. */
   blockNumber: z.number(),
+});
+
+// Beacon consensus proof section (Phase 4 — Helios light client verification).
+// Contains beacon chain light client data that allows offline BLS verification.
+const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
+  consensusMode: z.literal("beacon").optional(),
+  /** Beacon block root used as the bootstrap checkpoint. */
+  checkpoint: hashSchema,
+  /** JSON-serialized light client bootstrap (sync committee + beacon header). */
+  bootstrap: z.string(),
+  /** JSON-serialized light client updates (sync committee period transitions). */
+  updates: z.array(z.string()),
+  /** JSON-serialized light client finality update (BLS-signed finalized header). */
+  finalityUpdate: z.string(),
+  /** Beacon network identifier for selecting the correct fork config and genesis root. */
+  network: z.enum(CONSENSUS_NETWORKS),
   /** Beacon slot of the finalized header in the finality update. */
   finalizedSlot: z.number(),
 });
+
+// Non-beacon proof envelope used by OP Stack and Linea integration paths.
+// The desktop verifier rejects these modes today with deterministic
+// `unsupported-consensus-mode` until those verifier implementations are added.
+const nonBeaconConsensusProofSchema = consensusProofBaseSchema
+  .extend({
+    consensusMode: z.union([z.literal("opstack"), z.literal("linea")]),
+    /** Chain/network identifier consumed by mode-specific verifiers. */
+    network: z.string().min(1),
+    /** Mode-specific serialized proof payload. */
+    proofPayload: z.string(),
+  })
+  .passthrough();
+
+export const consensusProofSchema = z.union([
+  beaconConsensusProofSchema,
+  nonBeaconConsensusProofSchema,
+]);
 
 export type ConsensusProof = z.infer<typeof consensusProofSchema>;
 

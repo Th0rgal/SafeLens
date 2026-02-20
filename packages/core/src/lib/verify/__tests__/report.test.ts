@@ -8,6 +8,8 @@ import { VERIFICATION_SOURCE_IDS } from "../../trust/sources";
 import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
 
+type BeaconConsensusProof = Extract<ConsensusProof, { checkpoint: string }>;
+
 const VOID_SETTINGS: SettingsConfig = {
   version: "1.0",
   chains: {},
@@ -110,8 +112,11 @@ function makeOnchainProof(): OnchainPolicyProof {
   };
 }
 
-function makeConsensusProof(overrides: Partial<ConsensusProof> = {}): ConsensusProof {
+function makeConsensusProof(
+  overrides: Partial<BeaconConsensusProof> = {}
+): BeaconConsensusProof {
   return {
+    consensusMode: "beacon",
     checkpoint:
       "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     bootstrap: "{\"header\":{\"beacon\":{\"slot\":\"0\"}}}",

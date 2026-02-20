@@ -8,6 +8,8 @@ import {
 } from "../creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 
+type BeaconConsensusProof = Extract<ConsensusProof, { checkpoint: string }>;
+
 const { fetchOnchainPolicyProofMock, fetchConsensusProofMock } = vi.hoisted(
   () => ({
     fetchOnchainPolicyProofMock: vi.fn(),
@@ -55,8 +57,11 @@ function makeOnchainPolicyProof(
   };
 }
 
-function makeConsensusProof(overrides: Partial<ConsensusProof> = {}): ConsensusProof {
+function makeConsensusProof(
+  overrides: Partial<BeaconConsensusProof> = {}
+): BeaconConsensusProof {
   return {
+    consensusMode: "beacon",
     checkpoint:
       "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     bootstrap: "{}",

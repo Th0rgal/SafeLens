@@ -249,6 +249,30 @@ describe("consensus proof network schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts non-beacon consensus envelope for opstack", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "opstack",
+      network: "base",
+      proofPayload: "{\"version\":\"0.1\"}",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts non-beacon consensus envelope for linea", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "linea",
+      network: "linea",
+      proofPayload: "{\"version\":\"0.1\"}",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects unsupported consensus modes", () => {
     const result = consensusProofSchema.safeParse({
       consensusMode: "unknown",
@@ -262,6 +286,17 @@ describe("consensus proof network schema", () => {
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       blockNumber: 1,
       finalizedSlot: 1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-beacon consensus envelope without proof payload", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "opstack",
+      network: "base",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
     });
     expect(result.success).toBe(false);
   });

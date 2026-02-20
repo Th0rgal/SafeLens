@@ -20,10 +20,10 @@ use typenum::{U1, U128, U131072, U16, U2, U2048, U4096, U512, U64, U8, U8192};
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConsensusProofInput {
-    pub checkpoint: String,
-    pub bootstrap: String,
-    pub updates: Vec<String>,
-    pub finality_update: String,
+    pub checkpoint: Option<String>,
+    pub bootstrap: Option<String>,
+    pub updates: Option<Vec<String>>,
+    pub finality_update: Option<String>,
     #[serde(default = "default_consensus_mode")]
     pub consensus_mode: String,
     pub network: String,
@@ -374,7 +374,16 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     let mut checks = Vec::new();
 
     // Parse the checkpoint
-    let checkpoint = match parse_b256(&input.checkpoint) {
+    let checkpoint_raw = match input.checkpoint.as_deref() {
+        Some(checkpoint) => checkpoint,
+        None => {
+            return fail_result(
+                ERR_INVALID_CHECKPOINT,
+                "Missing checkpoint for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let checkpoint = match parse_b256(checkpoint_raw) {
         Ok(c) => c,
         Err(e) => {
             return fail_result(
@@ -388,7 +397,16 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     let config = get_network_config(network);
 
     // Parse bootstrap
-    let bootstrap: Bootstrap<S> = match serde_json::from_str(&input.bootstrap) {
+    let bootstrap_raw = match input.bootstrap.as_deref() {
+        Some(bootstrap) => bootstrap,
+        None => {
+            return fail_result(
+                ERR_INVALID_BOOTSTRAP,
+                "Missing bootstrap for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let bootstrap: Bootstrap<S> = match serde_json::from_str(bootstrap_raw) {
         Ok(b) => b,
         Err(e) => {
             return fail_result(
@@ -454,7 +472,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
 
     // Parse and verify updates
     let mut update_count = 0;
-    for (i, update_json) in input.updates.iter().enumerate() {
+    for (i, update_json) in input.updates.as_deref().unwrap_or(&[]).iter().enumerate() {
         let update: Update<S> = match serde_json::from_str(update_json) {
             Ok(u) => u,
             Err(e) => {
@@ -526,7 +544,16 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     }
 
     // Parse and verify finality update
-    let finality_update: FinalityUpdate<S> = match serde_json::from_str(&input.finality_update) {
+    let finality_update_raw = match input.finality_update.as_deref() {
+        Some(finality_update) => finality_update,
+        None => {
+            return fail_result(
+                ERR_INVALID_FINALITY_UPDATE,
+                "Missing finality update for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let finality_update: FinalityUpdate<S> = match serde_json::from_str(finality_update_raw) {
         Ok(f) => f,
         Err(e) => {
             return fail_result(
@@ -781,11 +808,13 @@ mod tests {
     #[test]
     fn returns_machine_readable_error_code_for_unsupported_network() {
         let result = verify_consensus_proof(ConsensusProofInput {
-            checkpoint: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                .to_string(),
-            bootstrap: "{}".to_string(),
-            updates: vec![],
-            finality_update: "{}".to_string(),
+            checkpoint: Some(
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                    .to_string(),
+            ),
+            bootstrap: Some("{}".to_string()),
+            updates: Some(vec![]),
+            finality_update: Some("{}".to_string()),
             consensus_mode: "beacon".to_string(),
             network: "polygon".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -802,10 +831,10 @@ mod tests {
     #[test]
     fn returns_machine_readable_error_code_for_invalid_checkpoint() {
         let result = verify_consensus_proof(ConsensusProofInput {
-            checkpoint: "0x1234".to_string(),
-            bootstrap: "{}".to_string(),
-            updates: vec![],
-            finality_update: "{}".to_string(),
+            checkpoint: Some("0x1234".to_string()),
+            bootstrap: Some("{}".to_string()),
+            updates: Some(vec![]),
+            finality_update: Some("{}".to_string()),
             consensus_mode: "beacon".to_string(),
             network: "mainnet".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -822,11 +851,10 @@ mod tests {
     #[test]
     fn returns_machine_readable_error_code_for_unsupported_consensus_mode() {
         let result = verify_consensus_proof(ConsensusProofInput {
-            checkpoint: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                .to_string(),
-            bootstrap: "{}".to_string(),
-            updates: vec![],
-            finality_update: "{}".to_string(),
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
             consensus_mode: "opstack".to_string(),
             network: "mainnet".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
