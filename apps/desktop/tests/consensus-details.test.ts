@@ -126,6 +126,25 @@ describe("buildConsensusDetailRows", () => {
     );
   });
 
+  it("treats missing consensus mode as beacon for legacy packages", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: {} as EvidencePackage["consensusProof"] },
+      makeVerification({
+        valid: false,
+        verified_block_number: 123,
+        verified_state_root: `0x${"b".repeat(64)}`,
+      })
+    );
+
+    expect(rows.find((row) => row.id === "consensus-mode")?.value).toBe("Beacon");
+    expect(rows.find((row) => row.id === "consensus-finalized-block")?.label).toBe(
+      "Finalized block"
+    );
+    expect(rows.find((row) => row.id === "consensus-state-root")?.label).toBe(
+      "Verified state root"
+    );
+  });
+
   it("includes participant count only for beacon mode", () => {
     const rows = buildConsensusDetailRows(
       { consensusProof: { consensusMode: "beacon" } as EvidencePackage["consensusProof"] },

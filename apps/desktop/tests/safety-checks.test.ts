@@ -444,13 +444,19 @@ describe("buildSafetyAttentionItems", () => {
     expect(items[2].id).toBe("network-support");
   });
 
-  it("deduplicates repeated warning text from checks and support helper", () => {
+  it("does not dedupe different checks that share identical detail text", () => {
     const sharedDetail =
       "Partially supported for this package: no consensus proof was included.";
     const checks: SafetyCheck[] = [
       {
         id: "chain-state-finalized",
         label: "Chain state is finalized",
+        status: "warning",
+        detail: sharedDetail,
+      },
+      {
+        id: "policy-authentic",
+        label: "Policy is authentic",
         status: "warning",
         detail: sharedDetail,
       },
@@ -461,8 +467,10 @@ describe("buildSafetyAttentionItems", () => {
       helperText: sharedDetail,
     });
 
-    expect(items).toHaveLength(1);
-    expect(items[0].detail).toContain(sharedDetail);
+    expect(items).toHaveLength(3);
+    expect(items[0].detail).toBe(`Chain state is finalized: ${sharedDetail}`);
+    expect(items[1].detail).toBe(`Policy is authentic: ${sharedDetail}`);
+    expect(items[2].detail).toBe(sharedDetail);
   });
 
   it("respects maxItems cap", () => {

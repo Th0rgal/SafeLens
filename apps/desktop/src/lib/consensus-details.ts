@@ -1,4 +1,8 @@
-import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
+import type {
+  ConsensusMode,
+  ConsensusVerificationResult,
+  EvidencePackage,
+} from "@safelens/core";
 
 export type ConsensusDetailRow = {
   id: string;
@@ -7,7 +11,7 @@ export type ConsensusDetailRow = {
   monospace?: boolean;
 };
 
-function getConsensusModeLabel(mode: string | undefined): string {
+function getConsensusModeLabel(mode: ConsensusMode): string {
   switch (mode) {
     case "opstack":
       return "OP Stack";
@@ -18,7 +22,7 @@ function getConsensusModeLabel(mode: string | undefined): string {
   }
 }
 
-function getAssuranceNotice(mode: string | undefined): string | null {
+function getAssuranceNotice(mode: ConsensusMode): string | null {
   switch (mode) {
     case "opstack":
       return "OP Stack consensus checks are not equivalent to Beacon light-client finality.";
@@ -33,7 +37,7 @@ function isUnverifiedNonBeaconConsensus(
   evidence: Pick<EvidencePackage, "consensusProof">,
   consensusVerification: ConsensusVerificationResult
 ): boolean {
-  const mode = evidence.consensusProof?.consensusMode;
+  const mode = evidence.consensusProof?.consensusMode ?? "beacon";
   return mode !== "beacon" && consensusVerification.valid !== true;
 }
 
@@ -45,14 +49,15 @@ export function buildConsensusDetailRows(
     return [];
   }
 
+  const consensusMode = evidence.consensusProof.consensusMode ?? "beacon";
   const rows: ConsensusDetailRow[] = [
     {
       id: "consensus-mode",
       label: "Consensus mode",
-      value: getConsensusModeLabel(evidence.consensusProof.consensusMode),
+      value: getConsensusModeLabel(consensusMode),
     },
   ];
-  const assuranceNotice = getAssuranceNotice(evidence.consensusProof.consensusMode);
+  const assuranceNotice = getAssuranceNotice(consensusMode);
   if (assuranceNotice) {
     rows.push({
       id: "consensus-assurance",
@@ -84,7 +89,7 @@ export function buildConsensusDetailRows(
   }
 
   if (
-    evidence.consensusProof.consensusMode === "beacon" &&
+    consensusMode === "beacon" &&
     consensusVerification.sync_committee_participants > 0
   ) {
     rows.push({

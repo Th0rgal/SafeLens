@@ -332,7 +332,9 @@ export function buildSafetyAttentionItems(
       id: `check-${check.id}`,
       detail: `${check.label}: ${check.detail}`,
       reasonCode: check.reasonCode,
-      dedupeKey: check.detail.trim().toLowerCase(),
+      dedupeKey: `${check.label.trim().toLowerCase()}:${check.detail
+        .trim()
+        .toLowerCase()}`,
     }));
 
   if (supportStatus && !supportStatus.isFullySupported && supportStatus.helperText) {
