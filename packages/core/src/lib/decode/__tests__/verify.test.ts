@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { verifyCalldata } from "../verify";
 import { normalizeCallSteps } from "../normalize";
-import { COWSWAP_TWAP_TX } from "@/lib/safe/__tests__/fixtures/cowswap-twap-tx";
+import { COWSWAP_TWAP_TX } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { CallStep } from "../types";
 
 /** Helper to get normalized steps from the fixture. */

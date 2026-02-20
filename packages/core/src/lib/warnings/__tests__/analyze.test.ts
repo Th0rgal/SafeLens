@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { identifyProposer, analyzeTarget, analyzeSigners } from "../analyze";
-import type { SettingsConfig } from "@/lib/settings/types";
+import type { SettingsConfig } from "../../settings/types";
 
 const mockConfig: SettingsConfig = {
   version: "1.0",

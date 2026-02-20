@@ -12,9 +12,15 @@ import {
   fetchSafeTransaction,
   fetchPendingTransactions,
   createEvidencePackage,
+  enrichWithOnchainProof,
+  enrichWithSimulation,
+  enrichWithConsensusProof,
+  finalizeEvidenceExport,
+  decodeSimulationEvents,
   buildGenerationSources,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
+  type ExportContractReason,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
 import { AddressDisplay } from "@/components/address-display";
@@ -25,6 +31,15 @@ const generationSources = buildGenerationSources();
 type PendingTx = SafeTransaction & { _chainId: number };
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
+  "missing-consensus-proof": "Consensus proof was not included.",
+  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
+  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
+  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
+  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
+  "simulation-fetch-failed": "Simulation fetch failed.",
+  "missing-simulation": "Simulation result was not included.",
+};
 
 function extractAddress(input: string): string | null {
   const trimmed = input.trim();
@@ -36,6 +51,7 @@ function extractAddress(input: string): string | null {
 
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
@@ -43,8 +59,76 @@ export default function AnalyzePage() {
   const [pendingTxs, setPendingTxs] = useState<PendingTx[] | null>(null);
   const [safeAddress, setSafeAddress] = useState<string | null>(null);
 
+  const [proofWarning, setProofWarning] = useState<string | null>(null);
+  const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
+  const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
+
+  /** Optionally enrich a package with on-chain policy proof, simulation, and consensus proof. */
+  const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
+    let enriched = pkg;
+    const trimmedRpc = rpcUrl.trim();
+    const rpcProvided = Boolean(trimmedRpc);
+    let consensusProofFailed = false;
+    let onchainPolicyProofFailed = false;
+    let simulationFailed = false;
+    let onchainPolicyProofAttempted = false;
+    let simulationAttempted = false;
+
+    // Fetch consensus proof first so policy proof can be pinned to the same
+    // finalized execution block.
+    try {
+      enriched = await enrichWithConsensusProof(enriched);
+    } catch (err) {
+      consensusProofFailed = true;
+      console.warn("Failed to fetch consensus proof:", err);
+      setConsensusWarning(
+        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+      );
+    }
+
+    if (rpcProvided) {
+      onchainPolicyProofAttempted = true;
+      try {
+        enriched = await enrichWithOnchainProof(enriched, {
+          rpcUrl: trimmedRpc,
+          blockNumber: enriched.consensusProof?.blockNumber,
+        });
+      } catch (err) {
+        onchainPolicyProofFailed = true;
+        console.warn("Failed to fetch on-chain policy proof:", err);
+        setProofWarning(
+          `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
+        );
+      }
+
+      simulationAttempted = true;
+      try {
+        enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
+      } catch (err) {
+        simulationFailed = true;
+        console.warn("Failed to simulate transaction:", err);
+        setSimulationWarning(
+          `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
+        );
+      }
+    }
+
+    return finalizeEvidenceExport(enriched, {
+      rpcProvided,
+      consensusProofAttempted: true,
+      consensusProofFailed,
+      onchainPolicyProofAttempted,
+      onchainPolicyProofFailed,
+      simulationAttempted,
+      simulationFailed,
+    });
+  };
+
   const handleAnalyze = async () => {
     setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -79,7 +163,8 @@ export default function AnalyzePage() {
 
         if (result.type === "transaction") {
           const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
-          const pkg = createEvidencePackage(tx, result.data.chainId, input);
+          let pkg = createEvidencePackage(tx, result.data.chainId, input);
+          pkg = await maybeEnrich(pkg);
           setEvidence(pkg);
         } else {
           const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
@@ -101,13 +186,18 @@ export default function AnalyzePage() {
   const handleSelectTransaction = async (tx: PendingTx) => {
     setLoading(true);
     setPendingTxs(null);
+    setEvidence(null);
     setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);
       const addr = safeAddress ?? tx.safe;
       const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
-      const pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      let pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      pkg = await maybeEnrich(pkg);
       setEvidence(pkg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create evidence package");
@@ -160,7 +250,7 @@ export default function AnalyzePage() {
             Paste a transaction URL, a queue URL, or a Safe address (0x...)
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               type="text"
@@ -172,6 +262,18 @@ export default function AnalyzePage() {
             <Button onClick={handleAnalyze} disabled={loading || !url}>
               {loading ? "Searching..." : "Analyze"}
             </Button>
+          </div>
+          <div>
+            <Input
+              type="text"
+              placeholder="RPC URL (optional — enables on-chain policy proof)"
+              value={rpcUrl}
+              onChange={(e) => setRpcUrl(e.target.value)}
+              className="text-xs"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Provide an Ethereum RPC URL to include a cryptographic policy proof (owners, threshold, modules) via eth_getProof.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -268,16 +370,56 @@ export default function AnalyzePage() {
         </Card>
       )}
 
+      {proofWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Policy Proof Warning</AlertTitle>
+          <AlertDescription>{proofWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {simulationWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Simulation Warning</AlertTitle>
+          <AlertDescription>{simulationWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {consensusWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Consensus Proof Warning</AlertTitle>
+          <AlertDescription>{consensusWarning}</AlertDescription>
+        </Alert>
+      )}
+
       {evidence && (
         <Card>
           <CardHeader>
             <CardTitle>Evidence Package</CardTitle>
             <CardDescription>
-              Transaction successfully analyzed and evidence package created.
+              {evidence.exportContract?.mode === "fully-verifiable"
+                ? "Fully verifiable package created."
+                : "Partial package created with explicit limitations."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {evidence.exportContract?.mode === "partial" && (
+              <Alert className="border-amber-500/20 bg-amber-500/10 text-amber-200">
+                <AlertTitle>Partial Export</AlertTitle>
+                <AlertDescription>
+                  This package is not fully verifiable. Reasons:
+                  {evidence.exportContract.reasons.map((reason) => (
+                    <div key={reason}>- {EXPORT_REASON_LABELS[reason] ?? reason}</div>
+                  ))}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="font-medium text-muted">Export Mode</div>
+                <div className={evidence.exportContract?.mode === "fully-verifiable" ? "text-green-400" : "text-amber-300"}>
+                  {evidence.exportContract?.mode === "fully-verifiable" ? "Fully verifiable" : "Partial"}
+                </div>
+              </div>
               <div>
                 <div className="font-medium text-muted">Chain</div>
                 <div className="font-mono">{getChainName(evidence.chainId)}</div>
@@ -304,11 +446,61 @@ export default function AnalyzePage() {
                 <div className="font-medium text-muted">Safe TX Hash</div>
                 <AddressDisplay address={evidence.safeTxHash} />
               </div>
+              {evidence.onchainPolicyProof && (
+                <div className="col-span-2">
+                  <div className="font-medium text-muted">Policy Proof</div>
+                  <div className="text-xs text-blue-400">
+                    Included (block {evidence.onchainPolicyProof.blockNumber}, {evidence.onchainPolicyProof.decodedPolicy.owners.length} owners, threshold {evidence.onchainPolicyProof.decodedPolicy.threshold})
+                  </div>
+                </div>
+              )}
+              {evidence.simulation && (() => {
+                const events = decodeSimulationEvents(
+                  evidence.simulation.logs,
+                  evidence.safeAddress,
+                  evidence.chainId,
+                );
+                return (
+                  <div className="col-span-2">
+                    <div className="font-medium text-muted">Simulation</div>
+                    <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
+                      {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
+                    </div>
+                    {events.length > 0 && (
+                      <div className="mt-1.5 space-y-1">
+                        {events.map((e, i) => (
+                          <div key={i} className={`text-xs rounded px-2 py-1 ${
+                            e.direction === "send" ? "bg-red-500/10 text-red-400" :
+                            e.direction === "receive" ? "bg-green-500/10 text-green-400" :
+                            "bg-gray-500/10 text-gray-400"
+                          }`}>
+                            {e.direction === "send" ? "↗ Send" :
+                             e.direction === "receive" ? "↙ Receive" :
+                             e.kind === "approval" ? "🔑 Approve" :
+                             "↔ Internal"}{" "}
+                            <span className="font-medium">{e.amountFormatted}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              {evidence.consensusProof && (
+                <div className="col-span-2">
+                  <div className="font-medium text-muted">Consensus Proof</div>
+                  <div className="text-xs text-green-400">
+                    Included ({evidence.consensusProof.network}, block {evidence.consensusProof.blockNumber}, {evidence.consensusProof.updates.length} sync committee update{evidence.consensusProof.updates.length !== 1 ? "s" : ""})
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2 pt-4">
               <Button onClick={handleDownload} className="flex-1">
-                Download JSON
+                {evidence.exportContract?.mode === "fully-verifiable"
+                  ? "Download Fully Verifiable JSON"
+                  : "Download Partial JSON"}
               </Button>
               <Button onClick={handleCopy} variant="outline" className="flex-1">
                 {copied ? "Copied!" : "Copy to Clipboard"}

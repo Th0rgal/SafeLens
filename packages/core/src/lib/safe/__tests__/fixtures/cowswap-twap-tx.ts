@@ -1,4 +1,4 @@
-import type { SafeTransaction } from "@/lib/types";
+import type { SafeTransaction } from "../../../types";
 
 /**
  * Hardcoded Safe transaction fixture: CowSwap TWAP sell order

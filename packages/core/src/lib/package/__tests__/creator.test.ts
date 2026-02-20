@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { createEvidencePackage, exportEvidencePackage } from "../creator";
+import {
+  createEvidencePackage,
+  exportEvidencePackage,
+  finalizeEvidenceExport,
+} from "../creator";
 import {
   COWSWAP_TWAP_TX,
   CHAIN_ID,
@@ -91,5 +95,93 @@ describe("exportEvidencePackage", () => {
     expect(parsed.confirmations[0].signature).toBe(
       COWSWAP_TWAP_TX.confirmations[0].signature
     );
+  });
+});
+
+describe("finalizeEvidenceExport", () => {
+  it("marks package as fully-verifiable when consensus and policy proofs are present", () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidence = {
+      ...base,
+      onchainPolicyProof: {
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        accountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        decodedPolicy: {
+          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+          threshold: 1,
+          nonce: 0,
+          modules: [],
+          guard: "0x0000000000000000000000000000000000000000",
+          fallbackHandler: "0x0000000000000000000000000000000000000000",
+          singleton: "0x0000000000000000000000000000000000000000",
+        },
+        trust: "rpc-sourced" as const,
+      },
+      consensusProof: {
+        checkpoint:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "mainnet" as const,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        blockNumber: 1,
+        finalizedSlot: 1,
+      },
+      simulation: {
+        success: true,
+        returnData: "0x",
+        gasUsed: "1",
+        logs: [],
+        blockNumber: 1,
+        trust: "rpc-sourced" as const,
+      },
+    };
+
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: true,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: true,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.mode).toBe("fully-verifiable");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(true);
+    expect(finalized.exportContract?.status).toBe("complete");
+  });
+
+  it("marks package as partial and records machine-readable reasons", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.mode).toBe("partial");
+    expect(finalized.exportContract?.status).toBe("partial");
+    expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
+    expect(finalized.exportContract?.reasons).toContain("consensus-proof-fetch-failed");
+    expect(finalized.exportContract?.reasons).toContain("missing-onchain-policy-proof");
   });
 });

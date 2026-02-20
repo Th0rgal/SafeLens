@@ -179,8 +179,8 @@ export function attachBlurDiagnostics(sidebarEl: HTMLElement): () => void {
       listen("tauri://move", () => log("tauri-move")).catch(() => {});
       listen("tauri://focus", () => log("tauri-focus")).catch(() => {});
       listen("tauri://blur", () => log("tauri-blur")).catch(() => {});
-      listen("tauri://scale-change", (e) => log("tauri-scale-change", JSON.stringify(e.payload))).catch(() => {});
-      listen("tauri://theme-changed", (e) => log("tauri-theme-changed", JSON.stringify(e.payload))).catch(() => {});
+      listen("tauri://scale-change", (e: { payload: unknown }) => log("tauri-scale-change", JSON.stringify(e.payload))).catch(() => {});
+      listen("tauri://theme-changed", (e: { payload: unknown }) => log("tauri-theme-changed", JSON.stringify(e.payload))).catch(() => {});
     }).catch(() => {});
   }
 

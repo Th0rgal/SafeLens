@@ -25,7 +25,20 @@ export async function computeConfigFingerprint(
 ): Promise<string> {
   const canonical = JSON.stringify(config, sortedReplacer);
   const data = new TextEncoder().encode(canonical);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  // In browsers, globalThis.crypto.subtle is always available.
+  // In Node.js/vitest, globalThis.crypto may be undefined in worker
+  // threads. We lazily require node:crypto as a fallback. We use a
+  // variable-based require so webpack doesn't try to resolve it
+  // (which would fail in browser bundles).
+  let subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeCrypto = "node:crypto";
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { webcrypto } = require(nodeCrypto) as typeof import("node:crypto");
+    subtle = (webcrypto as unknown as Crypto).subtle;
+  }
+  const hashBuffer = await subtle.digest("SHA-256", data);
   const hashArray = new Uint8Array(hashBuffer);
   return Array.from(hashArray)
     .map((b) => b.toString(16).padStart(2, "0"))
