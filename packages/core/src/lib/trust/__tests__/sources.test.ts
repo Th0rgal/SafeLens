@@ -239,6 +239,8 @@ describe("buildVerificationSources", () => {
     const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
     expect(consensusSource?.trust).toBe("consensus-verified-opstack");
     expect(consensusSource?.summary).toContain("verified against OP Stack consensus");
+    expect(consensusSource?.summary).toContain("not equivalent to Beacon light-client finality");
+    expect(consensusSource?.detail).toContain("not equivalent to Beacon light-client finality");
   });
 
   it("uses mode-aware wording for verified Linea consensus proofs", () => {
@@ -257,5 +259,7 @@ describe("buildVerificationSources", () => {
     expect(consensusSource?.trust).toBe("consensus-verified-linea");
     expect(consensusSource?.summary).toContain("verified against Linea consensus");
     expect(consensusSource?.detail).toContain("verified against Linea consensus data");
+    expect(consensusSource?.summary).toContain("not equivalent to Beacon light-client finality");
+    expect(consensusSource?.detail).toContain("not equivalent to Beacon light-client finality");
   });
 });

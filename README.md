@@ -151,6 +151,7 @@ Generator rollout flags:
 - Consensus mode/block/participants/state-root details now render inside `ExecutionSafetyPanel` expanded view; the separate standalone consensus card was removed to keep consensus signaling in one top-level safety component.
 - Consensus detail rows now avoid "Verified ..." wording for non-beacon results with `valid=false`; these render as "Envelope block/state root" until cryptographic verification is actually successful.
 - Consensus detail rows now include an explicit non-equivalence assurance note for `opstack`/`linea` modes, clarifying these checks are not Beacon light-client finality.
+- Core verification-source summaries/details now repeat the same non-equivalence boundary when OP Stack/Linea consensus is marked verified, preventing Beacon-equivalent interpretation in trust provenance output.
 - Desktop non-beacon verifier now emits explicit envelope-linkage error codes (`envelope-state-root-mismatch`, `envelope-block-number-mismatch`) when package consensus metadata does not match the envelope, and UI/core trust mapping treats them as deterministic integrity failures.
 - Core consensus routing tests now explicitly pin `holesky` and `hoodi` to the Beacon fetch path (not execution-envelope fetchers) to keep `#18` support deterministic.
 - Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.

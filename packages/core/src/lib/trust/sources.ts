@@ -145,6 +145,10 @@ export function buildVerificationSources(
       verificationType: "chain-specific consensus attestations",
     },
   };
+  const consensusAssuranceBoundaryByMode: Partial<Record<ConsensusMode, string>> = {
+    opstack: "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+    linea: "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+  };
   const consensusDisplay = consensusDisplayByMode[consensusMode];
   const consensusVerifiedTrustByMode: Record<ConsensusMode, TrustLevel> = {
     beacon: "consensus-verified-beacon",
@@ -153,6 +157,7 @@ export function buildVerificationSources(
   };
   const verifiedConsensusTrust =
     consensusVerifiedTrustByMode[consensusMode] ?? "consensus-verified";
+  const assuranceBoundary = consensusAssuranceBoundaryByMode[consensusMode];
 
   return [
     {
@@ -287,12 +292,16 @@ export function buildVerificationSources(
           title: "Consensus verification",
           trust: context.consensusVerified ? verifiedConsensusTrust : ("rpc-sourced" as TrustLevel),
           summary: context.consensusVerified
-            ? `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}.`
+            ? assuranceBoundary
+              ? `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}. ${assuranceBoundary}`
+              : `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}.`
             : consensusFailureReason
               ? `Consensus proof included but not yet verified (${consensusFailureReason}).`
               : `Consensus proof (${consensusDisplay.name}) included but not yet verified (requires desktop app).`,
           detail: context.consensusVerified
-            ? `The state root used in policy proofs has been cryptographically verified against ${consensusDisplay.name} consensus data.`
+            ? assuranceBoundary
+              ? `The state root used in policy proofs has been cryptographically verified against ${consensusDisplay.name} consensus data. ${assuranceBoundary}`
+              : `The state root used in policy proofs has been cryptographically verified against ${consensusDisplay.name} consensus data.`
             : consensusFailureReason
               ? `Consensus trust was not upgraded because ${consensusFailureReason}.`
               : `The evidence package contains ${consensusDisplay.name} consensus data. Verification requires the desktop app's Helios-based verifier.`,
