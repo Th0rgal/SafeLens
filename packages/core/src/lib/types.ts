@@ -263,6 +263,14 @@ export const LEGACY_PENDING_CONSENSUS_EXPORT_REASONS = [
 export type LegacyPendingConsensusExportReason =
   (typeof LEGACY_PENDING_CONSENSUS_EXPORT_REASONS)[number];
 
+export const LEGACY_PENDING_CONSENSUS_EXPORT_REASON_BY_MODE = {
+  opstack: "opstack-consensus-verifier-pending",
+  linea: "linea-consensus-verifier-pending",
+} as const satisfies Record<
+  Exclude<ConsensusMode, "beacon">,
+  LegacyPendingConsensusExportReason
+>;
+
 export function findLegacyPendingConsensusExportReason(
   reasons: readonly ExportContractReason[] | null | undefined
 ): LegacyPendingConsensusExportReason | null {
@@ -274,6 +282,16 @@ export function findLegacyPendingConsensusExportReason(
     reasons.includes(reasonCode)
   );
   return matched ?? null;
+}
+
+export function getLegacyPendingConsensusExportReasonForMode(
+  mode: ConsensusMode | null | undefined
+): LegacyPendingConsensusExportReason | null {
+  if (!mode || mode === "beacon") {
+    return null;
+  }
+
+  return LEGACY_PENDING_CONSENSUS_EXPORT_REASON_BY_MODE[mode];
 }
 
 export const evidenceExportContractSchema = z.object({

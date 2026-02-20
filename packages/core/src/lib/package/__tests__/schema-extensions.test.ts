@@ -4,6 +4,7 @@ import {
   evidenceExportContractSchema,
   consensusProofSchema,
   findLegacyPendingConsensusExportReason,
+  getLegacyPendingConsensusExportReasonForMode,
   getExportContractReasonLabel,
   onchainPolicyProofSchema,
   simulationSchema,
@@ -295,6 +296,17 @@ describe("export contract schema", () => {
     ).toBeNull();
     expect(findLegacyPendingConsensusExportReason([])).toBeNull();
     expect(findLegacyPendingConsensusExportReason(undefined)).toBeNull();
+  });
+
+  it("maps consensus mode to legacy pending export reason", () => {
+    expect(
+      getLegacyPendingConsensusExportReasonForMode("opstack")
+    ).toBe("opstack-consensus-verifier-pending");
+    expect(
+      getLegacyPendingConsensusExportReasonForMode("linea")
+    ).toBe("linea-consensus-verifier-pending");
+    expect(getLegacyPendingConsensusExportReasonForMode("beacon")).toBeNull();
+    expect(getLegacyPendingConsensusExportReasonForMode(undefined)).toBeNull();
   });
 
   it("returns a non-empty label for every export reason", () => {

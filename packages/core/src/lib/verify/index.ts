@@ -1,5 +1,8 @@
 import { analyzeTarget, identifyProposer, type TransactionWarning } from "../warnings/analyze";
-import type { EvidencePackage } from "../types";
+import {
+  getLegacyPendingConsensusExportReasonForMode,
+  type EvidencePackage,
+} from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
 import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof";
@@ -103,6 +106,12 @@ type ConsensusTrustDecision = {
   reason: ConsensusTrustDecisionReason;
 };
 
+const NO_PROOF_EXPORT_REASONS = [
+  "consensus-mode-disabled-by-feature-flag",
+  "unsupported-consensus-mode",
+  "consensus-proof-fetch-failed",
+] as const satisfies readonly Exclude<ConsensusTrustDecisionReason, null>[];
+
 /**
  * Trust upgrade boundary for consensus verification.
  *
@@ -114,57 +123,34 @@ function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
 ): ConsensusTrustDecision {
+  const consensusProof = evidence.consensusProof;
   const exportReasons = evidence.exportContract?.reasons ?? [];
 
-  if (
-    !evidence.consensusProof &&
-    exportReasons.includes("consensus-mode-disabled-by-feature-flag")
-  ) {
-    return {
-      trusted: false,
-      reason: "consensus-mode-disabled-by-feature-flag",
-    };
-  }
-  if (
-    !evidence.consensusProof &&
-    exportReasons.includes("unsupported-consensus-mode")
-  ) {
-    return {
-      trusted: false,
-      reason: "unsupported-consensus-mode",
-    };
-  }
-  if (
-    !evidence.consensusProof &&
-    exportReasons.includes("consensus-proof-fetch-failed")
-  ) {
-    return {
-      trusted: false,
-      reason: "consensus-proof-fetch-failed",
-    };
-  }
-  if (
-    !consensusVerification &&
-    evidence.consensusProof?.consensusMode === "opstack" &&
-    exportReasons.includes("opstack-consensus-verifier-pending")
-  ) {
-    return {
-      trusted: false,
-      reason: "opstack-consensus-verifier-pending",
-    };
-  }
-  if (
-    !consensusVerification &&
-    evidence.consensusProof?.consensusMode === "linea" &&
-    exportReasons.includes("linea-consensus-verifier-pending")
-  ) {
-    return {
-      trusted: false,
-      reason: "linea-consensus-verifier-pending",
-    };
+  if (!consensusProof) {
+    const noProofReason = NO_PROOF_EXPORT_REASONS.find((reason) =>
+      exportReasons.includes(reason)
+    );
+    if (noProofReason) {
+      return {
+        trusted: false,
+        reason: noProofReason,
+      };
+    }
   }
 
-  if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
+  if (!consensusVerification && consensusProof) {
+    const pendingReason = getLegacyPendingConsensusExportReasonForMode(
+      consensusProof.consensusMode ?? "beacon"
+    );
+    if (pendingReason && exportReasons.includes(pendingReason)) {
+      return {
+        trusted: false,
+        reason: pendingReason,
+      };
+    }
+  }
+
+  if (!consensusProof || !evidence.onchainPolicyProof) {
     return {
       trusted: false,
       reason: "missing-consensus-or-policy-proof",
