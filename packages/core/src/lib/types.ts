@@ -197,6 +197,8 @@ export const simulationSchema = z.object({
   logs: z.array(simulationLogSchema),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
   blockNumber: z.number(),
+  /** RFC3339 timestamp for the block used during simulation, when available. */
+  blockTimestamp: z.string().datetime({ offset: true }).optional(),
   trust: trustClassificationSchema,
 });
 

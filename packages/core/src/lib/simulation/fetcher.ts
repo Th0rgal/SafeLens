@@ -285,6 +285,7 @@ export async function fetchSimulation(
     gasUsed,
     logs: traceResult.logs,
     blockNumber,
+    blockTimestamp: new Date(Number(block.timestamp) * 1000).toISOString(),
     trust: "rpc-sourced" as TrustClassification,
   };
 

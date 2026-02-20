@@ -139,6 +139,7 @@ Generator rollout flags:
 - Verification reports now preserve `invalid-expected-state-root` as an explicit consensus trust reason when policy root formatting is invalid.
 - Desktop non-beacon verification now enforces package `network` metadata consistency with envelope `chainId` (`opstack`: `10->optimism`, `8453->base`; `linea`: `59144->linea`) and emits deterministic `unsupported-network` on mismatch.
 - OP Mainnet envelope metadata now uses canonical `network: "optimism"`; desktop verifier still accepts legacy `network: "oeth"` for backward compatibility.
+- Simulation results now include optional `blockTimestamp`; desktop `ExecutionSafetyPanel` freshness copy shows block time and age against local time when present.
 
 ### Cleanup
 

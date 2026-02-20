@@ -20,6 +20,7 @@ import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/lib/safety-checks";
+import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -262,24 +263,6 @@ function classifySimulationStatus(
     status: "check",
     detail: "Simulation ran successfully.",
   };
-}
-
-function formatRelativeTime(timestamp: string): string | null {
-  const parsed = new Date(timestamp);
-  const ms = parsed.getTime();
-  if (Number.isNaN(ms)) return null;
-
-  const diffMinutes = Math.max(0, Math.floor((Date.now() - ms) / 60000));
-  if (diffMinutes < 1) return "just now";
-  if (diffMinutes === 1) return "1 minute ago";
-  if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours === 1) return "1 hour ago";
-  if (diffHours < 24) return `${diffHours} hours ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
 }
 
 export default function VerifyScreen() {
@@ -1156,9 +1139,10 @@ function ExecutionSafetyPanel({
 
   const verdictStyle = SAFETY_STATUS_STYLE[verdict.status];
   const VerdictIcon = verdictStyle.icon;
-  const simulationFreshness = evidence.simulation
-    ? `Simulated at block ${evidence.simulation.blockNumber} • package created ${formatRelativeTime(evidence.packagedAt) ?? "at an unknown time"}`
-    : "Simulation not performed for this package.";
+  const simulationFreshness = buildSimulationFreshnessDetail(
+    evidence.simulation,
+    evidence.packagedAt
+  );
 
   return (
     <Card>

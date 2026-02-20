@@ -409,6 +409,15 @@ describe("simulation schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts simulation with RFC3339 block timestamp", () => {
+    const sim = {
+      ...MOCK_SIMULATION,
+      blockTimestamp: "2026-02-20T13:55:00.000Z",
+    };
+    const result = simulationSchema.safeParse(sim);
+    expect(result.success).toBe(true);
+  });
+
   it("rejects simulation with invalid trust level", () => {
     const invalid = { ...MOCK_SIMULATION, trust: "invalid-trust" };
     expect(simulationSchema.safeParse(invalid).success).toBe(false);
