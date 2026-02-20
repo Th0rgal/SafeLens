@@ -1,4 +1,9 @@
-import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
+import {
+  isWarningConsensusTrustDecisionReason,
+  mapConsensusVerifierErrorCodeToTrustReason,
+  type ConsensusVerificationResult,
+  type EvidencePackage,
+} from "@safelens/core";
 
 export type SafetyStatus = "check" | "warning" | "error";
 
@@ -9,16 +14,6 @@ export type SafetyCheck = {
   detail: string;
   reasonCode?: string;
 };
-
-const WARNING_CONSENSUS_ERROR_CODES = new Set([
-  "consensus-mode-disabled-by-feature-flag",
-  "unsupported-consensus-mode",
-  "unsupported-network",
-  "opstack-consensus-verifier-pending",
-  "linea-consensus-verifier-pending",
-  "stale-consensus-envelope",
-  "non-finalized-consensus-envelope",
-]);
 
 const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
   "consensus-mode-disabled-by-feature-flag":
@@ -110,6 +105,15 @@ function getConsensusFailureDetail(
   return consensusVerification.error ?? fallbackSummary;
 }
 
+function getConsensusFailureStatus(
+  consensusVerification: ConsensusVerificationResult
+): SafetyStatus {
+  const reason = mapConsensusVerifierErrorCodeToTrustReason(
+    consensusVerification.error_code
+  );
+  return isWarningConsensusTrustDecisionReason(reason) ? "warning" : "error";
+}
+
 function getConsensusSuccessDetail(
   consensusMode: string | undefined,
   verifiedBlockNumber: number | null
@@ -179,9 +183,7 @@ export function classifyConsensusStatus(
   return {
     id: "chain-state-finalized",
     label: "Chain state is finalized",
-    status: WARNING_CONSENSUS_ERROR_CODES.has(consensusVerification.error_code ?? "")
-      ? "warning"
-      : "error",
+    status: getConsensusFailureStatus(consensusVerification),
     detail: getConsensusFailureDetail(consensusVerification, fallbackSummary),
     reasonCode: consensusVerification.error_code ?? undefined,
   };

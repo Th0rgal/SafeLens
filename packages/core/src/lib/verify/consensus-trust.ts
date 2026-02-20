@@ -57,6 +57,18 @@ const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
   "invalid-expected-state-root": "invalid-expected-state-root",
 };
 
+const WARNING_CONSENSUS_TRUST_REASONS = new Set<
+  Exclude<ConsensusTrustDecisionReason, null>
+>([
+  "consensus-mode-disabled-by-feature-flag",
+  "unsupported-consensus-mode",
+  "unsupported-network",
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
+  "stale-consensus-envelope",
+  "non-finalized-consensus-envelope",
+]);
+
 export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
   Exclude<ConsensusTrustDecisionReason, null>,
   string
@@ -115,4 +127,14 @@ export function mapConsensusVerifierErrorCodeToTrustReason(
   }
 
   return CONSENSUS_ERROR_CODE_TO_TRUST_REASON[errorCode] ?? null;
+}
+
+export function isWarningConsensusTrustDecisionReason(
+  reason: ConsensusTrustDecisionReason | undefined
+): boolean {
+  if (!reason) {
+    return false;
+  }
+
+  return WARNING_CONSENSUS_TRUST_REASONS.has(reason);
 }

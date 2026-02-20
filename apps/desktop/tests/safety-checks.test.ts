@@ -129,6 +129,23 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBe("unsupported-network");
   });
 
+  it("returns warning for unsupported consensus modes reported by verifier", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("opstack"),
+      makeConsensusVerification({
+        valid: false,
+        error: "unsupported consensus mode",
+        error_code: "unsupported-consensus-mode",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("warning");
+    expect(status.detail).toBe(
+      "This package uses a consensus mode the desktop verifier does not support."
+    );
+    expect(status.reasonCode).toBe("unsupported-consensus-mode");
+  });
+
   it("returns warning with explicit stale guidance for Linea stale envelopes", () => {
     const status = classifyConsensusStatus(
       makeEvidence("linea"),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CONSENSUS_TRUST_DECISION_REASONS,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  isWarningConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
   summarizeConsensusTrustDecisionReason,
 } from "../consensus-trust";
@@ -42,5 +43,19 @@ describe("consensus trust reason contract", () => {
     expect(mapConsensusVerifierErrorCodeToTrustReason("some-new-code")).toBeNull();
     expect(mapConsensusVerifierErrorCodeToTrustReason(undefined)).toBeNull();
     expect(mapConsensusVerifierErrorCodeToTrustReason(null)).toBeNull();
+  });
+
+  it("classifies warning-vs-error trust reasons deterministically", () => {
+    expect(isWarningConsensusTrustDecisionReason("unsupported-network")).toBe(true);
+    expect(isWarningConsensusTrustDecisionReason("stale-consensus-envelope")).toBe(
+      true
+    );
+    expect(isWarningConsensusTrustDecisionReason("invalid-proof-payload")).toBe(
+      false
+    );
+    expect(
+      isWarningConsensusTrustDecisionReason("state-root-mismatch-policy-proof")
+    ).toBe(false);
+    expect(isWarningConsensusTrustDecisionReason(null)).toBe(false);
   });
 });

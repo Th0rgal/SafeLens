@@ -13,6 +13,8 @@ import {
 } from "./consensus-trust";
 export {
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  isWarningConsensusTrustDecisionReason,
+  mapConsensusVerifierErrorCodeToTrustReason,
   summarizeConsensusTrustDecisionReason,
 } from "./consensus-trust";
 export type { ConsensusTrustDecisionReason } from "./consensus-trust";
