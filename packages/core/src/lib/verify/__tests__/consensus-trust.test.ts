@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CONSENSUS_TRUST_DECISION_REASONS,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  mapConsensusVerifierErrorCodeToTrustReason,
   summarizeConsensusTrustDecisionReason,
 } from "../consensus-trust";
 
@@ -20,5 +21,26 @@ describe("consensus trust reason contract", () => {
   it("returns null summary for null/undefined reasons", () => {
     expect(summarizeConsensusTrustDecisionReason(null)).toBeNull();
     expect(summarizeConsensusTrustDecisionReason(undefined)).toBeNull();
+  });
+
+  it("maps known verifier error codes to deterministic trust reasons", () => {
+    expect(mapConsensusVerifierErrorCodeToTrustReason("unsupported-network")).toBe(
+      "unsupported-network"
+    );
+    expect(
+      mapConsensusVerifierErrorCodeToTrustReason("envelope-network-mismatch")
+    ).toBe("invalid-proof-payload");
+    expect(
+      mapConsensusVerifierErrorCodeToTrustReason("envelope-state-root-mismatch")
+    ).toBe("invalid-proof-payload");
+    expect(
+      mapConsensusVerifierErrorCodeToTrustReason("non-finalized-consensus-envelope")
+    ).toBe("non-finalized-consensus-envelope");
+  });
+
+  it("returns null for unknown verifier error codes", () => {
+    expect(mapConsensusVerifierErrorCodeToTrustReason("some-new-code")).toBeNull();
+    expect(mapConsensusVerifierErrorCodeToTrustReason(undefined)).toBeNull();
+    expect(mapConsensusVerifierErrorCodeToTrustReason(null)).toBeNull();
   });
 });

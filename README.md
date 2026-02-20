@@ -153,6 +153,7 @@ Generator rollout flags:
 - Consensus detail rows now include an explicit non-equivalence assurance note for `opstack`/`linea` modes, clarifying these checks are not Beacon light-client finality.
 - Core verification-source summaries/details now repeat the same non-equivalence boundary when OP Stack/Linea consensus is marked verified, preventing Beacon-equivalent interpretation in trust provenance output.
 - Desktop non-beacon verifier now emits explicit envelope-linkage error codes (`envelope-state-root-mismatch`, `envelope-block-number-mismatch`) when package consensus metadata does not match the envelope, and UI/core trust mapping treats them as deterministic integrity failures.
+- Core consensus trust evaluation now centralizes `consensusVerification.error_code -> consensusTrustDecisionReason` mapping in one helper, reducing drift risk as OP Stack/Linea verifier codes expand.
 - Core consensus routing tests now explicitly pin `holesky` and `hoodi` to the Beacon fetch path (not execution-envelope fetchers) to keep `#18` support deterministic.
 - Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.

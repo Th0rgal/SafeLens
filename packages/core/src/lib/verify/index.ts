@@ -7,7 +7,10 @@ import { verifySimulation, type SimulationVerificationResult } from "../simulati
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources, createVerificationSourceContext } from "../trust";
-import type { ConsensusTrustDecisionReason } from "./consensus-trust";
+import {
+  mapConsensusVerifierErrorCodeToTrustReason,
+  type ConsensusTrustDecisionReason,
+} from "./consensus-trust";
 export {
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
   summarizeConsensusTrustDecisionReason,
@@ -134,73 +137,13 @@ function evaluateConsensusTrustDecision(
       reason: "missing-consensus-or-policy-proof",
     };
   }
-  if (consensusVerification?.error_code === "unsupported-consensus-mode") {
+  const mappedReason = mapConsensusVerifierErrorCodeToTrustReason(
+    consensusVerification?.error_code
+  );
+  if (mappedReason) {
     return {
       trusted: false,
-      reason: "unsupported-consensus-mode",
-    };
-  }
-  if (consensusVerification?.error_code === "unsupported-network") {
-    return {
-      trusted: false,
-      reason: "unsupported-network",
-    };
-  }
-  if (consensusVerification?.error_code === "envelope-network-mismatch") {
-    return {
-      trusted: false,
-      reason: "invalid-proof-payload",
-    };
-  }
-  if (consensusVerification?.error_code === "opstack-consensus-verifier-pending") {
-    return {
-      trusted: false,
-      reason: "opstack-consensus-verifier-pending",
-    };
-  }
-  if (consensusVerification?.error_code === "linea-consensus-verifier-pending") {
-    return {
-      trusted: false,
-      reason: "linea-consensus-verifier-pending",
-    };
-  }
-  if (consensusVerification?.error_code === "state-root-mismatch") {
-    return {
-      trusted: false,
-      reason: "state-root-mismatch-flag",
-    };
-  }
-  if (consensusVerification?.error_code === "stale-consensus-envelope") {
-    return {
-      trusted: false,
-      reason: "stale-consensus-envelope",
-    };
-  }
-  if (consensusVerification?.error_code === "non-finalized-consensus-envelope") {
-    return {
-      trusted: false,
-      reason: "non-finalized-consensus-envelope",
-    };
-  }
-  if (consensusVerification?.error_code === "invalid-proof-payload") {
-    return {
-      trusted: false,
-      reason: "invalid-proof-payload",
-    };
-  }
-  if (
-    consensusVerification?.error_code === "envelope-state-root-mismatch" ||
-    consensusVerification?.error_code === "envelope-block-number-mismatch"
-  ) {
-    return {
-      trusted: false,
-      reason: "invalid-proof-payload",
-    };
-  }
-  if (consensusVerification?.error_code === "invalid-expected-state-root") {
-    return {
-      trusted: false,
-      reason: "invalid-expected-state-root",
+      reason: mappedReason,
     };
   }
   if (

@@ -40,6 +40,23 @@ export type ConsensusTrustDecisionReason =
   | (typeof CONSENSUS_TRUST_DECISION_REASONS)[number]
   | null;
 
+const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
+  Record<string, Exclude<ConsensusTrustDecisionReason, null>>
+> = {
+  "unsupported-consensus-mode": "unsupported-consensus-mode",
+  "unsupported-network": "unsupported-network",
+  "envelope-network-mismatch": "invalid-proof-payload",
+  "opstack-consensus-verifier-pending": "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending": "linea-consensus-verifier-pending",
+  "state-root-mismatch": "state-root-mismatch-flag",
+  "stale-consensus-envelope": "stale-consensus-envelope",
+  "non-finalized-consensus-envelope": "non-finalized-consensus-envelope",
+  "invalid-proof-payload": "invalid-proof-payload",
+  "envelope-state-root-mismatch": "invalid-proof-payload",
+  "envelope-block-number-mismatch": "invalid-proof-payload",
+  "invalid-expected-state-root": "invalid-expected-state-root",
+};
+
 export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
   Exclude<ConsensusTrustDecisionReason, null>,
   string
@@ -84,4 +101,18 @@ export function summarizeConsensusTrustDecisionReason(
   }
 
   return CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason];
+}
+
+/**
+ * Maps machine-readable verifier error_code values to deterministic trust reasons.
+ * Keeping this mapping in one place reduces drift as new verifier codes land.
+ */
+export function mapConsensusVerifierErrorCodeToTrustReason(
+  errorCode: string | null | undefined
+): Exclude<ConsensusTrustDecisionReason, null> | null {
+  if (!errorCode) {
+    return null;
+  }
+
+  return CONSENSUS_ERROR_CODE_TO_TRUST_REASON[errorCode] ?? null;
 }
