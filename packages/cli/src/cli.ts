@@ -8,16 +8,20 @@ import {
   fetchPendingTransactions,
   createEvidencePackage,
   enrichWithOnchainProof,
+  enrichWithConsensusProof,
   enrichWithSimulation,
+  finalizeEvidenceExport,
   exportEvidencePackage,
   parseEvidencePackage,
   verifyEvidencePackage,
+  UnsupportedConsensusModeError,
   loadSettingsConfig,
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
   buildVerificationSources,
   createVerificationSourceContext,
   getChainName,
+  getNetworkCapability,
   interpretTransaction,
   computeSafeTxHashDetailed,
   resolveAddress,
@@ -60,6 +64,7 @@ Usage:
 
 Options:
   --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
+  --enable-experimental-linea-consensus  Enable experimental Linea consensus envelope fetch in analyze
 
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
@@ -360,6 +365,7 @@ async function runAnalyze(args: string[]) {
   const format = getOutputFormat(args, "text");
 
   const rpcUrl = getFlag(args, "--rpc-url");
+  const enableExperimentalLineaConsensus = hasFlag(args, "--enable-experimental-linea-consensus");
 
   const parsed = parseSafeUrlFlexible(url);
 
@@ -380,27 +386,80 @@ async function runAnalyze(args: string[]) {
 
   const tx = await fetchSafeTransaction(parsed.data.chainId, parsed.data.safeTxHash);
   let evidence = createEvidencePackage(tx, parsed.data.chainId, url);
+  const consensusMode = getNetworkCapability(parsed.data.chainId)?.consensusMode;
+  const shouldAttemptConsensus = Boolean(consensusMode);
+  let consensusProofAttempted = false;
+  let consensusProofFailed = false;
+  let consensusProofUnsupportedMode = false;
+  let consensusProofDisabledByFeatureFlag = false;
+  let onchainPolicyProofAttempted = false;
+  let onchainPolicyProofFailed = false;
+  let simulationAttempted = false;
+  let simulationFailed = false;
+
+  if (shouldAttemptConsensus) {
+    consensusProofAttempted = true;
+    try {
+      const consensusOptions: {
+        rpcUrl?: string;
+        enableExperimentalLineaConsensus?: boolean;
+      } = {};
+      if ((consensusMode === "opstack" || consensusMode === "linea") && rpcUrl) {
+        consensusOptions.rpcUrl = rpcUrl;
+      }
+      if (enableExperimentalLineaConsensus) {
+        consensusOptions.enableExperimentalLineaConsensus = true;
+      }
+      evidence = await enrichWithConsensusProof(evidence, consensusOptions);
+    } catch (err) {
+      consensusProofFailed = true;
+      if (err instanceof UnsupportedConsensusModeError) {
+        consensusProofUnsupportedMode = err.reason === "not-implemented";
+        consensusProofDisabledByFeatureFlag = err.reason === "disabled-by-feature-flag";
+      }
+      console.error(
+        `Warning: Failed to fetch consensus proof: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without consensus proof.\n");
+    }
+  }
 
   // Fetch on-chain policy proof if RPC URL is provided
   if (rpcUrl) {
+    onchainPolicyProofAttempted = true;
     try {
       evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
     } catch (err) {
+      onchainPolicyProofFailed = true;
       console.error(
         `Warning: Failed to fetch on-chain policy proof: ${err instanceof Error ? err.message : err}`
       );
       console.error("Continuing without policy proof.\n");
     }
 
+    simulationAttempted = true;
     try {
       evidence = await enrichWithSimulation(evidence, { rpcUrl });
     } catch (err) {
+      simulationFailed = true;
       console.error(
         `Warning: Failed to simulate transaction: ${err instanceof Error ? err.message : err}`
       );
       console.error("Continuing without simulation.\n");
     }
   }
+
+  evidence = finalizeEvidenceExport(evidence, {
+    rpcProvided: Boolean(rpcUrl),
+    consensusProofAttempted,
+    consensusProofFailed,
+    consensusProofUnsupportedMode,
+    consensusProofDisabledByFeatureFlag,
+    onchainPolicyProofAttempted,
+    onchainPolicyProofFailed,
+    simulationAttempted,
+    simulationFailed,
+  });
 
   const settings = await loadSettingsForVerify(args);
   const report = await verifyEvidencePackage(evidence, { settings });

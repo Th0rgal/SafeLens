@@ -133,6 +133,7 @@ Generator rollout flags:
 - OP Stack/Linea packages now preserve explicit `*-consensus-verifier-pending` trust reasons before desktop verification runs, avoiding generic "missing consensus result" messaging.
 - Beacon light-client fetch remains beacon-only; OP Stack/Linea are tracked as separate execution-envelope consensus modes.
 - OP Stack/Linea envelope generation now enforces `blockTag: finalized` to keep export-time consensus claims aligned with verifier finality requirements.
+- CLI `analyze` now attempts consensus enrichment where supported and always stamps `exportContract` with explicit machine-readable partial/failure reasons.
 
 ### Cleanup
 
