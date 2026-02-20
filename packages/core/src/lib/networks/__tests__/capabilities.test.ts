@@ -9,7 +9,7 @@ import {
 
 describe("network capability matrix", () => {
   it("uses explicit active chain IDs for generator/CLI discovery", () => {
-    expect(SAFE_ADDRESS_SEARCH_CHAIN_IDS).toEqual([1, 11155111, 137, 42161, 10, 100, 8453]);
+    expect(SAFE_ADDRESS_SEARCH_CHAIN_IDS).toEqual([1, 11155111, 137, 42161, 10, 100, 8453, 59144]);
   });
 
   it("exposes consensus support only where verification paths exist", () => {

@@ -171,6 +171,16 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     supportsSimulation: true,
     enabledInSafeAddressSearch: true,
   },
+  {
+    chainId: 59144,
+    chainPrefix: "linea",
+    chainName: "Linea",
+    safeApiUrl: "https://safe-transaction-linea.safe.global",
+    defaultRpcUrl: "https://linea-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    enabledInSafeAddressSearch: true,
+  },
   // Legacy Safe chain prefix retained for URL parsing compatibility.
   {
     chainId: 5,
