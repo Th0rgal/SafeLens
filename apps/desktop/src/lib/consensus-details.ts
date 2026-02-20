@@ -4,33 +4,52 @@ import type {
   EvidencePackage,
 } from "@safelens/core";
 
+export const CONSENSUS_DETAIL_ROW_IDS = [
+  "consensus-mode",
+  "consensus-assurance",
+  "consensus-status",
+  "consensus-finalized-block",
+  "consensus-participants",
+  "consensus-state-root",
+] as const;
+
+export type ConsensusDetailRowId = (typeof CONSENSUS_DETAIL_ROW_IDS)[number];
+
 export type ConsensusDetailRow = {
-  id: string;
+  id: ConsensusDetailRowId;
   label: string;
   value: string;
   monospace?: boolean;
 };
 
+function assertUnreachableConsensusMode(mode: never): never {
+  throw new Error(`Unhandled consensus mode: ${String(mode)}`);
+}
+
 function getConsensusModeLabel(mode: ConsensusMode): string {
   switch (mode) {
+    case "beacon":
+      return "Beacon";
     case "opstack":
       return "OP Stack";
     case "linea":
       return "Linea";
-    default:
-      return "Beacon";
   }
+
+  return assertUnreachableConsensusMode(mode);
 }
 
 function getAssuranceNotice(mode: ConsensusMode): string | null {
   switch (mode) {
+    case "beacon":
+      return null;
     case "opstack":
       return "OP Stack consensus checks are not equivalent to Beacon light-client finality.";
     case "linea":
       return "Linea consensus checks are not equivalent to Beacon light-client finality.";
-    default:
-      return null;
   }
+
+  return assertUnreachableConsensusMode(mode);
 }
 
 function isUnverifiedNonBeaconConsensus(

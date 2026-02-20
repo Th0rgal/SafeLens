@@ -1,6 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
-import { buildConsensusDetailRows } from "../src/lib/consensus-details";
+import {
+  buildConsensusDetailRows,
+  CONSENSUS_DETAIL_ROW_IDS,
+} from "../src/lib/consensus-details";
 
 function makeVerification(
   overrides: Partial<ConsensusVerificationResult>
@@ -153,5 +156,19 @@ describe("buildConsensusDetailRows", () => {
 
     expect(rows.map((row) => row.id)).toContain("consensus-participants");
     expect(rows.find((row) => row.id === "consensus-participants")?.value).toBe("491/512");
+  });
+
+  it("emits only supported consensus detail row ids", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "linea" } as EvidencePackage["consensusProof"] },
+      makeVerification({
+        valid: false,
+        verified_block_number: 123,
+        verified_state_root: `0x${"a".repeat(64)}`,
+      })
+    );
+
+    const knownIds = new Set(CONSENSUS_DETAIL_ROW_IDS);
+    expect(rows.every((row) => knownIds.has(row.id))).toBe(true);
   });
 });
