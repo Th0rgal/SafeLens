@@ -56,6 +56,9 @@ describe("consensus trust reason contract", () => {
 
   it("classifies warning-vs-error trust reasons deterministically", () => {
     expect(isWarningConsensusTrustDecisionReason("unsupported-network")).toBe(true);
+    expect(
+      isWarningConsensusTrustDecisionReason("consensus-proof-fetch-failed")
+    ).toBe(true);
     expect(isWarningConsensusTrustDecisionReason("stale-consensus-envelope")).toBe(
       true
     );

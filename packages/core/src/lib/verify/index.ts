@@ -122,6 +122,15 @@ function evaluateConsensusTrustDecision(
     };
   }
   if (
+    !evidence.consensusProof &&
+    exportReasons.includes("consensus-proof-fetch-failed")
+  ) {
+    return {
+      trusted: false,
+      reason: "consensus-proof-fetch-failed",
+    };
+  }
+  if (
     !consensusVerification &&
     evidence.consensusProof?.consensusMode === "opstack" &&
     exportReasons.includes("opstack-consensus-verifier-pending")

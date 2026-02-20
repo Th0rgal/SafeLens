@@ -354,6 +354,34 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain("not supported");
   });
 
+  it("uses explicit consensus-proof-fetch-failed reason when consensus proof fetch failed at export", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: ["consensus-proof-fetch-failed"] as ExportContractReason[],
+        artifacts: {
+          consensusProof: false,
+          onchainPolicyProof: false,
+          simulation: false,
+        },
+      },
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "consensus-proof-fetch-failed"
+    );
+    const consensusSource = result.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain("generation failed");
+  });
+
   it("uses explicit OP Stack pending reason before desktop consensus verification runs", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

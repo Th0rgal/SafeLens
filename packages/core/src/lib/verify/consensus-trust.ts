@@ -9,6 +9,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "consensus-mode-disabled-by-feature-flag",
   // Consensus mode is unknown to the desktop verifier.
   "unsupported-consensus-mode",
+  // Consensus proof generation failed during package export.
+  "consensus-proof-fetch-failed",
   // Consensus mode is known, but envelope chain is outside supported rollout scope.
   "unsupported-network",
   // Envelope metadata network label does not match expected chain metadata.
@@ -74,6 +76,7 @@ const WARNING_CONSENSUS_TRUST_REASONS = new Set<
 >([
   "consensus-mode-disabled-by-feature-flag",
   "unsupported-consensus-mode",
+  "consensus-proof-fetch-failed",
   "unsupported-network",
   "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending",
@@ -89,6 +92,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "consensus mode rollout is currently disabled by feature flag",
   "unsupported-consensus-mode":
     "consensus mode is not supported by the desktop verifier",
+  "consensus-proof-fetch-failed":
+    "consensus proof generation failed during package export",
   "unsupported-network":
     "consensus envelope chain is not supported for this consensus mode",
   "envelope-network-mismatch":
