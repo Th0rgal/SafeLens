@@ -8,17 +8,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy::primitives::{b256, fixed_bytes, B256};
 use helios_consensus_core::{
-    apply_bootstrap, apply_finality_update, apply_update, verify_bootstrap,
-    verify_finality_update, verify_update,
+    apply_bootstrap, apply_finality_update, apply_update,
     consensus_spec::{ConsensusSpec, MainnetConsensusSpec},
-    types::{
-        Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update,
-    },
+    types::{Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update},
+    verify_bootstrap, verify_finality_update, verify_update,
 };
 use serde::{Deserialize, Serialize};
-use typenum::{
-    U1, U2, U8, U16, U64, U128, U512, U2048, U4096, U8192, U131072,
-};
+use typenum::{U1, U128, U131072, U16, U2, U2048, U4096, U512, U64, U8, U8192};
 
 /// Input from the frontend: the consensus proof section of an evidence package.
 #[derive(Debug, Deserialize)]
@@ -71,7 +67,7 @@ struct NetworkConfig {
     forks: Forks,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum ConsensusNetwork {
     Mainnet,
     Sepolia,
@@ -84,13 +80,34 @@ fn mainnet_config() -> NetworkConfig {
         genesis_time: 1606824023,
         seconds_per_slot: 12,
         forks: Forks {
-            genesis: Fork { epoch: 0, fork_version: fixed_bytes!("00000000") },
-            altair: Fork { epoch: 74240, fork_version: fixed_bytes!("01000000") },
-            bellatrix: Fork { epoch: 144896, fork_version: fixed_bytes!("02000000") },
-            capella: Fork { epoch: 194048, fork_version: fixed_bytes!("03000000") },
-            deneb: Fork { epoch: 269568, fork_version: fixed_bytes!("04000000") },
-            electra: Fork { epoch: 364032, fork_version: fixed_bytes!("05000000") },
-            fulu: Fork { epoch: 411392, fork_version: fixed_bytes!("06000000") },
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("00000000"),
+            },
+            altair: Fork {
+                epoch: 74240,
+                fork_version: fixed_bytes!("01000000"),
+            },
+            bellatrix: Fork {
+                epoch: 144896,
+                fork_version: fixed_bytes!("02000000"),
+            },
+            capella: Fork {
+                epoch: 194048,
+                fork_version: fixed_bytes!("03000000"),
+            },
+            deneb: Fork {
+                epoch: 269568,
+                fork_version: fixed_bytes!("04000000"),
+            },
+            electra: Fork {
+                epoch: 364032,
+                fork_version: fixed_bytes!("05000000"),
+            },
+            fulu: Fork {
+                epoch: 411392,
+                fork_version: fixed_bytes!("06000000"),
+            },
         },
     }
 }
@@ -101,13 +118,34 @@ fn sepolia_config() -> NetworkConfig {
         genesis_time: 1655733600,
         seconds_per_slot: 12,
         forks: Forks {
-            genesis: Fork { epoch: 0, fork_version: fixed_bytes!("90000069") },
-            altair: Fork { epoch: 50, fork_version: fixed_bytes!("90000070") },
-            bellatrix: Fork { epoch: 100, fork_version: fixed_bytes!("90000071") },
-            capella: Fork { epoch: 56832, fork_version: fixed_bytes!("90000072") },
-            deneb: Fork { epoch: 132608, fork_version: fixed_bytes!("90000073") },
-            electra: Fork { epoch: 222464, fork_version: fixed_bytes!("90000074") },
-            fulu: Fork { epoch: 272640, fork_version: fixed_bytes!("90000075") },
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("90000069"),
+            },
+            altair: Fork {
+                epoch: 50,
+                fork_version: fixed_bytes!("90000070"),
+            },
+            bellatrix: Fork {
+                epoch: 100,
+                fork_version: fixed_bytes!("90000071"),
+            },
+            capella: Fork {
+                epoch: 56832,
+                fork_version: fixed_bytes!("90000072"),
+            },
+            deneb: Fork {
+                epoch: 132608,
+                fork_version: fixed_bytes!("90000073"),
+            },
+            electra: Fork {
+                epoch: 222464,
+                fork_version: fixed_bytes!("90000074"),
+            },
+            fulu: Fork {
+                epoch: 272640,
+                fork_version: fixed_bytes!("90000075"),
+            },
         },
     }
 }
@@ -119,12 +157,30 @@ fn gnosis_config() -> NetworkConfig {
         genesis_time: 1638993340,
         seconds_per_slot: 5,
         forks: Forks {
-            genesis: Fork { epoch: 0, fork_version: fixed_bytes!("00000064") },
-            altair: Fork { epoch: 512, fork_version: fixed_bytes!("01000064") },
-            bellatrix: Fork { epoch: 385536, fork_version: fixed_bytes!("02000064") },
-            capella: Fork { epoch: 648704, fork_version: fixed_bytes!("03000064") },
-            deneb: Fork { epoch: 889856, fork_version: fixed_bytes!("04000064") },
-            electra: Fork { epoch: 1337856, fork_version: fixed_bytes!("05000064") },
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("00000064"),
+            },
+            altair: Fork {
+                epoch: 512,
+                fork_version: fixed_bytes!("01000064"),
+            },
+            bellatrix: Fork {
+                epoch: 385536,
+                fork_version: fixed_bytes!("02000064"),
+            },
+            capella: Fork {
+                epoch: 648704,
+                fork_version: fixed_bytes!("03000064"),
+            },
+            deneb: Fork {
+                epoch: 889856,
+                fork_version: fixed_bytes!("04000064"),
+            },
+            electra: Fork {
+                epoch: 1337856,
+                fork_version: fixed_bytes!("05000064"),
+            },
             fulu: Fork {
                 epoch: u64::MAX,
                 fork_version: fixed_bytes!("06000064"),
@@ -193,10 +249,7 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     };
 
     if matches!(network, ConsensusNetwork::Gnosis) {
-        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(
-            input,
-            network,
-        );
+        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(input, network);
     }
     verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input, network)
 }
@@ -234,7 +287,10 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
                 id: "bootstrap".into(),
                 label: "Bootstrap verification".into(),
                 passed: true,
-                detail: Some("Bootstrap header hash matches checkpoint and sync committee proof is valid.".into()),
+                detail: Some(
+                    "Bootstrap header hash matches checkpoint and sync committee proof is valid."
+                        .into(),
+                ),
             });
         }
         Err(e) => {
@@ -343,18 +399,16 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
     }
 
     // Parse and verify finality update
-    let finality_update: FinalityUpdate<S> =
-        match serde_json::from_str(&input.finality_update) {
-            Ok(f) => f,
-            Err(e) => {
-                return fail_result(format!("Failed to parse finality update: {}", e));
-            }
-        };
+    let finality_update: FinalityUpdate<S> = match serde_json::from_str(&input.finality_update) {
+        Ok(f) => f,
+        Err(e) => {
+            return fail_result(format!("Failed to parse finality update: {}", e));
+        }
+    };
 
     // Count sync committee participants
-    let participants = helios_consensus_core::get_bits::<S>(
-        &finality_update.sync_aggregate().sync_committee_bits,
-    );
+    let participants =
+        helios_consensus_core::get_bits::<S>(&finality_update.sync_aggregate().sync_committee_bits);
 
     match verify_finality_update::<S>(
         &finality_update,
@@ -419,8 +473,7 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
             ));
         }
     };
-    let state_root_matches =
-        verified_state_root.eq_ignore_ascii_case(&expected_state_root);
+    let state_root_matches = verified_state_root.eq_ignore_ascii_case(&expected_state_root);
 
     checks.push(ConsensusCheck {
         id: "state-root".into(),
@@ -446,20 +499,22 @@ fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
         },
     });
 
+    let mismatch_error = if state_root_matches {
+        None
+    } else {
+        Some(format!(
+            "State root mismatch: Helios verified {} but onchainPolicyProof.stateRoot is {}.",
+            verified_state_root, expected_state_root
+        ))
+    };
+
     ConsensusVerificationResult {
         valid: state_root_matches,
         verified_state_root: Some(verified_state_root),
         verified_block_number: Some(verified_block_number),
         state_root_matches,
         sync_committee_participants: participants,
-        error: if state_root_matches {
-            None
-        } else {
-            Some(format!(
-                "State root mismatch: Helios verified {} but onchainPolicyProof.stateRoot is {}.",
-                verified_state_root, expected_state_root
-            ))
-        },
+        error: mismatch_error,
         checks,
     }
 }
@@ -500,17 +555,16 @@ fn expected_current_slot_for_network(
 #[cfg(test)]
 mod tests {
     use super::{
-        expected_current_slot_for_network, get_network_config, parse_b256,
-        parse_network, ConsensusNetwork,
+        expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
+        ConsensusNetwork,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
     fn parse_b256_accepts_prefixed_hex() {
-        let parsed = parse_b256(
-            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        )
-        .expect("valid b256");
+        let parsed =
+            parse_b256("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .expect("valid b256");
         assert_eq!(
             format!("{:#x}", parsed),
             "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -525,9 +579,7 @@ mod tests {
 
     #[test]
     fn supports_gnosis_network_config() {
-        let config = get_network_config(
-            parse_network("gnosis").expect("gnosis must be supported"),
-        );
+        let config = get_network_config(parse_network("gnosis").expect("gnosis must be supported"));
         assert_eq!(config.genesis_time, 1638993340);
         assert_eq!(config.seconds_per_slot, 5);
         assert_eq!(config.forks.altair.epoch, 512);
