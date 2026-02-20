@@ -147,6 +147,7 @@ Generator rollout flags:
 - Missing-consensus warning rows now also expose deterministic export reason codes/details (for example `consensus-mode-disabled-by-feature-flag` and `consensus-proof-fetch-failed`) instead of falling back to generic copy.
 - Consensus mode/block/participants/state-root details now render inside `ExecutionSafetyPanel` expanded view; the separate standalone consensus card was removed to keep consensus signaling in one top-level safety component.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
+- Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.
 
 ### Cleanup
 
