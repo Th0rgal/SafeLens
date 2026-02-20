@@ -736,8 +736,16 @@ function ExecutionSafetyPanel({
   const verdict = hasError
     ? { title: "Do not sign", detail: "One or more safety checks failed.", status: "error" as const }
     : hasWarning
-      ? { title: "Review carefully", detail: "Some checks are partial or unavailable.", status: "warning" as const }
-      : { title: "Safe to sign", detail: "Core safety checks passed.", status: "check" as const };
+      ? {
+          title: "Manual review required",
+          detail: "Some checks are partial or unavailable. Confirm transaction intent manually.",
+          status: "warning" as const,
+        }
+      : {
+          title: "No critical issues found",
+          detail: "All available safety checks passed. Confirm intent and destinations before signing.",
+          status: "check" as const,
+        };
 
   const verdictStyle = SAFETY_STATUS_STYLE[verdict.status];
   const VerdictIcon = verdictStyle.icon;
@@ -745,6 +753,9 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.packagedAt
   );
+  const passedChecks = checks.filter((check) => check.status === "check").length;
+  const warningChecks = checks.filter((check) => check.status === "warning").length;
+  const errorChecks = checks.filter((check) => check.status === "error").length;
   const consensusDetails = buildConsensusDetailRows(evidence, consensusVerification);
   const policyDetails = buildPolicyDetailRows(policyProof);
   const simulationDetails = buildSimulationDetailRows(
@@ -796,6 +807,10 @@ function ExecutionSafetyPanel({
             </div>
           );
         })}
+        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+          Checks summary: {passedChecks} passed, {warningChecks} warning
+          {warningChecks === 1 ? "" : "s"}, {errorChecks} error{errorChecks === 1 ? "" : "s"}.
+        </div>
         <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
           {simulationFreshness}
         </div>

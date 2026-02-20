@@ -78,7 +78,7 @@ describe("classifyConsensusStatus", () => {
     expect(status.detail).toContain("No consensus proof");
   });
 
-  it("surfaces deterministic pending reason for opstack when verifier output is absent", () => {
+  it("surfaces legacy pending reason for opstack when verifier output is absent", () => {
     const status = classifyConsensusStatus(
       {
         consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"],
@@ -92,10 +92,10 @@ describe("classifyConsensusStatus", () => {
 
     expect(status.status).toBe("warning");
     expect(status.reasonCode).toBe("opstack-consensus-verifier-pending");
-    expect(status.detail).toContain("full cryptographic consensus verification is not available yet");
+    expect(status.detail).toContain("legacy pending-verifier reason");
   });
 
-  it("surfaces deterministic pending reason for linea when verifier output is absent", () => {
+  it("surfaces legacy pending reason for linea when verifier output is absent", () => {
     const status = classifyConsensusStatus(
       {
         consensusProof: { consensusMode: "linea" } as EvidencePackage["consensusProof"],
@@ -109,7 +109,21 @@ describe("classifyConsensusStatus", () => {
 
     expect(status.status).toBe("warning");
     expect(status.reasonCode).toBe("linea-consensus-verifier-pending");
-    expect(status.detail).toContain("full cryptographic consensus verification is not available yet");
+    expect(status.detail).toContain("legacy pending-verifier reason");
+  });
+
+  it("uses unavailable-in-session wording when verifier output is absent without export reason", () => {
+    const status = classifyConsensusStatus(
+      {
+        consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"],
+      } as EvidencePackage,
+      undefined,
+      "fallback summary"
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBeUndefined();
+    expect(status.detail).toContain("unavailable in this session");
   });
 
   it("returns warning for partial-support consensus errors", () => {

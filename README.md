@@ -174,6 +174,7 @@ Generator rollout flags:
 - Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
 - Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.
+- `ExecutionSafetyPanel` verdict copy now avoids ambiguous "safe/verified" phrasing (`Manual review required` / `No critical issues found`), includes a per-package checks summary counter, and labels missing desktop consensus output as `Unavailable in this session` instead of `Running`.
 
 ### Cleanup
 

@@ -113,5 +113,6 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.isFullySupported).toBe(false);
     expect(status.badgeText).toBe("Partial");
     expect(status.helperText).toContain("legacy pending-verifier reason");
+    expect(status.helperText).toContain("Re-export");
   });
 });

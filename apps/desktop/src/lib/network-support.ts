@@ -30,7 +30,7 @@ function getConsensusSupportReasonText(
     exportReasons.includes("opstack-consensus-verifier-pending") ||
     exportReasons.includes("linea-consensus-verifier-pending")
   ) {
-    return "Partially supported: this package was exported with a legacy pending-verifier reason.";
+    return "Partially supported: this package was exported with a legacy pending-verifier reason. Re-export with a current SafeLens build.";
   }
 
   return null;

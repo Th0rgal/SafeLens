@@ -53,12 +53,13 @@ const NO_PROOF_CONSENSUS_REASON_CODES = [
 
 type NoProofConsensusReasonCode = (typeof NO_PROOF_CONSENSUS_REASON_CODES)[number];
 
-const PENDING_CONSENSUS_REASON_CODES = [
+const LEGACY_PENDING_CONSENSUS_REASON_CODES = [
   "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending",
 ] as const;
 
-type PendingConsensusReasonCode = (typeof PENDING_CONSENSUS_REASON_CODES)[number];
+type LegacyPendingConsensusReasonCode =
+  (typeof LEGACY_PENDING_CONSENSUS_REASON_CODES)[number];
 
 const NO_PROOF_CONSENSUS_DETAILS: Record<NoProofConsensusReasonCode, string> = {
   "consensus-mode-disabled-by-feature-flag":
@@ -81,11 +82,11 @@ function getNoProofConsensusReasonCode(
   return matched ?? null;
 }
 
-function getPendingConsensusReasonCode(
+function getLegacyPendingConsensusReasonCode(
   evidence: Pick<EvidencePackage, "exportContract">
-): PendingConsensusReasonCode | null {
+): LegacyPendingConsensusReasonCode | null {
   const exportReasons = evidence.exportContract?.reasons ?? [];
-  const matched = PENDING_CONSENSUS_REASON_CODES.find((reasonCode) =>
+  const matched = LEGACY_PENDING_CONSENSUS_REASON_CODES.find((reasonCode) =>
     exportReasons.includes(reasonCode)
   );
   return matched ?? null;
@@ -156,14 +157,14 @@ export function classifyConsensusStatus(
   }
 
   if (!consensusVerification) {
-    const reasonCode = getPendingConsensusReasonCode(evidence);
+    const reasonCode = getLegacyPendingConsensusReasonCode(evidence);
     return {
       id: "chain-state-finalized",
       label: "Chain state is finalized",
       status: "warning",
       detail: reasonCode
-        ? CONSENSUS_ERROR_DETAILS[reasonCode] ?? "Consensus verification is still running."
-        : "Consensus verification is still running.",
+        ? "This package was exported with a legacy pending-verifier reason. Re-export with a current SafeLens build."
+        : "Consensus verification result is unavailable in this session. Retry verification in the desktop app.",
       reasonCode: reasonCode ?? undefined,
     };
   }

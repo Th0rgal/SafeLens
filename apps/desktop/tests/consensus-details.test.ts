@@ -24,7 +24,7 @@ describe("buildConsensusDetailRows", () => {
     expect(rows).toEqual([]);
   });
 
-  it("shows running status when proof exists but verifier result is pending", () => {
+  it("shows unavailable-in-session status when proof exists but verifier result is absent", () => {
     const rows = buildConsensusDetailRows(
       { consensusProof: { consensusMode: "beacon" } as EvidencePackage["consensusProof"] },
       undefined
@@ -32,7 +32,11 @@ describe("buildConsensusDetailRows", () => {
 
     expect(rows).toEqual([
       { id: "consensus-mode", label: "Consensus mode", value: "Beacon" },
-      { id: "consensus-status", label: "Verification status", value: "Running" },
+      {
+        id: "consensus-status",
+        label: "Verification status",
+        value: "Unavailable in this session",
+      },
     ]);
   });
 

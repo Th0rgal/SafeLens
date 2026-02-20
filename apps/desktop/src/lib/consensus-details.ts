@@ -65,7 +65,7 @@ export function buildConsensusDetailRows(
     rows.push({
       id: "consensus-status",
       label: "Verification status",
-      value: "Running",
+      value: "Unavailable in this session",
     });
     return rows;
   }
