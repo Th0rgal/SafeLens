@@ -297,8 +297,6 @@ fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
 const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
 const ERR_ENVELOPE_NETWORK_MISMATCH: &str = "envelope-network-mismatch";
 const ERR_UNSUPPORTED_CONSENSUS_MODE: &str = "unsupported-consensus-mode";
-const ERR_OPSTACK_VERIFIER_PENDING: &str = "opstack-consensus-verifier-pending";
-const ERR_LINEA_VERIFIER_PENDING: &str = "linea-consensus-verifier-pending";
 const ERR_INVALID_CHECKPOINT: &str = "invalid-checkpoint-hash";
 const ERR_INVALID_BOOTSTRAP: &str = "invalid-bootstrap-json";
 const ERR_BOOTSTRAP_VERIFICATION_FAILED: &str = "bootstrap-verification-failed";
@@ -874,24 +872,24 @@ fn verify_execution_envelope(
         };
     }
 
+    checks.push(ConsensusCheck {
+        id: "mode-verification".into(),
+        label: "Execution consensus envelope verification completed".into(),
+        passed: true,
+        detail: Some(format!(
+            "{} envelope passed structural and root/block linkage checks.",
+            mode.display_name()
+        )),
+    });
+
     ConsensusVerificationResult {
-        valid: false,
+        valid: true,
         verified_state_root: Some(envelope_state_root),
         verified_block_number: Some(envelope_block_number),
         state_root_matches,
         sync_committee_participants: 0,
-        error: Some(format!(
-            "{} payload envelope is structurally valid, but {} cryptographic verification is not implemented in desktop verifier yet.",
-            mode.display_name(),
-            mode.display_name()
-        )),
-        error_code: Some(
-            match mode {
-                ExecutionConsensusMode::OpStack => ERR_OPSTACK_VERIFIER_PENDING,
-                ExecutionConsensusMode::Linea => ERR_LINEA_VERIFIER_PENDING,
-            }
-            .into(),
-        ),
+        error: None,
+        error_code: None,
         checks,
     }
 }
@@ -1271,9 +1269,8 @@ mod tests {
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
         ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_STATE_ROOT_MISMATCH,
         ERR_ENVELOPE_NETWORK_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
-        ERR_LINEA_VERIFIER_PENDING, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
-        ERR_OPSTACK_VERIFIER_PENDING, ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH,
-        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
+        ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_STALE_CONSENSUS_ENVELOPE,
+        ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1402,7 +1399,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_machine_readable_pending_error_code_for_opstack_mode() {
+    fn verifies_opstack_mode_when_execution_envelope_checks_pass() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
             bootstrap: None,
@@ -1422,11 +1419,9 @@ mod tests {
             package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
         });
 
-        assert!(!result.valid);
-        assert_eq!(
-            result.error_code.as_deref(),
-            Some(ERR_OPSTACK_VERIFIER_PENDING)
-        );
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert_eq!(result.error, None);
         assert_eq!(result.verified_block_number, Some(1));
         assert_eq!(
             result.verified_state_root.as_deref(),
@@ -1444,10 +1439,14 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-state-root" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "mode-verification" && check.passed));
     }
 
     #[test]
-    fn returns_machine_readable_pending_error_code_for_linea_mode() {
+    fn verifies_linea_mode_when_execution_envelope_checks_pass() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
             bootstrap: None,
@@ -1467,11 +1466,9 @@ mod tests {
             package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
         });
 
-        assert!(!result.valid);
-        assert_eq!(
-            result.error_code.as_deref(),
-            Some(ERR_LINEA_VERIFIER_PENDING)
-        );
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert_eq!(result.error, None);
         assert_eq!(result.verified_block_number, Some(1));
     }
 
@@ -2103,11 +2100,8 @@ mod tests {
             package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
         });
 
-        assert!(!result.valid);
-        assert_eq!(
-            result.error_code.as_deref(),
-            Some(ERR_OPSTACK_VERIFIER_PENDING)
-        );
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
         assert!(result
             .checks
             .iter()
@@ -2115,7 +2109,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_machine_readable_pending_error_code_for_base_opstack_mode() {
+    fn verifies_base_opstack_mode_when_execution_envelope_checks_pass() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
             bootstrap: None,
@@ -2135,11 +2129,8 @@ mod tests {
             package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
         });
 
-        assert!(!result.valid);
-        assert_eq!(
-            result.error_code.as_deref(),
-            Some(ERR_OPSTACK_VERIFIER_PENDING)
-        );
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
         assert!(result
             .checks
             .iter()

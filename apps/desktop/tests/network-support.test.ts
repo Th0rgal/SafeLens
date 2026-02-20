@@ -55,16 +55,16 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.helperText).toContain("no consensus proof was included");
   });
 
-  it("returns partial support for opstack even when package artifacts are present", () => {
+  it("returns full support for opstack when package artifacts are present", () => {
     const status = buildNetworkSupportStatus({
       chainId: 10,
       consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"],
       simulation: { simulationResult: { success: true } } as EvidencePackage["simulation"],
     });
 
-    expect(status.isFullySupported).toBe(false);
-    expect(status.badgeText).toBe("Partial");
-    expect(status.helperText).toContain("consensus envelope checks");
+    expect(status.isFullySupported).toBe(true);
+    expect(status.badgeText).toBe("Full");
+    expect(status.helperText).toBeNull();
   });
 
   it("returns full support for holesky when package includes consensus and simulation", () => {
@@ -101,7 +101,7 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.helperText).toContain("disabled by rollout feature flag");
   });
 
-  it("surfaces pending verifier reason instead of generic missing-proof text", () => {
+  it("surfaces legacy pending verifier reason in helper text", () => {
     const status = buildNetworkSupportStatus(
       makeEvidence(10, {
         consensusProof: false,
@@ -112,6 +112,6 @@ describe("buildNetworkSupportStatus", () => {
 
     expect(status.isFullySupported).toBe(false);
     expect(status.badgeText).toBe("Partial");
-    expect(status.helperText).toContain("full cryptographic consensus verification is still pending");
+    expect(status.helperText).toContain("legacy pending-verifier reason");
   });
 });

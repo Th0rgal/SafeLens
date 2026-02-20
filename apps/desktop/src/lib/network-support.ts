@@ -23,14 +23,14 @@ function getConsensusSupportReasonText(
   }
 
   if (exportReasons.includes("unsupported-consensus-mode")) {
-    return "Partially supported: this network's consensus verification mode is not implemented yet.";
+    return "Partially supported: this network's consensus verification mode is not supported in this build.";
   }
 
   if (
     exportReasons.includes("opstack-consensus-verifier-pending") ||
     exportReasons.includes("linea-consensus-verifier-pending")
   ) {
-    return "Partially supported: consensus envelope checks are available, but full cryptographic consensus verification is still pending.";
+    return "Partially supported: this package was exported with a legacy pending-verifier reason.";
   }
 
   return null;
@@ -50,7 +50,6 @@ export function buildNetworkSupportStatus(
   }
 
   const hasConsensusMode = Boolean(capability.consensusMode);
-  const hasFullConsensusVerification = Boolean(capability.consensus);
   const supportsSimulation = capability.supportsSimulation;
   const hasConsensusProof = Boolean(evidence.consensusProof);
   const hasSimulation = Boolean(evidence.simulation);
@@ -63,15 +62,15 @@ export function buildNetworkSupportStatus(
     );
   }
 
-  if (!supportsSimulation && hasConsensusMode && !hasFullConsensusVerification) {
-    return partial(
-      "Partially supported: simulation is unavailable, and only consensus envelope checks are available (full cryptographic consensus verification is pending)."
-    );
-  }
-
   if (!supportsSimulation) {
     return partial(
       "Partially supported: full simulation is not available on this network."
+    );
+  }
+
+  if (!hasConsensusMode) {
+    return partial(
+      "Partially supported: consensus verification is not available on this network."
     );
   }
 
@@ -91,21 +90,9 @@ export function buildNetworkSupportStatus(
     );
   }
 
-  if (!hasFullConsensusVerification && hasConsensusMode) {
-    return partial(
-      "Partially supported: consensus envelope checks are available, but full cryptographic consensus verification is not available on this network yet."
-    );
-  }
-
-  if (hasFullConsensusVerification) {
-    return {
-      isFullySupported: true,
-      badgeText: "Full",
-      helperText: null,
-    };
-  }
-
-  return partial(
-    "Partially supported: consensus verification is not available on this network."
-  );
+  return {
+    isFullySupported: true,
+    badgeText: "Full",
+    helperText: null,
+  };
 }

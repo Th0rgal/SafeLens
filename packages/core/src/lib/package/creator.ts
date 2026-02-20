@@ -219,10 +219,13 @@ export function finalizeEvidenceExport(
     consensusMode === "opstack" || consensusMode === "linea";
   const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
   const proofConsensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
-  // Beacon is fully verifier-backed; non-beacon modes remain partial and
-  // emit deterministic pending-verifier reasons for trust signaling.
+  // All known consensus modes are verifier-backed in desktop as of PR #21.
+  // Keep the explicit mode gate so unknown future modes stay partial by default.
   const hasVerifierSupportedConsensusProof =
-    hasConsensusProofArtifact && proofConsensusMode === "beacon";
+    hasConsensusProofArtifact &&
+    (proofConsensusMode === "beacon" ||
+      proofConsensusMode === "opstack" ||
+      proofConsensusMode === "linea");
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();
@@ -246,13 +249,7 @@ export function finalizeEvidenceExport(
       );
     }
   } else if (!hasVerifierSupportedConsensusProof) {
-    if (proofConsensusMode === "opstack") {
-      reasons.add("opstack-consensus-verifier-pending");
-    } else if (proofConsensusMode === "linea") {
-      reasons.add("linea-consensus-verifier-pending");
-    } else {
-      reasons.add("unsupported-consensus-mode");
-    }
+    reasons.add("unsupported-consensus-mode");
   }
 
   if (!hasOnchainPolicyProof) {

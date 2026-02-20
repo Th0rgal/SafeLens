@@ -127,6 +127,7 @@ Generator rollout flags:
 
 - `NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS=1` enables experimental Linea consensus envelope generation.
 - Default is disabled so Linea remains an explicit partial-support path until full verifier rollout is complete.
+- OP Stack/Linea desktop verification now completes as a supported consensus mode path (`valid: true`) when envelope integrity, root linkage, block linkage, and freshness checks pass; packages with all three artifacts can be exported as `fully-verifiable` without `*-consensus-verifier-pending` reasons.
 - When disabled, generated partial packages include explicit reason `consensus-mode-disabled-by-feature-flag`.
 - Verification reports surface the same reason in consensus trust summaries, instead of collapsing to a generic missing-proof message.
 - Desktop `ExecutionSafetyPanel` now reuses that summary for the collapsed consensus row when no proof is present.

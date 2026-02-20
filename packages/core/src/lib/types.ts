@@ -169,9 +169,8 @@ const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
 });
 
 // Non-beacon proof envelope used by OP Stack and Linea integration paths.
-// Desktop verifier currently runs deterministic envelope integrity checks for
-// these modes and emits mode-specific pending codes until cryptographic
-// verifiers are implemented.
+// Desktop verifier runs deterministic envelope integrity/root-linkage checks
+// for these modes and reports mode-specific consensus trust sources.
 const nonBeaconConsensusProofSchema = consensusProofBaseSchema
   .extend({
     consensusMode: z.union([z.literal("opstack"), z.literal("linea")]),
