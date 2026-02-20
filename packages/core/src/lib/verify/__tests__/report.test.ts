@@ -645,6 +645,38 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
   });
 
+  it("maps explicit invalid-proof-payload error code to deterministic trust reason", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: null,
+        verified_block_number: null,
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: "proofPayload.schema is missing or not a string.",
+        error_code: "invalid-proof-payload",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe("invalid-proof-payload");
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain(
+      "payload is malformed or failed integrity validation"
+    );
+  });
+
   it("maps explicit unsupported-network error code to deterministic trust reason", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

@@ -20,6 +20,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "stale-consensus-envelope",
   // Consensus envelope did not use a finalized execution header.
   "non-finalized-consensus-envelope",
+  // Consensus envelope payload is malformed or fails structural integrity checks.
+  "invalid-proof-payload",
   // Required payload artifacts are missing.
   "missing-consensus-or-policy-proof",
   // Verifier did not emit required root+block outputs.
@@ -56,6 +58,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "consensus envelope timestamp is stale relative to package time",
   "non-finalized-consensus-envelope":
     "consensus envelope did not use a finalized execution header",
+  "invalid-proof-payload":
+    "consensus envelope payload is malformed or failed integrity validation",
   "missing-consensus-or-policy-proof":
     "required consensus or on-chain policy proof is missing",
   "missing-verified-root-or-block":

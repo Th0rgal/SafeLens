@@ -174,6 +174,12 @@ function evaluateConsensusTrustDecision(
       reason: "non-finalized-consensus-envelope",
     };
   }
+  if (consensusVerification?.error_code === "invalid-proof-payload") {
+    return {
+      trusted: false,
+      reason: "invalid-proof-payload",
+    };
+  }
   if (
     consensusVerification &&
     !consensusVerification.state_root_matches &&
