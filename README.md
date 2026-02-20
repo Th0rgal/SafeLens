@@ -160,6 +160,7 @@ Generator rollout flags:
 - Linea stale-envelope handling is now regression-locked in both core trust mapping and desktop `ExecutionSafetyPanel` warning copy (`stale-consensus-envelope`) to keep `#20` stale semantics deterministic end-to-end.
 - Execution-envelope consensus fetch now validates RPC header fields (`hash`, `parentHash`, `stateRoot`) as strict 32-byte hex before packaging, with direct core regressions to keep malformed upstream payload handling deterministic for OP Stack/Linea.
 - Core consensus routing tests now explicitly pin `holesky` and `hoodi` to the Beacon fetch path (not execution-envelope fetchers) to keep `#18` support deterministic.
+- Package export-contract regressions now also pin OP Stack Base (`chainId 8453`) to the same deterministic non-beacon partial reasons used by OP Mainnet/Linea (`opstack-consensus-verifier-pending` with artifacts present, `missing-consensus-proof` when RPC is omitted).
 - Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
 - Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.

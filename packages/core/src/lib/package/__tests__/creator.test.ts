@@ -228,6 +228,12 @@ describe("finalizeEvidenceExport", () => {
       pendingReason: "opstack-consensus-verifier-pending" as const,
     },
     {
+      chainId: 8453,
+      consensusMode: "opstack" as const,
+      network: "base" as const,
+      pendingReason: "opstack-consensus-verifier-pending" as const,
+    },
+    {
       chainId: 59144,
       consensusMode: "linea" as const,
       network: "linea" as const,
@@ -303,6 +309,7 @@ describe("finalizeEvidenceExport", () => {
 
   it.each([
     { chainId: 10, label: "opstack" },
+    { chainId: 8453, label: "base-opstack" },
     { chainId: 59144, label: "linea" },
   ])(
     "does not mark consensus fetch failure for $label chains when rpc was not provided",
