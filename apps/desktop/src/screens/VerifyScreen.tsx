@@ -16,7 +16,12 @@ import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/lib/safety-checks";
+import {
+  buildSafetyAttentionItems,
+  classifyConsensusStatus,
+  type SafetyCheck,
+  type SafetyStatus,
+} from "@/lib/safety-checks";
 import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
 import { buildConsensusDetailRows } from "@/lib/consensus-details";
@@ -753,6 +758,7 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.packagedAt
   );
+  const attentionItems = buildSafetyAttentionItems(checks, networkSupport, 3);
   const passedChecks = checks.filter((check) => check.status === "check").length;
   const warningChecks = checks.filter((check) => check.status === "warning").length;
   const errorChecks = checks.filter((check) => check.status === "error").length;
@@ -784,6 +790,21 @@ function ExecutionSafetyPanel({
         {!hashMatch && (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
             Safe transaction hash mismatch detected. Treat this package as unsafe.
+          </div>
+        )}
+        {!showDetails && attentionItems.length > 0 && (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            <div className="font-medium text-amber-200">Attention needed</div>
+            <ul className="mt-1 list-disc space-y-1 pl-4">
+              {attentionItems.map((item) => (
+                <li key={item.id}>
+                  {item.detail}
+                  {item.reasonCode && (
+                    <span className="text-amber-200"> (Reason code: {item.reasonCode})</span>
+                  )}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {checks.map((check) => {
@@ -826,7 +847,9 @@ function ExecutionSafetyPanel({
             >
               {networkSupport.badgeText}
             </span>
-            {networkSupport.helperText && <span className="text-amber-300">{networkSupport.helperText}</span>}
+            {showDetails && networkSupport.helperText && (
+              <span className="text-amber-300">{networkSupport.helperText}</span>
+            )}
           </div>
         )}
         {showDetails && consensusDetails.length > 0 && (

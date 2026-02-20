@@ -175,6 +175,7 @@ Generator rollout flags:
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
 - Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.
 - `ExecutionSafetyPanel` verdict copy now avoids ambiguous "safe/verified" phrasing (`Manual review required` / `No critical issues found`), includes a per-package checks summary counter, and labels missing desktop consensus output as `Unavailable in this session` instead of `Running`.
+- `ExecutionSafetyPanel` collapsed view now surfaces a prioritized `Attention needed` summary (errors/warnings first, explicit reason codes, deduped against network-support helper text), while detailed helper text remains in expanded view to reduce repeated partial-support copy.
 
 ### Cleanup
 

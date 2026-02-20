@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
-import { classifyConsensusStatus } from "../src/lib/safety-checks";
+import {
+  buildSafetyAttentionItems,
+  classifyConsensusStatus,
+  type SafetyCheck,
+} from "../src/lib/safety-checks";
 
 function makeEvidence(consensusMode?: "beacon" | "opstack" | "linea"): EvidencePackage {
   if (!consensusMode) {
@@ -278,5 +282,89 @@ describe("classifyConsensusStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toContain("Linea");
     expect(status.detail).toContain("not equivalent to Beacon finality");
+  });
+});
+
+describe("buildSafetyAttentionItems", () => {
+  it("prioritizes errors over warnings and includes partial-support helper text", () => {
+    const checks: SafetyCheck[] = [
+      {
+        id: "policy-authentic",
+        label: "Policy is authentic",
+        status: "warning",
+        detail: "Policy proof verification is unavailable in this session.",
+      },
+      {
+        id: "chain-state-finalized",
+        label: "Chain state is finalized",
+        status: "error",
+        detail: "Consensus-verified state root does not match the package state root.",
+        reasonCode: "state-root-mismatch",
+      },
+      {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "check",
+        detail: "Simulation succeeded.",
+      },
+    ];
+
+    const items = buildSafetyAttentionItems(checks, {
+      isFullySupported: false,
+      helperText:
+        "Partially supported for this package: simulation was not performed.",
+    });
+
+    expect(items).toHaveLength(3);
+    expect(items[0].id).toBe("check-chain-state-finalized");
+    expect(items[0].reasonCode).toBe("state-root-mismatch");
+    expect(items[2].id).toBe("network-support");
+  });
+
+  it("deduplicates repeated warning text from checks and support helper", () => {
+    const sharedDetail =
+      "Partially supported for this package: no consensus proof was included.";
+    const checks: SafetyCheck[] = [
+      {
+        id: "chain-state-finalized",
+        label: "Chain state is finalized",
+        status: "warning",
+        detail: sharedDetail,
+      },
+    ];
+
+    const items = buildSafetyAttentionItems(checks, {
+      isFullySupported: false,
+      helperText: sharedDetail,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0].detail).toContain(sharedDetail);
+  });
+
+  it("respects maxItems cap", () => {
+    const checks: SafetyCheck[] = [
+      {
+        id: "a",
+        label: "A",
+        status: "warning",
+        detail: "A detail",
+      },
+      {
+        id: "b",
+        label: "B",
+        status: "warning",
+        detail: "B detail",
+      },
+      {
+        id: "c",
+        label: "C",
+        status: "warning",
+        detail: "C detail",
+      },
+    ];
+
+    const items = buildSafetyAttentionItems(checks, null, 2);
+    expect(items).toHaveLength(2);
   });
 });

@@ -15,6 +15,12 @@ export type SafetyCheck = {
   reasonCode?: string;
 };
 
+export type SafetyAttentionItem = {
+  id: string;
+  detail: string;
+  reasonCode?: string;
+};
+
 const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
   "consensus-mode-disabled-by-feature-flag":
     "Consensus verification for this mode is disabled in this build.",
@@ -188,4 +194,47 @@ export function classifyConsensusStatus(
     detail: getConsensusFailureDetail(consensusVerification, fallbackSummary),
     reasonCode: consensusVerification.error_code ?? undefined,
   };
+}
+
+type SafetyAttentionSupportStatus = {
+  isFullySupported: boolean;
+  helperText: string | null;
+};
+
+export function buildSafetyAttentionItems(
+  checks: SafetyCheck[],
+  supportStatus: SafetyAttentionSupportStatus | null,
+  maxItems = 3
+): SafetyAttentionItem[] {
+  const sortedChecks = [...checks].sort((left, right) => {
+    const leftRank = left.status === "error" ? 0 : left.status === "warning" ? 1 : 2;
+    const rightRank = right.status === "error" ? 0 : right.status === "warning" ? 1 : 2;
+    return leftRank - rightRank;
+  });
+
+  const items: Array<SafetyAttentionItem & { dedupeKey: string }> = sortedChecks
+    .filter((check) => check.status !== "check")
+    .map((check) => ({
+      id: `check-${check.id}`,
+      detail: `${check.label}: ${check.detail}`,
+      reasonCode: check.reasonCode,
+      dedupeKey: check.detail.trim().toLowerCase(),
+    }));
+
+  if (supportStatus && !supportStatus.isFullySupported && supportStatus.helperText) {
+    items.push({
+      id: "network-support",
+      detail: supportStatus.helperText,
+      dedupeKey: supportStatus.helperText.trim().toLowerCase(),
+    });
+  }
+
+  const deduped = items.filter((item, index, all) => {
+    return (
+      all.findIndex((candidate) => candidate.dedupeKey === item.dedupeKey) ===
+      index
+    );
+  });
+
+  return deduped.slice(0, Math.max(maxItems, 0)).map(({ dedupeKey: _dedupeKey, ...item }) => item);
 }
