@@ -4,6 +4,8 @@ import {
   fetchConsensusProof,
   UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
 } from "../index";
+import * as beaconApi from "../beacon-api";
+import * as executionApi from "../execution-api";
 
 describe("consensus mode routing", () => {
   afterEach(() => {
@@ -157,5 +159,67 @@ describe("consensus mode routing", () => {
     ).rejects.toThrow(
       "Execution consensus envelopes require blockTag='finalized'; received 'safe'."
     );
+  });
+
+  it("routes holesky through beacon consensus fetcher", async () => {
+    const beaconSpy = vi
+      .spyOn(beaconApi, "fetchConsensusProof")
+      .mockResolvedValue({
+        consensusMode: "beacon",
+        checkpoint: `0x${"a".repeat(64)}`,
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "holesky",
+        stateRoot: `0x${"b".repeat(64)}`,
+        blockNumber: 123,
+        finalizedSlot: 456,
+      });
+    const executionSpy = vi.spyOn(executionApi, "fetchExecutionConsensusProof");
+
+    const proof = await fetchConsensusProof(17000, {
+      beaconRpcUrl: "https://example.invalid/beacon",
+    });
+
+    expect(proof).toMatchObject({
+      consensusMode: "beacon",
+      network: "holesky",
+      blockNumber: 123,
+    });
+    expect(beaconSpy).toHaveBeenCalledWith(17000, {
+      beaconRpcUrl: "https://example.invalid/beacon",
+    });
+    expect(executionSpy).not.toHaveBeenCalled();
+  });
+
+  it("routes hoodi through beacon consensus fetcher", async () => {
+    const beaconSpy = vi
+      .spyOn(beaconApi, "fetchConsensusProof")
+      .mockResolvedValue({
+        consensusMode: "beacon",
+        checkpoint: `0x${"c".repeat(64)}`,
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "hoodi",
+        stateRoot: `0x${"d".repeat(64)}`,
+        blockNumber: 789,
+        finalizedSlot: 987,
+      });
+    const executionSpy = vi.spyOn(executionApi, "fetchExecutionConsensusProof");
+
+    const proof = await fetchConsensusProof(560048, {
+      beaconRpcUrl: "https://example.invalid/beacon",
+    });
+
+    expect(proof).toMatchObject({
+      consensusMode: "beacon",
+      network: "hoodi",
+      blockNumber: 789,
+    });
+    expect(beaconSpy).toHaveBeenCalledWith(560048, {
+      beaconRpcUrl: "https://example.invalid/beacon",
+    });
+    expect(executionSpy).not.toHaveBeenCalled();
   });
 });
