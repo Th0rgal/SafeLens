@@ -96,15 +96,33 @@ function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
 ): ConsensusTrustDecision {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+
   if (
     !evidence.consensusProof &&
-    evidence.exportContract?.reasons.includes(
-      "consensus-mode-disabled-by-feature-flag"
-    )
+    exportReasons.includes("consensus-mode-disabled-by-feature-flag")
   ) {
     return {
       trusted: false,
       reason: "consensus-mode-disabled-by-feature-flag",
+    };
+  }
+  if (
+    evidence.consensusProof?.consensusMode === "opstack" &&
+    exportReasons.includes("opstack-consensus-verifier-pending")
+  ) {
+    return {
+      trusted: false,
+      reason: "opstack-consensus-verifier-pending",
+    };
+  }
+  if (
+    evidence.consensusProof?.consensusMode === "linea" &&
+    exportReasons.includes("linea-consensus-verifier-pending")
+  ) {
+    return {
+      trusted: false,
+      reason: "linea-consensus-verifier-pending",
     };
   }
 

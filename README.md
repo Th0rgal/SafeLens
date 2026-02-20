@@ -130,6 +130,7 @@ Generator rollout flags:
 - When disabled, generated partial packages include explicit reason `consensus-mode-disabled-by-feature-flag`.
 - Verification reports surface the same reason in consensus trust summaries, instead of collapsing to a generic missing-proof message.
 - Desktop `ExecutionSafetyPanel` now reuses that summary for the collapsed consensus row when no proof is present.
+- OP Stack/Linea packages now preserve explicit `*-consensus-verifier-pending` trust reasons before desktop verification runs, avoiding generic "missing consensus result" messaging.
 - Beacon light-client fetch remains beacon-only; OP Stack/Linea are tracked as separate execution-envelope consensus modes.
 
 ### Cleanup

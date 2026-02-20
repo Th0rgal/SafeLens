@@ -14,6 +14,7 @@ import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
 
 type BeaconConsensusProof = Extract<ConsensusProof, { checkpoint: string }>;
+type ExecutionConsensusProof = Extract<ConsensusProof, { proofPayload: string }>;
 
 const VOID_SETTINGS: SettingsConfig = {
   version: "1.0",
@@ -133,6 +134,33 @@ function makeConsensusProof(
     blockNumber: makeOnchainProof().blockNumber,
     finalizedSlot: 12345,
     ...overrides,
+  };
+}
+
+function makeExecutionConsensusProof(
+  mode: "opstack" | "linea" = "opstack"
+): ExecutionConsensusProof {
+  const onchainProof = makeOnchainProof();
+  const chainId = mode === "opstack" ? 10 : 59144;
+
+  return {
+    consensusMode: mode,
+    network: mode === "opstack" ? "optimism" : "linea",
+    stateRoot: onchainProof.stateRoot,
+    blockNumber: onchainProof.blockNumber,
+    proofPayload: JSON.stringify({
+      schema: "execution-block-header-v1",
+      consensusMode: mode,
+      chainId,
+      blockTag: "finalized",
+      block: {
+        number: `0x${onchainProof.blockNumber.toString(16)}`,
+        hash: `0x${"b".repeat(64)}`,
+        parentHash: `0x${"c".repeat(64)}`,
+        stateRoot: onchainProof.stateRoot,
+        timestamp: "2026-01-01T00:00:00Z",
+      },
+    }),
   };
 }
 
@@ -296,6 +324,36 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain(
       "disabled by feature flag"
     );
+  });
+
+  it("uses explicit OP Stack pending reason before desktop consensus verification runs", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeExecutionConsensusProof("opstack"),
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: ["opstack-consensus-verifier-pending"] as ExportContractReason[],
+        artifacts: {
+          consensusProof: true,
+          onchainPolicyProof: true,
+          simulation: false,
+        },
+      },
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "opstack-consensus-verifier-pending"
+    );
+    const consensusSource = result.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain("OP Stack envelope checks passed");
   });
 
   it("fails policy proof when consensus proof root/block mismatches", async () => {
