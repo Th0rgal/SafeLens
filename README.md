@@ -142,6 +142,7 @@ Generator rollout flags:
 - Added explicit OP Stack `base` regression coverage in core generation and desktop verification tests to lock `chainId 8453 <-> network "base"` behavior.
 - Simulation results now include optional `blockTimestamp`; desktop `ExecutionSafetyPanel` freshness copy shows block time and age against local time when present.
 - Desktop network support badges are now package-aware: if a package omits simulation or consensus artifacts, `ExecutionSafetyPanel` shows `Partial` with explicit helper text instead of a capability-only `Full` label.
+- Desktop network support badges now also map consensus export reasons (`consensus-mode-disabled-by-feature-flag`, `unsupported-consensus-mode`, `*-consensus-verifier-pending`) to explicit partial-support helper text instead of generic missing-proof wording.
 - `ExecutionSafetyPanel` now maps known consensus verifier `error_code` values to concise, actionable trust text (with raw verifier text fallback for unknown codes) to keep warning/error messaging deterministic and user-focused.
 - `ExecutionSafetyPanel` expanded view now surfaces machine-readable reason codes for warning/error rows, preserving deterministic trust semantics alongside concise user-facing text.
 - Missing-consensus warning rows now also expose deterministic export reason codes/details (for example `consensus-mode-disabled-by-feature-flag` and `consensus-proof-fetch-failed`) instead of falling back to generic copy.

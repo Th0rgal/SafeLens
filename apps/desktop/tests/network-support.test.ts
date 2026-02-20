@@ -4,8 +4,12 @@ import { buildNetworkSupportStatus } from "../src/lib/network-support";
 
 function makeEvidence(
   chainId: number,
-  options: { consensusProof?: boolean; simulation?: boolean } = {}
-): Pick<EvidencePackage, "chainId" | "consensusProof" | "simulation"> {
+  options: {
+    consensusProof?: boolean;
+    simulation?: boolean;
+    exportReasons?: NonNullable<EvidencePackage["exportContract"]>["reasons"];
+  } = {}
+): Pick<EvidencePackage, "chainId" | "consensusProof" | "simulation" | "exportContract"> {
   return {
     chainId,
     consensusProof: options.consensusProof
@@ -13,6 +17,9 @@ function makeEvidence(
       : undefined,
     simulation: options.simulation
       ? ({ simulationResult: { success: true } } as EvidencePackage["simulation"])
+      : undefined,
+    exportContract: options.exportReasons
+      ? ({ type: "partial", reasons: options.exportReasons } as EvidencePackage["exportContract"])
       : undefined,
   };
 }
@@ -58,5 +65,33 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.isFullySupported).toBe(false);
     expect(status.badgeText).toBe("Partial");
     expect(status.helperText).toContain("consensus envelope checks");
+  });
+
+  it("surfaces feature-flag-disabled consensus mode in helper text", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(59144, {
+        consensusProof: false,
+        simulation: true,
+        exportReasons: ["consensus-mode-disabled-by-feature-flag"],
+      })
+    );
+
+    expect(status.isFullySupported).toBe(false);
+    expect(status.badgeText).toBe("Partial");
+    expect(status.helperText).toContain("disabled by rollout feature flag");
+  });
+
+  it("surfaces pending verifier reason instead of generic missing-proof text", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(10, {
+        consensusProof: false,
+        simulation: true,
+        exportReasons: ["opstack-consensus-verifier-pending"],
+      })
+    );
+
+    expect(status.isFullySupported).toBe(false);
+    expect(status.badgeText).toBe("Partial");
+    expect(status.helperText).toContain("full cryptographic consensus verification is still pending");
   });
 });
