@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import type { ConsensusVerificationResult, EvidencePackage } from "@safelens/core";
+import type {
+  ConsensusMode,
+  ConsensusVerificationResult,
+  EvidencePackage,
+} from "@safelens/core";
 import {
   buildConsensusDetailRows,
   CONSENSUS_DETAIL_ROW_IDS,
@@ -52,6 +56,29 @@ describe("buildConsensusDetailRows", () => {
     expect(rows.find((row) => row.id === "consensus-assurance")?.value).toBe(
       "OP Stack consensus checks are not equivalent to Beacon light-client finality."
     );
+  });
+
+  it("renders the expected consensus mode label for each supported mode", () => {
+    const cases: Array<{ mode: ConsensusMode; expected: string }> = [
+      { mode: "beacon", expected: "Beacon" },
+      { mode: "opstack", expected: "OP Stack" },
+      { mode: "linea", expected: "Linea" },
+    ];
+
+    for (const testCase of cases) {
+      const rows = buildConsensusDetailRows(
+        {
+          consensusProof: {
+            consensusMode: testCase.mode,
+          } as EvidencePackage["consensusProof"],
+        },
+        makeVerification({})
+      );
+
+      expect(rows.find((row) => row.id === "consensus-mode")?.value).toBe(
+        testCase.expected
+      );
+    }
   });
 
   it("includes non-equivalence assurance row for Linea mode", () => {

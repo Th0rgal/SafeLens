@@ -22,34 +22,31 @@ export type ConsensusDetailRow = {
   monospace?: boolean;
 };
 
-function assertUnreachableConsensusMode(mode: never): never {
-  throw new Error(`Unhandled consensus mode: ${String(mode)}`);
-}
-
-function getConsensusModeLabel(mode: ConsensusMode): string {
-  switch (mode) {
-    case "beacon":
-      return "Beacon";
-    case "opstack":
-      return "OP Stack";
-    case "linea":
-      return "Linea";
+const CONSENSUS_MODE_METADATA = {
+  beacon: {
+    label: "Beacon",
+    assuranceNotice: null,
+  },
+  opstack: {
+    label: "OP Stack",
+    assuranceNotice:
+      "OP Stack consensus checks are not equivalent to Beacon light-client finality.",
+  },
+  linea: {
+    label: "Linea",
+    assuranceNotice:
+      "Linea consensus checks are not equivalent to Beacon light-client finality.",
+  },
+} as const satisfies Record<
+  ConsensusMode,
+  {
+    label: string;
+    assuranceNotice: string | null;
   }
+>;
 
-  return assertUnreachableConsensusMode(mode);
-}
-
-function getAssuranceNotice(mode: ConsensusMode): string | null {
-  switch (mode) {
-    case "beacon":
-      return null;
-    case "opstack":
-      return "OP Stack consensus checks are not equivalent to Beacon light-client finality.";
-    case "linea":
-      return "Linea consensus checks are not equivalent to Beacon light-client finality.";
-  }
-
-  return assertUnreachableConsensusMode(mode);
+function getConsensusModeMetadata(mode: ConsensusMode) {
+  return CONSENSUS_MODE_METADATA[mode];
 }
 
 function isUnverifiedNonBeaconConsensus(
@@ -69,14 +66,15 @@ export function buildConsensusDetailRows(
   }
 
   const consensusMode = evidence.consensusProof.consensusMode ?? "beacon";
+  const { label: consensusModeLabel, assuranceNotice } =
+    getConsensusModeMetadata(consensusMode);
   const rows: ConsensusDetailRow[] = [
     {
       id: "consensus-mode",
       label: "Consensus mode",
-      value: getConsensusModeLabel(consensusMode),
+      value: consensusModeLabel,
     },
   ];
-  const assuranceNotice = getAssuranceNotice(consensusMode);
   if (assuranceNotice) {
     rows.push({
       id: "consensus-assurance",
