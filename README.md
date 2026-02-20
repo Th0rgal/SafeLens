@@ -129,6 +129,7 @@ Generator rollout flags:
 - Default is disabled so Linea remains an explicit partial-support path until full verifier rollout is complete.
 - When disabled, generated partial packages include explicit reason `consensus-mode-disabled-by-feature-flag`.
 - Verification reports surface the same reason in consensus trust summaries, instead of collapsing to a generic missing-proof message.
+- Desktop `ExecutionSafetyPanel` now reuses that summary for the collapsed consensus row when no proof is present.
 
 ### Cleanup
 

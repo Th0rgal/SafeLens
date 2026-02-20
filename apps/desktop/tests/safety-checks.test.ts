@@ -32,6 +32,12 @@ describe("classifyConsensusStatus", () => {
   it("returns warning when no consensus proof is included", () => {
     const status = classifyConsensusStatus(makeEvidence(), undefined, "fallback summary");
     expect(status.status).toBe("warning");
+    expect(status.detail).toBe("fallback summary");
+  });
+
+  it("falls back to default no-proof detail when summary is empty", () => {
+    const status = classifyConsensusStatus(makeEvidence(), undefined, "");
+    expect(status.status).toBe("warning");
     expect(status.detail).toContain("No consensus proof");
   });
 

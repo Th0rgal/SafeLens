@@ -10,6 +10,7 @@ export type SafetyCheck = {
 };
 
 const WARNING_CONSENSUS_ERROR_CODES = new Set([
+  "consensus-mode-disabled-by-feature-flag",
   "unsupported-consensus-mode",
   "unsupported-network",
   "opstack-consensus-verifier-pending",
@@ -49,7 +50,10 @@ export function classifyConsensusStatus(
       id: "chain-state-finalized",
       label: "Chain state is finalized",
       status: "warning",
-      detail: "No consensus proof was included in this evidence package.",
+      detail:
+        fallbackSummary.trim().length > 0
+          ? fallbackSummary
+          : "No consensus proof was included in this evidence package.",
     };
   }
 
