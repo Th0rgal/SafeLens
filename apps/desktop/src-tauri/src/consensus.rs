@@ -759,9 +759,12 @@ fn verify_execution_envelope(
         )),
     });
     if !package_root_matches {
-        return fail_result(
+        return fail_result_with_context(
             ERR_ENVELOPE_STATE_ROOT_MISMATCH,
             "Envelope state root does not match package consensusProof.stateRoot.".into(),
+            checks,
+            envelope_state_root,
+            envelope_block_number,
         );
     }
 
@@ -776,9 +779,12 @@ fn verify_execution_envelope(
         )),
     });
     if !package_block_matches {
-        return fail_result(
+        return fail_result_with_context(
             ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH,
             "Envelope block number does not match package consensusProof.blockNumber.".into(),
+            checks,
+            envelope_state_root,
+            envelope_block_number,
         );
     }
 
@@ -836,17 +842,7 @@ fn verify_execution_envelope(
         Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
     };
 
-    if packaged_at < envelope_block_timestamp {
-        return fail_result(
-            ERR_INVALID_PROOF_PAYLOAD,
-            format!(
-                "packagePackagedAt ({}) is earlier than proofPayload.block.timestamp ({}).",
-                packaged_at_raw, envelope_block_timestamp_raw
-            ),
-        );
-    }
-
-    let age_seconds = packaged_at - envelope_block_timestamp;
+    let age_seconds = (packaged_at - envelope_block_timestamp).max(0);
     let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
     checks.push(ConsensusCheck {
         id: "envelope-freshness".into(),
@@ -1232,6 +1228,25 @@ fn fail_result(error_code: &str, error: String) -> ConsensusVerificationResult {
     }
 }
 
+fn fail_result_with_context(
+    error_code: &str,
+    error: String,
+    checks: Vec<ConsensusCheck>,
+    verified_state_root: String,
+    verified_block_number: u64,
+) -> ConsensusVerificationResult {
+    ConsensusVerificationResult {
+        valid: false,
+        verified_state_root: Some(verified_state_root),
+        verified_block_number: Some(verified_block_number),
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: Some(error),
+        error_code: Some(error_code.into()),
+        checks,
+    }
+}
+
 fn parse_b256(s: &str) -> Result<B256, String> {
     let s = s.strip_prefix("0x").unwrap_or(s);
     let bytes = hex::decode(s).map_err(|e| format!("hex decode: {}", e))?;
@@ -1267,8 +1282,8 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
-        ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_STATE_ROOT_MISMATCH,
-        ERR_ENVELOPE_NETWORK_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
+        ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_NETWORK_MISMATCH,
+        ERR_ENVELOPE_STATE_ROOT_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
         ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_STALE_CONSENSUS_ENVELOPE,
         ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
@@ -1739,6 +1754,15 @@ mod tests {
             result.error.as_deref(),
             Some("Envelope state root does not match package consensusProof.stateRoot.")
         );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && !check.passed));
     }
 
     #[test]
@@ -1771,6 +1795,15 @@ mod tests {
             result.error.as_deref(),
             Some("Envelope block number does not match package consensusProof.blockNumber.")
         );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-block-number" && !check.passed));
     }
 
     #[test]
@@ -1875,6 +1908,42 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_non_beacon_envelope_when_packaged_at_precedes_block_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2025-12-31T23:59:55Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && check.passed));
+        assert!(result.checks.iter().any(|check| {
+            check.id == "envelope-freshness"
+                && check
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("Age at packaging: 0s"))
+        }));
     }
 
     #[test]

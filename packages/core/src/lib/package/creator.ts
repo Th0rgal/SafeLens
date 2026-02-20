@@ -219,8 +219,6 @@ export function finalizeEvidenceExport(
   options: FinalizeExportContractOptions
 ): EvidencePackage {
   const consensusMode = getNetworkCapability(evidence.chainId)?.consensusMode;
-  const consensusFetchRequiresRpc =
-    consensusMode === "opstack" || consensusMode === "linea";
   const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
   const proofConsensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
   // All known consensus modes are verifier-backed in desktop as of PR #21.
@@ -241,10 +239,6 @@ export function finalizeEvidenceExport(
       reasons.add("consensus-mode-disabled-by-feature-flag");
     } else if (options.consensusProofUnsupportedMode) {
       reasons.add("unsupported-consensus-mode");
-    } else if (consensusFetchRequiresRpc && !options.rpcProvided) {
-      // For execution-envelope consensus modes, no RPC means enrichment was
-      // skipped by configuration rather than failing at runtime.
-      reasons.add("missing-consensus-proof");
     } else {
       reasons.add(
         options.consensusProofFailed

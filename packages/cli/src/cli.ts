@@ -494,7 +494,10 @@ async function runAnalyze(args: string[]) {
   if (rpcUrl) {
     onchainPolicyProofAttempted = true;
     try {
-      evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
+      evidence = await enrichWithOnchainProof(evidence, {
+        rpcUrl,
+        blockNumber: evidence.consensusProof?.blockNumber,
+      });
     } catch (err) {
       onchainPolicyProofFailed = true;
       console.error(

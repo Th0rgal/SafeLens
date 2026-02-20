@@ -315,7 +315,7 @@ describe("finalizeEvidenceExport", () => {
     { chainId: 8453, label: "base-opstack" },
     { chainId: 59144, label: "linea" },
   ])(
-    "does not mark consensus fetch failure for $label chains when rpc was not provided",
+    "marks consensus fetch failure for $label chains when enrichment was attempted and failed",
     ({ chainId }) => {
       const evidence = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
       const finalized = finalizeEvidenceExport(evidence, {
@@ -328,8 +328,8 @@ describe("finalizeEvidenceExport", () => {
         simulationFailed: false,
       });
 
-      expect(finalized.exportContract?.reasons).toContain("missing-consensus-proof");
-      expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+      expect(finalized.exportContract?.reasons).toContain("consensus-proof-fetch-failed");
+      expect(finalized.exportContract?.reasons).not.toContain("missing-consensus-proof");
       expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
     }
   );
