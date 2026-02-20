@@ -23,6 +23,7 @@ import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/
 import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
 import { buildConsensusDetailRows } from "@/lib/consensus-details";
+import { buildPolicyDetailRows } from "@/lib/policy-details";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -490,6 +491,7 @@ export default function VerifyScreen() {
             hashMatch={hashMatch}
             networkSupport={networkSupport}
             consensusVerification={consensusVerification}
+            policyProof={policyProof}
             showDetails={showSafetyDetails}
             onToggleDetails={() => setShowSafetyDetails((value) => !value)}
           />
@@ -657,51 +659,6 @@ export default function VerifyScreen() {
                   </div>
                 </CardContent>
               </Card>
-
-              {policyProof && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>On-Chain Policy Proof</CardTitle>
-                      <TrustBadge level={policyProof.valid ? "proof-verified" : "rpc-sourced"} />
-                    </div>
-                    <CardDescription>
-                      {policyProof.valid
-                        ? "All policy fields cryptographically verified against state root"
-                        : `Proof verification failed: ${policyProof.errors.length} error(s)`}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-1.5">
-                      {policyProof.checks.map((check) => (
-                        <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                          <span className="text-sm font-medium">{check.label}</span>
-                          <div className="flex items-center gap-2">
-                            {check.passed ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                                <ShieldCheck className="h-3 w-3" />
-                                Pass
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                                <AlertTriangle className="h-3 w-3" />
-                                Fail
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {policyProof.errors.length > 0 && (
-                      <div className="mt-3 space-y-1">
-                        {policyProof.errors.map((err, i) => (
-                          <div key={i} className="text-xs text-red-400">{err}</div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
 
               {simulationVerification ? (
                 <SimulationCard
@@ -970,6 +927,7 @@ function ExecutionSafetyPanel({
   hashMatch,
   networkSupport,
   consensusVerification,
+  policyProof,
   showDetails,
   onToggleDetails,
 }: {
@@ -978,6 +936,7 @@ function ExecutionSafetyPanel({
   hashMatch: boolean;
   networkSupport: NetworkSupportStatus | null;
   consensusVerification: ConsensusVerificationResult | undefined;
+  policyProof: PolicyProofVerificationResult | undefined;
   showDetails: boolean;
   onToggleDetails: () => void;
 }) {
@@ -997,6 +956,7 @@ function ExecutionSafetyPanel({
     evidence.packagedAt
   );
   const consensusDetails = buildConsensusDetailRows(evidence, consensusVerification);
+  const policyDetails = buildPolicyDetailRows(policyProof);
 
   return (
     <Card>
@@ -1065,6 +1025,19 @@ function ExecutionSafetyPanel({
                   <span className={item.monospace ? "max-w-[70%] break-all font-mono text-[11px]" : ""}>
                     {item.value}
                   </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {showDetails && (
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+            <div className="text-xs font-medium text-muted">Policy details</div>
+            <div className="mt-2 space-y-1.5">
+              {policyDetails.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                  <span className="text-muted">{item.label}</span>
+                  <span className="max-w-[70%] text-right">{item.value}</span>
                 </div>
               ))}
             </div>
