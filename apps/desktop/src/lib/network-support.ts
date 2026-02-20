@@ -18,15 +18,31 @@ function partial(helperText: string): NetworkSupportStatus {
   };
 }
 
-function getConsensusSupportReasonText(
-  exportReasons: ExportContractReason[]
-): string | null {
-  if (exportReasons.includes("consensus-mode-disabled-by-feature-flag")) {
-    return "Partially supported: consensus verification mode is disabled by rollout feature flag in this build.";
-  }
+const CONSENSUS_SUPPORT_REASON_PRIORITY = [
+  "consensus-mode-disabled-by-feature-flag",
+  "unsupported-consensus-mode",
+] as const satisfies readonly ExportContractReason[];
 
-  if (exportReasons.includes("unsupported-consensus-mode")) {
-    return "Partially supported: this network's consensus verification mode is not supported in this build.";
+type ConsensusSupportReasonCode =
+  (typeof CONSENSUS_SUPPORT_REASON_PRIORITY)[number];
+
+const CONSENSUS_SUPPORT_REASON_TEXT_BY_CODE: Record<
+  ConsensusSupportReasonCode,
+  string
+> = {
+  "consensus-mode-disabled-by-feature-flag":
+    "Partially supported: consensus verification mode is disabled by rollout feature flag in this build.",
+  "unsupported-consensus-mode":
+    "Partially supported: this network's consensus verification mode is not supported in this build.",
+};
+
+function getConsensusSupportReasonText(
+  exportReasons: readonly ExportContractReason[]
+): string | null {
+  for (const reasonCode of CONSENSUS_SUPPORT_REASON_PRIORITY) {
+    if (exportReasons.includes(reasonCode)) {
+      return CONSENSUS_SUPPORT_REASON_TEXT_BY_CODE[reasonCode];
+    }
   }
 
   if (findLegacyPendingConsensusExportReason(exportReasons)) {

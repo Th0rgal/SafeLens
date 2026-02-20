@@ -101,6 +101,24 @@ describe("buildNetworkSupportStatus", () => {
     expect(status.helperText).toContain("disabled by rollout feature flag");
   });
 
+  it("uses deterministic priority when multiple consensus support reasons are present", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(59144, {
+        consensusProof: false,
+        simulation: true,
+        exportReasons: [
+          "unsupported-consensus-mode",
+          "consensus-mode-disabled-by-feature-flag",
+        ],
+      })
+    );
+
+    expect(status.isFullySupported).toBe(false);
+    expect(status.badgeText).toBe("Partial");
+    expect(status.helperText).toContain("disabled by rollout feature flag");
+    expect(status.helperText).not.toContain("not supported in this build");
+  });
+
   it("surfaces legacy pending verifier reason in helper text", () => {
     const status = buildNetworkSupportStatus(
       makeEvidence(10, {
