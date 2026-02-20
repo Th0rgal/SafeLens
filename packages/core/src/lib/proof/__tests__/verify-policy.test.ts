@@ -310,6 +310,25 @@ describe("verifyPolicyProof end-to-end with real mainnet data", () => {
     expect(modulesCheck?.passed).toBe(true);
     expect(modulesCheck?.detail).toContain("sentinel");
   });
+
+  it("accepts compact quantity keys for direct storage slots", () => {
+    const proof = makeProof();
+    const compactSlotKeys = new Map<string, Hex>([
+      [slotToKey(SLOT_SINGLETON).toLowerCase(), "0x0" as Hex],
+      [slotToKey(SLOT_OWNER_COUNT).toLowerCase(), "0x3" as Hex],
+      [slotToKey(SLOT_THRESHOLD).toLowerCase(), "0x4" as Hex],
+      [slotToKey(SLOT_NONCE).toLowerCase(), "0x5" as Hex],
+    ]);
+
+    proof.accountProof.storageProof = proof.accountProof.storageProof.map((sp) => ({
+      ...sp,
+      key: compactSlotKeys.get(sp.key.toLowerCase()) ?? sp.key,
+    }));
+
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
 });
 
 describe("verifyPolicyProof rejects missing storage proof keys", () => {

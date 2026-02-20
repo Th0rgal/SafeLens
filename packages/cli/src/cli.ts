@@ -26,6 +26,7 @@ import {
   computeSafeTxHashDetailed,
   resolveAddress,
   setGlobalDescriptors,
+  decodeSimulationEvents,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -309,6 +310,52 @@ function printVerificationText(
   if (report.simulationVerification) {
     const sv = report.simulationVerification;
     const simRows: Array<[string, string]> = [];
+    const checksPassed = sv.checks.filter((check) => check.passed).length;
+
+    simRows.push([
+      "Simulation status",
+      sv.valid
+        ? sv.executionReverted
+          ? "Executed but reverted"
+          : "Executed successfully"
+        : "Verification failed",
+    ]);
+    simRows.push(["Simulation checks passed", `${checksPassed}/${sv.checks.length}`]);
+
+    if (evidence.simulation) {
+      simRows.push(["Gas used", code(evidence.simulation.gasUsed)]);
+      simRows.push(["Block", code(String(evidence.simulation.blockNumber))]);
+      if (evidence.simulation.blockTimestamp) {
+        simRows.push(["Block timestamp", evidence.simulation.blockTimestamp]);
+      }
+
+      const decodedEvents = decodeSimulationEvents(
+        evidence.simulation.logs ?? [],
+        evidence.safeAddress,
+        evidence.chainId
+      );
+      if (decodedEvents.length > 0) {
+        const transfersOut = decodedEvents.filter(
+          (event) => event.kind === "transfer" && event.direction === "send"
+        ).length;
+        const transfersIn = decodedEvents.filter(
+          (event) => event.kind === "transfer" && event.direction === "receive"
+        ).length;
+        const approvals = decodedEvents.filter((event) => event.kind === "approval").length;
+
+        simRows.push(["Token events", String(decodedEvents.length)]);
+        if (transfersOut > 0 || transfersIn > 0) {
+          simRows.push(["Token transfers", `${transfersOut} out, ${transfersIn} in`]);
+        }
+        if (approvals > 0) {
+          simRows.push(["Token approvals", String(approvals)]);
+        }
+      }
+    }
+
+    if (sv.errors.length > 0) {
+      simRows.push(["Verifier error", sv.errors[0]!]);
+    }
 
     for (const check of sv.checks) {
       const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");

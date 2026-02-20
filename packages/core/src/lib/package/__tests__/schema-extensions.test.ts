@@ -390,6 +390,24 @@ describe("onchain policy proof schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts compact storage slot keys and values from eth_getProof", () => {
+    const compact = {
+      ...MOCK_POLICY_PROOF,
+      accountProof: {
+        ...MOCK_POLICY_PROOF.accountProof,
+        storageProof: [
+          {
+            ...MOCK_POLICY_PROOF.accountProof.storageProof[0],
+            key: "0x4",
+            value: "0x2",
+          },
+        ],
+      },
+    };
+
+    expect(onchainPolicyProofSchema.safeParse(compact).success).toBe(true);
+  });
+
   it("rejects policy proof missing required fields", () => {
     const incomplete = { ...MOCK_POLICY_PROOF };
     delete (incomplete as Record<string, unknown>).decodedPolicy;

@@ -222,6 +222,30 @@ describe("CLI verify output", () => {
     // Sources of Truth section removed - not shown in app
   });
 
+  it("shows basic simulation preview fields in text output", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    evidence.simulation = {
+      success: true,
+      returnData: "0x",
+      gasUsed: "68000",
+      logs: [],
+      blockNumber: 19000000,
+      blockTimestamp: "2026-02-20T16:07:40.000Z",
+      trust: "rpc-sourced",
+    };
+    const evidencePath = path.join(tmpDir, "evidence-with-sim.json");
+
+    await writeFile(evidencePath, JSON.stringify(evidence, null, 2), "utf-8");
+    const result = runCli(["verify", "--file", evidencePath, "--no-settings"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Transaction Simulation");
+    expect(result.stdout).toContain("Simulation status");
+    expect(result.stdout).toContain("Simulation checks passed");
+    expect(result.stdout).toContain("Gas used");
+    expect(result.stdout).toContain("Block timestamp");
+  });
+
   it("prints sources documentation command", async () => {
     const result = runCli(["sources"]);
     expect(result.code).toBe(0);

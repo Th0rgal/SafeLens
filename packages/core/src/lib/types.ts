@@ -16,6 +16,19 @@ export const hexDataSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]*$/, "Invalid hex data");
 
+// Storage slot keys from eth_getProof may be compact quantities (e.g. 0x0)
+// or fully padded 32-byte words.
+export const storageSlotKeySchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]+$/, "Invalid storage slot key")
+  .refine((value) => value.length <= 66, "Invalid storage slot key");
+
+// Storage values in eth_getProof are quantities and may be compact.
+export const storageValueSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]*$/, "Invalid storage value")
+  .refine((value) => value.length <= 66, "Invalid storage value");
+
 // Safe transaction schema (from Safe API)
 export const safeTransactionSchema = z.object({
   safe: addressSchema,
@@ -83,8 +96,8 @@ export type ConsensusMode = z.infer<typeof consensusModeSchema>;
 
 // Storage proof for a single slot
 export const storageProofEntrySchema = z.object({
-  key: hashSchema,
-  value: hashSchema,
+  key: storageSlotKeySchema,
+  value: storageValueSchema,
   proof: z.array(hexDataSchema),
 });
 
