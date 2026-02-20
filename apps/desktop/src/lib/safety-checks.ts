@@ -7,6 +7,7 @@ export type SafetyCheck = {
   label: string;
   status: SafetyStatus;
   detail: string;
+  reasonCode?: string;
 };
 
 const WARNING_CONSENSUS_ERROR_CODES = new Set([
@@ -122,5 +123,6 @@ export function classifyConsensusStatus(
       ? "warning"
       : "error",
     detail: getConsensusFailureDetail(consensusVerification, fallbackSummary),
+    reasonCode: consensusVerification.error_code ?? undefined,
   };
 }

@@ -33,6 +33,7 @@ describe("classifyConsensusStatus", () => {
     const status = classifyConsensusStatus(makeEvidence(), undefined, "fallback summary");
     expect(status.status).toBe("warning");
     expect(status.detail).toBe("fallback summary");
+    expect(status.reasonCode).toBeUndefined();
   });
 
   it("falls back to default no-proof detail when summary is empty", () => {
@@ -55,6 +56,7 @@ describe("classifyConsensusStatus", () => {
     expect(status.detail).toBe(
       "Consensus verification is not available for this network/mode combination."
     );
+    expect(status.reasonCode).toBe("unsupported-network");
   });
 
   it("returns error for consensus mismatches", () => {
@@ -71,6 +73,7 @@ describe("classifyConsensusStatus", () => {
     expect(status.detail).toBe(
       "Consensus-verified state root does not match the package state root."
     );
+    expect(status.reasonCode).toBe("state-root-mismatch");
   });
 
   it("falls back to verifier error text for unknown error codes", () => {
@@ -85,6 +88,7 @@ describe("classifyConsensusStatus", () => {
     );
     expect(status.status).toBe("error");
     expect(status.detail).toBe("unexpected verifier edge case");
+    expect(status.reasonCode).toBe("some-new-error-code");
   });
 
   it("keeps OP Stack success wording explicit about non-equivalence", () => {

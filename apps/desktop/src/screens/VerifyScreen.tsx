@@ -94,11 +94,8 @@ function getConsensusModeDisplay(mode: string | undefined): ConsensusModeDisplay
 }
 
 function getSimulationUnavailableReason(evidence: EvidencePackage): string {
-  const exportReasons = evidence.exportContract?.reasons ?? [];
-  const matchedReason = SIMULATION_REASON_CODES.find((code) =>
-    exportReasons.includes(code)
-  );
-  if (matchedReason) return SIMULATION_REASON_LABELS[matchedReason];
+  const reasonCode = getSimulationUnavailableReasonCode(evidence);
+  if (reasonCode) return SIMULATION_REASON_LABELS[reasonCode];
 
   const capability = getNetworkCapability(evidence.chainId);
   if (capability && !capability.supportsSimulation) {
@@ -106,6 +103,16 @@ function getSimulationUnavailableReason(evidence: EvidencePackage): string {
   }
 
   return "No simulation result is available in this evidence package.";
+}
+
+function getSimulationUnavailableReasonCode(
+  evidence: EvidencePackage
+): SimulationReasonCode | null {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+  const matchedReason = SIMULATION_REASON_CODES.find((code) =>
+    exportReasons.includes(code)
+  );
+  return matchedReason ?? null;
 }
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
@@ -123,12 +130,17 @@ function classifyPolicyStatus(
   evidence: EvidencePackage,
   policyProof: PolicyProofVerificationResult | undefined
 ): SafetyCheck {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+
   if (!evidence.onchainPolicyProof) {
     return {
       id: "policy-authentic",
       label: "Policy is authentic",
       status: "warning",
       detail: "No on-chain policy proof was included in this evidence package.",
+      reasonCode: exportReasons.includes("missing-onchain-policy-proof")
+        ? "missing-onchain-policy-proof"
+        : undefined,
     };
   }
 
@@ -155,6 +167,7 @@ function classifyPolicyStatus(
     label: "Policy is authentic",
     status: "error",
     detail: policyProof.errors[0] ?? "Policy proof verification failed.",
+    reasonCode: "policy-proof-verification-failed",
   };
 }
 
@@ -163,11 +176,13 @@ function classifySimulationStatus(
   simulationVerification: SimulationVerificationResult | undefined
 ): SafetyCheck {
   if (!simulationVerification || !evidence.simulation) {
+    const reasonCode = getSimulationUnavailableReasonCode(evidence);
     return {
       id: "simulation-outcome",
       label: "Simulation outcome",
       status: "warning",
       detail: getSimulationUnavailableReason(evidence),
+      reasonCode: reasonCode ?? undefined,
     };
   }
 
@@ -179,6 +194,7 @@ function classifySimulationStatus(
       detail:
         simulationVerification.errors[0] ??
         "Simulation structure checks failed.",
+      reasonCode: "simulation-verification-failed",
     };
   }
 
@@ -188,6 +204,7 @@ function classifySimulationStatus(
       label: "Simulation outcome",
       status: "warning",
       detail: "Simulation ran but the transaction reverted.",
+      reasonCode: "simulation-execution-reverted",
     };
   }
 
@@ -1109,6 +1126,11 @@ function ExecutionSafetyPanel({
                 </span>
               </div>
               <div className={`mt-1 text-xs ${style.text}`}>{check.detail}</div>
+              {showDetails && check.status !== "check" && check.reasonCode && (
+                <div className="mt-1 text-[11px] text-muted">
+                  Reason code: <code>{check.reasonCode}</code>
+                </div>
+              )}
             </div>
           );
         })}
