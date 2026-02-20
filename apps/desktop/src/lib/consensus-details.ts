@@ -18,6 +18,17 @@ function getConsensusModeLabel(mode: string | undefined): string {
   }
 }
 
+function getAssuranceNotice(mode: string | undefined): string | null {
+  switch (mode) {
+    case "opstack":
+      return "OP Stack consensus checks are not equivalent to Beacon light-client finality.";
+    case "linea":
+      return "Linea consensus checks are not equivalent to Beacon light-client finality.";
+    default:
+      return null;
+  }
+}
+
 function isUnverifiedNonBeaconConsensus(
   evidence: Pick<EvidencePackage, "consensusProof">,
   consensusVerification: ConsensusVerificationResult
@@ -41,6 +52,14 @@ export function buildConsensusDetailRows(
       value: getConsensusModeLabel(evidence.consensusProof.consensusMode),
     },
   ];
+  const assuranceNotice = getAssuranceNotice(evidence.consensusProof.consensusMode);
+  if (assuranceNotice) {
+    rows.push({
+      id: "consensus-assurance",
+      label: "Assurance",
+      value: assuranceNotice,
+    });
+  }
 
   if (!consensusVerification) {
     rows.push({

@@ -36,6 +36,37 @@ describe("buildConsensusDetailRows", () => {
     ]);
   });
 
+  it("includes non-equivalence assurance row for OP Stack mode", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"] },
+      makeVerification({})
+    );
+
+    expect(rows.find((row) => row.id === "consensus-assurance")?.value).toBe(
+      "OP Stack consensus checks are not equivalent to Beacon light-client finality."
+    );
+  });
+
+  it("includes non-equivalence assurance row for Linea mode", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "linea" } as EvidencePackage["consensusProof"] },
+      makeVerification({})
+    );
+
+    expect(rows.find((row) => row.id === "consensus-assurance")?.value).toBe(
+      "Linea consensus checks are not equivalent to Beacon light-client finality."
+    );
+  });
+
+  it("does not include non-equivalence assurance row for Beacon mode", () => {
+    const rows = buildConsensusDetailRows(
+      { consensusProof: { consensusMode: "beacon" } as EvidencePackage["consensusProof"] },
+      makeVerification({})
+    );
+
+    expect(rows.find((row) => row.id === "consensus-assurance")).toBeUndefined();
+  });
+
   it("includes finalized block and state root rows when available", () => {
     const rows = buildConsensusDetailRows(
       { consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"] },
@@ -47,10 +78,11 @@ describe("buildConsensusDetailRows", () => {
 
     expect(rows.map((row) => row.id)).toEqual([
       "consensus-mode",
+      "consensus-assurance",
       "consensus-finalized-block",
       "consensus-state-root",
     ]);
-    expect(rows[2]?.monospace).toBe(true);
+    expect(rows.find((row) => row.id === "consensus-state-root")?.monospace).toBe(true);
   });
 
   it("uses envelope labels for unverified OP Stack consensus rows", () => {
