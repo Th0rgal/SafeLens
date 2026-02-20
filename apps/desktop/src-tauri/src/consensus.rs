@@ -748,14 +748,27 @@ fn verify_execution_envelope(
             Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
         };
 
-    let package_root_matches = envelope_state_root.eq_ignore_ascii_case(&input.state_root);
+    let package_state_root = match parse_b256(&input.state_root) {
+        Ok(root) => format!("{:#x}", root),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!(
+                    "Invalid state root from package consensusProof.stateRoot: {}",
+                    error
+                ),
+            )
+        }
+    };
+
+    let package_root_matches = envelope_state_root.eq_ignore_ascii_case(&package_state_root);
     checks.push(ConsensusCheck {
         id: "envelope-state-root".into(),
         label: "Envelope state root matches package consensusProof.stateRoot".into(),
         passed: package_root_matches,
         detail: Some(format!(
             "Envelope: {}, package: {}",
-            envelope_state_root, input.state_root
+            envelope_state_root, package_state_root
         )),
     });
     if !package_root_matches {
@@ -1763,6 +1776,35 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-state-root" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_non_beacon_envelope_when_package_state_root_has_no_0x_prefix() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && check.passed));
     }
 
     #[test]
