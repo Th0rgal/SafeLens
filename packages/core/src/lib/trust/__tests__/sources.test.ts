@@ -185,6 +185,28 @@ describe("buildVerificationSources", () => {
     );
   });
 
+  it("surfaces feature-flag-disabled consensus omission when no consensus proof is included", () => {
+    const reason = "consensus-mode-disabled-by-feature-flag" as const;
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+      consensusVerified: false,
+      consensusTrustDecisionReason: reason,
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
+    expect(consensusSource?.detail).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
+  });
+
   it("uses mode-aware wording for unverified OP Stack consensus proofs", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,

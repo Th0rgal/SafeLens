@@ -3,7 +3,12 @@ import { applyConsensusVerificationToReport, verifyEvidencePackage } from "..";
 import { createEvidencePackage } from "../../package/creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { SettingsConfig } from "../../settings/types";
-import type { ConsensusProof, OnchainPolicyProof, Simulation } from "../../types";
+import type {
+  ConsensusProof,
+  ExportContractReason,
+  OnchainPolicyProof,
+  Simulation,
+} from "../../types";
 import { VERIFICATION_SOURCE_IDS } from "../../trust/sources";
 import type { Address, Hex } from "viem";
 import proofFixture from "../../proof/__tests__/fixtures/safe-policy-proof.json";
@@ -258,6 +263,38 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     const result = await verifyEvidencePackage(enriched);
     expect(result.consensusTrustDecisionReason).toBe(
       "missing-consensus-or-policy-proof"
+    );
+  });
+
+  it("uses explicit feature-flag-disabled reason when consensus proof was intentionally omitted", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: [
+          "consensus-mode-disabled-by-feature-flag",
+        ] as ExportContractReason[],
+        artifacts: {
+          consensusProof: false,
+          onchainPolicyProof: false,
+          simulation: false,
+        },
+      },
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "consensus-mode-disabled-by-feature-flag"
+    );
+    const consensusSource = result.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain(
+      "disabled by feature flag"
     );
   });
 

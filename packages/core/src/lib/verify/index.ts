@@ -96,6 +96,18 @@ function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
 ): ConsensusTrustDecision {
+  if (
+    !evidence.consensusProof &&
+    evidence.exportContract?.reasons.includes(
+      "consensus-mode-disabled-by-feature-flag"
+    )
+  ) {
+    return {
+      trusted: false,
+      reason: "consensus-mode-disabled-by-feature-flag",
+    };
+  }
+
   if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
     return {
       trusted: false,
@@ -383,9 +395,7 @@ export async function verifyEvidencePackage(
     simulationVerification = verifySimulation(evidence.simulation);
   }
 
-  const consensusDecision = evidence.consensusProof
-    ? evaluateConsensusTrustDecision(evidence)
-    : { trusted: false, reason: undefined };
+  const consensusDecision = evaluateConsensusTrustDecision(evidence);
 
   return {
     proposer,

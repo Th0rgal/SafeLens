@@ -5,6 +5,8 @@
  * logic and report/rendering surfaces. Keep them machine-readable and stable.
  */
 export const CONSENSUS_TRUST_DECISION_REASONS = [
+  // Consensus mode rollout is intentionally disabled by feature flag.
+  "consensus-mode-disabled-by-feature-flag",
   // Consensus mode is unknown to the desktop verifier.
   "unsupported-consensus-mode",
   // Consensus mode is known, but envelope chain is outside supported rollout scope.
@@ -38,6 +40,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
   Exclude<ConsensusTrustDecisionReason, null>,
   string
 > = {
+  "consensus-mode-disabled-by-feature-flag":
+    "consensus mode rollout is currently disabled by feature flag",
   "unsupported-consensus-mode":
     "consensus mode is not supported by the desktop verifier",
   "unsupported-network":

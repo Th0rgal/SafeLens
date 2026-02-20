@@ -302,9 +302,12 @@ export function buildVerificationSources(
           id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
           title: "Consensus verification",
           trust: "rpc-sourced" as TrustLevel,
-          summary: "No consensus proof included. State root is RPC-trusted.",
-          detail:
-            "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
+          summary: consensusFailureReason
+            ? `No consensus proof included (${consensusFailureReason}). State root is RPC-trusted.`
+            : "No consensus proof included. State root is RPC-trusted.",
+          detail: consensusFailureReason
+            ? `Consensus proof was omitted because ${consensusFailureReason}. State root in policy proofs remains trusted from the RPC provider.`
+            : "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
           status: "disabled" as VerificationSourceStatus,
         },
     context.hasSettings
