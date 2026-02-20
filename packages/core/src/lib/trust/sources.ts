@@ -7,6 +7,36 @@ import type { ConsensusMode } from "../types";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
 
+interface ConsensusSourceMetadata {
+  name: string;
+  verificationType: string;
+  verifiedTrust: TrustLevel;
+  assuranceBoundary?: string;
+}
+
+const CONSENSUS_SOURCE_METADATA_BY_MODE = {
+  beacon: {
+    name: "Beacon",
+    verificationType: "BLS sync committee signatures",
+    verifiedTrust: "consensus-verified-beacon",
+    assuranceBoundary: undefined,
+  },
+  opstack: {
+    name: "OP Stack",
+    verificationType: "rollup consensus commitments",
+    verifiedTrust: "consensus-verified-opstack",
+    assuranceBoundary:
+      "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+  },
+  linea: {
+    name: "Linea",
+    verificationType: "chain-specific consensus attestations",
+    verifiedTrust: "consensus-verified-linea",
+    assuranceBoundary:
+      "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+  },
+} satisfies Record<ConsensusMode, ConsensusSourceMetadata>;
+
 export const GENERATION_SOURCE_IDS = {
   SAFE_URL_INPUT: "safe-url-input",
   SAFE_API_RESPONSE: "safe-api-response",
@@ -131,33 +161,9 @@ export function buildVerificationSources(
     context.consensusTrustDecisionReason
   );
   const consensusMode = context.consensusMode ?? "beacon";
-  const consensusDisplayByMode: Record<ConsensusMode, { name: string; verificationType: string }> = {
-    beacon: {
-      name: "Beacon",
-      verificationType: "BLS sync committee signatures",
-    },
-    opstack: {
-      name: "OP Stack",
-      verificationType: "rollup consensus commitments",
-    },
-    linea: {
-      name: "Linea",
-      verificationType: "chain-specific consensus attestations",
-    },
-  };
-  const consensusAssuranceBoundaryByMode: Partial<Record<ConsensusMode, string>> = {
-    opstack: "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
-    linea: "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
-  };
-  const consensusDisplay = consensusDisplayByMode[consensusMode];
-  const consensusVerifiedTrustByMode: Record<ConsensusMode, TrustLevel> = {
-    beacon: "consensus-verified-beacon",
-    opstack: "consensus-verified-opstack",
-    linea: "consensus-verified-linea",
-  };
-  const verifiedConsensusTrust =
-    consensusVerifiedTrustByMode[consensusMode] ?? "consensus-verified";
-  const assuranceBoundary = consensusAssuranceBoundaryByMode[consensusMode];
+  const consensusMetadata = CONSENSUS_SOURCE_METADATA_BY_MODE[consensusMode];
+  const verifiedConsensusTrust = consensusMetadata.verifiedTrust;
+  const assuranceBoundary = consensusMetadata.assuranceBoundary;
 
   return [
     {
@@ -293,18 +299,18 @@ export function buildVerificationSources(
           trust: context.consensusVerified ? verifiedConsensusTrust : ("rpc-sourced" as TrustLevel),
           summary: context.consensusVerified
             ? assuranceBoundary
-              ? `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}. ${assuranceBoundary}`
-              : `State root verified against ${consensusDisplay.name} consensus via ${consensusDisplay.verificationType}.`
+              ? `State root verified against ${consensusMetadata.name} consensus via ${consensusMetadata.verificationType}. ${assuranceBoundary}`
+              : `State root verified against ${consensusMetadata.name} consensus via ${consensusMetadata.verificationType}.`
             : consensusFailureReason
               ? `Consensus proof included but not yet verified (${consensusFailureReason}).`
-              : `Consensus proof (${consensusDisplay.name}) included but not yet verified (requires desktop app).`,
+              : `Consensus proof (${consensusMetadata.name}) included but not yet verified (requires desktop app).`,
           detail: context.consensusVerified
             ? assuranceBoundary
-              ? `The state root used in policy proofs has been cryptographically verified against ${consensusDisplay.name} consensus data. ${assuranceBoundary}`
-              : `The state root used in policy proofs has been cryptographically verified against ${consensusDisplay.name} consensus data.`
+              ? `The state root used in policy proofs has been cryptographically verified against ${consensusMetadata.name} consensus data. ${assuranceBoundary}`
+              : `The state root used in policy proofs has been cryptographically verified against ${consensusMetadata.name} consensus data.`
             : consensusFailureReason
               ? `Consensus trust was not upgraded because ${consensusFailureReason}.`
-              : `The evidence package contains ${consensusDisplay.name} consensus data. Verification requires the desktop app's Helios-based verifier.`,
+              : `The evidence package contains ${consensusMetadata.name} consensus data. Verification requires the desktop app's Helios-based verifier.`,
           status: "enabled" as VerificationSourceStatus,
         }
       : {

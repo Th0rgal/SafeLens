@@ -262,4 +262,27 @@ describe("buildVerificationSources", () => {
     expect(consensusSource?.summary).toContain("not equivalent to Beacon light-client finality");
     expect(consensusSource?.detail).toContain("not equivalent to Beacon light-client finality");
   });
+
+  it("uses deterministic verified trust mapping for every consensus mode", () => {
+    const cases = [
+      { mode: "beacon" as const, expected: "consensus-verified-beacon" as const },
+      { mode: "opstack" as const, expected: "consensus-verified-opstack" as const },
+      { mode: "linea" as const, expected: "consensus-verified-linea" as const },
+    ];
+
+    for (const { mode, expected } of cases) {
+      const sources = buildVerificationSources(createVerificationSourceContext({
+        hasSettings: false,
+        hasUnsupportedSignatures: false,
+        hasDecodedData: false,
+        hasOnchainPolicyProof: true,
+        hasSimulation: false,
+        hasConsensusProof: true,
+        consensusVerified: true,
+        consensusMode: mode,
+      }));
+      const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+      expect(consensusSource?.trust).toBe(expected);
+    }
+  });
 });
