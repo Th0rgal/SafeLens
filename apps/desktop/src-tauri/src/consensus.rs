@@ -311,6 +311,39 @@ const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
 const ERR_NON_FINALIZED_CONSENSUS_ENVELOPE: &str = "non-finalized-consensus-envelope";
 const NON_BEACON_MAX_BLOCK_AGE_SECS: i64 = 24 * 60 * 60;
 
+#[derive(Clone, Copy)]
+enum ExecutionConsensusMode {
+    OpStack,
+    Linea,
+}
+
+impl ExecutionConsensusMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::OpStack => "opstack",
+            Self::Linea => "linea",
+        }
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::OpStack => "OP Stack",
+            Self::Linea => "Linea",
+        }
+    }
+}
+
+fn parse_execution_consensus_mode(mode: &str) -> Result<ExecutionConsensusMode, String> {
+    match mode {
+        "opstack" => Ok(ExecutionConsensusMode::OpStack),
+        "linea" => Ok(ExecutionConsensusMode::Linea),
+        _ => Err(format!(
+            "Unsupported consensus mode '{}'. Desktop verifier supports 'beacon', 'opstack', and 'linea'.",
+            mode
+        )),
+    }
+}
+
 fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
     match network {
         ConsensusNetwork::Mainnet => mainnet_config(),
@@ -356,7 +389,11 @@ impl ConsensusSpec for GnosisConsensusSpec {
 /// 5. Compare it against the claimed state root
 pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
     if input.consensus_mode != "beacon" {
-        return verify_execution_envelope(input);
+        let mode = match parse_execution_consensus_mode(&input.consensus_mode) {
+            Ok(mode) => mode,
+            Err(err) => return fail_result(ERR_UNSUPPORTED_CONSENSUS_MODE, err),
+        };
+        return verify_execution_envelope(input, mode);
     }
 
     let network = match parse_network(&input.network) {
@@ -370,7 +407,10 @@ pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificati
     verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input, network)
 }
 
-fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificationResult {
+fn verify_execution_envelope(
+    input: ConsensusProofInput,
+    mode: ExecutionConsensusMode,
+) -> ConsensusVerificationResult {
     let mut checks = Vec::new();
 
     let payload_raw = match input.proof_payload.as_deref() {
@@ -430,12 +470,13 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
             )
         }
     };
-    if payload_mode != input.consensus_mode {
+    if payload_mode != mode.as_str() {
         return fail_result(
             ERR_INVALID_PROOF_PAYLOAD,
             format!(
                 "proofPayload.consensusMode '{}' does not match package consensusMode '{}'.",
-                payload_mode, input.consensus_mode
+                payload_mode,
+                mode.as_str()
             ),
         );
     }
@@ -443,7 +484,7 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         id: "envelope-mode".into(),
         label: "Envelope consensus mode matches package metadata".into(),
         passed: true,
-        detail: Some(format!("Mode: {}", payload_mode)),
+        detail: Some(format!("Mode: {}", mode.as_str())),
     });
 
     let payload_network = match payload.get("chainId").and_then(Value::as_u64) {
@@ -750,8 +791,9 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         state_root_matches,
         sync_committee_participants: 0,
         error: Some(format!(
-            "Consensus mode '{}' payload envelope is structurally valid, but cryptographic verification is not implemented in desktop verifier yet.",
-            input.consensus_mode
+            "{} payload envelope is structurally valid, but {} cryptographic verification is not implemented in desktop verifier yet.",
+            mode.display_name(),
+            mode.display_name()
         )),
         error_code: Some(ERR_UNSUPPORTED_CONSENSUS_MODE.into()),
         checks,
@@ -1304,6 +1346,37 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-state-root" && check.passed));
+    }
+
+    #[test]
+    fn rejects_unknown_non_beacon_consensus_mode_before_payload_validation() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "arb-nitro".to_string(),
+            network: "arbitrum".to_string(),
+            proof_payload: None,
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(42161),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_UNSUPPORTED_CONSENSUS_MODE)
+        );
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error
+                .contains("Desktop verifier supports 'beacon', 'opstack', and 'linea'.")));
     }
 
     #[test]
