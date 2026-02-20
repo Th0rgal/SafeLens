@@ -19,6 +19,42 @@ import {
   type FetchConsensusProofOptions,
 } from "../consensus";
 
+export const PROOF_ALIGNMENT_ERROR_CODE = "proof-alignment-mismatch" as const;
+
+/**
+ * Thrown when on-chain policy proof and consensus proof do not refer to the
+ * same finalized execution payload root/block pair.
+ */
+export class ProofAlignmentError extends Error {
+  readonly code = PROOF_ALIGNMENT_ERROR_CODE;
+  readonly onchainStateRoot: string;
+  readonly onchainBlockNumber: number;
+  readonly consensusStateRoot: string;
+  readonly consensusBlockNumber: number;
+
+  constructor(params: {
+    onchainStateRoot: string;
+    onchainBlockNumber: number;
+    consensusStateRoot: string;
+    consensusBlockNumber: number;
+  }) {
+    const {
+      onchainStateRoot,
+      onchainBlockNumber,
+      consensusStateRoot,
+      consensusBlockNumber,
+    } = params;
+    super(
+      `Proof alignment mismatch: onchainPolicyProof(${onchainBlockNumber}, ${onchainStateRoot}) != consensusProof(${consensusBlockNumber}, ${consensusStateRoot}). Both artifacts must refer to the same finalized chain point.`
+    );
+    this.name = "ProofAlignmentError";
+    this.onchainStateRoot = onchainStateRoot;
+    this.onchainBlockNumber = onchainBlockNumber;
+    this.consensusStateRoot = consensusStateRoot;
+    this.consensusBlockNumber = consensusBlockNumber;
+  }
+}
+
 /**
  * Create an evidence package from a Safe transaction
  */
@@ -250,7 +286,10 @@ function assertProofAlignment(
     return;
   }
 
-  throw new Error(
-    `Proof alignment mismatch: onchainPolicyProof(${onchainBlockNumber}, ${onchainStateRoot}) != consensusProof(${consensusBlockNumber}, ${consensusStateRoot}). Both artifacts must refer to the same finalized chain point.`
-  );
+  throw new ProofAlignmentError({
+    onchainStateRoot,
+    onchainBlockNumber,
+    consensusStateRoot,
+    consensusBlockNumber,
+  });
 }

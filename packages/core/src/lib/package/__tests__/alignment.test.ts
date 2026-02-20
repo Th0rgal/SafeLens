@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ConsensusProof, OnchainPolicyProof } from "../../types";
-import { createEvidencePackage, enrichWithConsensusProof, enrichWithOnchainProof } from "../creator";
+import {
+  createEvidencePackage,
+  enrichWithConsensusProof,
+  enrichWithOnchainProof,
+  PROOF_ALIGNMENT_ERROR_CODE,
+} from "../creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 
 const { fetchOnchainPolicyProofMock, fetchConsensusProofMock } = vi.hoisted(
@@ -83,9 +88,12 @@ describe("proof alignment in package enrichment", () => {
       onchainPolicyProof: makeOnchainPolicyProof(),
     };
 
-    await expect(enrichWithConsensusProof(evidence)).rejects.toThrow(
-      "Proof alignment mismatch"
-    );
+    await expect(enrichWithConsensusProof(evidence)).rejects.toMatchObject({
+      name: "ProofAlignmentError",
+      code: PROOF_ALIGNMENT_ERROR_CODE,
+      onchainBlockNumber: 21000000,
+      consensusBlockNumber: 21000001,
+    });
   });
 
   it("rejects onchain enrichment when existing consensus proof is misaligned", async () => {
@@ -99,8 +107,13 @@ describe("proof alignment in package enrichment", () => {
       consensusProof: makeConsensusProof(),
     };
 
-    await expect(enrichWithOnchainProof(evidence)).rejects.toThrow(
-      "Proof alignment mismatch"
-    );
+    await expect(enrichWithOnchainProof(evidence)).rejects.toMatchObject({
+      name: "ProofAlignmentError",
+      code: PROOF_ALIGNMENT_ERROR_CODE,
+      onchainStateRoot:
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      consensusStateRoot:
+        "0xa38574512fb60ec85617785cd52c30f918902b355bab53242fbdf3b40b7a1e7e",
+    });
   });
 });
