@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/toast";
 import {
   parseEvidencePackage,
   getChainName,
+  getNetworkCapability,
   verifyEvidencePackage,
   applyConsensusVerificationToReport,
   decodeSimulationEvents,
@@ -33,6 +34,54 @@ const WARNING_STYLES: Record<string, { border: string; bg: string; text: string;
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
   danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
 };
+
+function getNetworkSupportStatus(chainId: number): {
+  isFullySupported: boolean;
+  badgeText: string;
+  helperText: string | null;
+} {
+  const capability = getNetworkCapability(chainId);
+  if (!capability) {
+    return {
+      isFullySupported: false,
+      badgeText: "Partial",
+      helperText: "Partially supported: this network is unknown to SafeLens capabilities.",
+    };
+  }
+
+  const hasConsensus = Boolean(capability.consensus);
+  const hasSimulation = capability.supportsSimulation;
+
+  if (hasConsensus && hasSimulation) {
+    return {
+      isFullySupported: true,
+      badgeText: "Full",
+      helperText: null,
+    };
+  }
+
+  if (!hasSimulation && !hasConsensus) {
+    return {
+      isFullySupported: false,
+      badgeText: "Partial",
+      helperText: "Partially supported: consensus verification and full simulation are not available on this network.",
+    };
+  }
+
+  if (!hasSimulation) {
+    return {
+      isFullySupported: false,
+      badgeText: "Partial",
+      helperText: "Partially supported: full simulation is not available on this network.",
+    };
+  }
+
+  return {
+    isFullySupported: false,
+    badgeText: "Partial",
+    helperText: "Partially supported: consensus verification is not available on this network.",
+  };
+}
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
   const style = WARNING_STYLES[warning.level];
@@ -266,6 +315,7 @@ export default function VerifyScreen() {
       : signatureResults.some((r) => r.status === "invalid" || r.status === "unsupported")
         ? "api-sourced"
         : "self-verified";
+  const networkSupport = evidence ? getNetworkSupportStatus(evidence.chainId) : null;
 
   return (
     <div className="space-y-6">
@@ -368,7 +418,27 @@ export default function VerifyScreen() {
                   <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
                     Chain <TrustBadge level="self-verified" />
                   </div>
-                  <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
+                    {networkSupport && (
+                      <span
+                        title={networkSupport.helperText ?? "Fully supported: consensus verification and simulation are available."}
+                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${
+                          networkSupport.isFullySupported
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {networkSupport.badgeText}
+                      </span>
+                    )}
+                  </div>
+                  {networkSupport?.helperText && (
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-300">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      <span>{networkSupport.helperText}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>
