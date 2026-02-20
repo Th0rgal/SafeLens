@@ -113,6 +113,12 @@ function formatTrustLevel(trust: string): string {
   switch (trust) {
     case "consensus-verified":
       return colors.green("🛡 consensus-verified");
+    case "consensus-verified-beacon":
+      return colors.green("🛡 consensus-verified-beacon");
+    case "consensus-verified-opstack":
+      return colors.green("🛡 consensus-verified-opstack");
+    case "consensus-verified-linea":
+      return colors.green("🛡 consensus-verified-linea");
     case "proof-verified":
       return colors.blue("🔒 proof-verified");
     case "self-verified":

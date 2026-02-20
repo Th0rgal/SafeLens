@@ -68,6 +68,9 @@ export function badge(text: string, variant: "info" | "warning" | "critical" | "
 export function trustBadge(level: string): string {
   switch (level) {
     case "consensus-verified":
+    case "consensus-verified-beacon":
+    case "consensus-verified-opstack":
+    case "consensus-verified-linea":
       return colors.green("🛡");
     case "proof-verified":
       return colors.blue("🔒");
