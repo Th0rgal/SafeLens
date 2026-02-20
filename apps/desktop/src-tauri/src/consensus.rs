@@ -499,27 +499,7 @@ fn verify_execution_envelope(
     });
 
     let envelope_chain_id = match payload.get("chainId").and_then(Value::as_u64) {
-        Some(chain_id) => {
-            if let Some(package_chain_id) = input.package_chain_id {
-                let chain_id_matches = chain_id == package_chain_id;
-                checks.push(ConsensusCheck {
-                    id: "envelope-chain-id".into(),
-                    label: "Envelope chainId matches package chainId".into(),
-                    passed: chain_id_matches,
-                    detail: Some(format!(
-                        "Envelope: {}, package: {}",
-                        chain_id, package_chain_id
-                    )),
-                });
-                if !chain_id_matches {
-                    return fail_result(
-                        ERR_INVALID_PROOF_PAYLOAD,
-                        "Envelope chainId does not match package chainId.".into(),
-                    );
-                }
-            }
-            chain_id
-        }
+        Some(chain_id) => chain_id,
         None => {
             return fail_result(
                 ERR_INVALID_PROOF_PAYLOAD,
@@ -527,6 +507,32 @@ fn verify_execution_envelope(
             )
         }
     };
+    let package_chain_id = match input.package_chain_id {
+        Some(chain_id) => chain_id,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "packageChainId is required for non-beacon consensus envelope verification."
+                    .into(),
+            )
+        }
+    };
+    let chain_id_matches = envelope_chain_id == package_chain_id;
+    checks.push(ConsensusCheck {
+        id: "envelope-chain-id".into(),
+        label: "Envelope chainId matches package chainId".into(),
+        passed: chain_id_matches,
+        detail: Some(format!(
+            "Envelope: {}, package: {}",
+            envelope_chain_id, package_chain_id
+        )),
+    });
+    if !chain_id_matches {
+        return fail_result(
+            ERR_INVALID_PROOF_PAYLOAD,
+            "Envelope chainId does not match package chainId.".into(),
+        );
+    }
     checks.push(ConsensusCheck {
         id: "envelope-network".into(),
         label: "Envelope network metadata present".into(),
@@ -1483,6 +1489,38 @@ mod tests {
         assert_eq!(
             result.error.as_deref(),
             Some("Envelope chainId does not match package chainId.")
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_without_package_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: None,
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("packageChainId is required for non-beacon consensus envelope verification.")
         );
     }
 
