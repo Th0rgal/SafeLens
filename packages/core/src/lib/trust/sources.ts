@@ -1,41 +1,9 @@
 import type { TrustLevel } from "./types";
-import {
-  summarizeConsensusTrustDecisionReason,
-  type ConsensusTrustDecisionReason,
-} from "../verify/consensus-trust";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
 
-export const GENERATION_SOURCE_IDS = {
-  SAFE_URL_INPUT: "safe-url-input",
-  SAFE_API_RESPONSE: "safe-api-response",
-  PACKAGED_AT_TIMESTAMP: "packaged-at-timestamp",
-  EXPORTED_JSON: "exported-json",
-} as const;
-
-export type GenerationSourceId =
-  (typeof GENERATION_SOURCE_IDS)[keyof typeof GENERATION_SOURCE_IDS];
-
-export const VERIFICATION_SOURCE_IDS = {
-  EVIDENCE_PACKAGE: "evidence-package",
-  HASH_RECOMPUTE: "hash-recompute",
-  SIGNATURES: "signatures",
-  SIGNATURE_SCHEME_COVERAGE: "signature-scheme-coverage",
-  SAFE_OWNERS_THRESHOLD: "safe-owners-threshold",
-  ONCHAIN_POLICY_PROOF: "onchain-policy-proof",
-  DECODED_CALLDATA: "decoded-calldata",
-  SIMULATION: "simulation",
-  CONSENSUS_PROOF: "consensus-proof",
-  SETTINGS: "settings",
-} as const;
-
-export type VerificationSourceId =
-  (typeof VERIFICATION_SOURCE_IDS)[keyof typeof VERIFICATION_SOURCE_IDS];
-
-export type SourceId = GenerationSourceId | VerificationSourceId;
-
 export interface VerificationSource {
-  id: SourceId;
+  id: string;
   title: string;
   trust: TrustLevel;
   summary: string;
@@ -47,31 +15,6 @@ export interface VerificationSourceContext {
   hasSettings: boolean;
   hasUnsupportedSignatures: boolean;
   hasDecodedData: boolean;
-  hasOnchainPolicyProof: boolean;
-  hasSimulation: boolean;
-  hasConsensusProof: boolean;
-  onchainPolicyProofTrust?: TrustLevel;
-  simulationTrust?: TrustLevel;
-  consensusVerified?: boolean;
-  consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
-}
-
-export const DEFAULT_VERIFICATION_SOURCE_CONTEXT: VerificationSourceContext = {
-  hasSettings: false,
-  hasUnsupportedSignatures: false,
-  hasDecodedData: false,
-  hasOnchainPolicyProof: false,
-  hasSimulation: false,
-  hasConsensusProof: false,
-};
-
-export function createVerificationSourceContext(
-  overrides: Partial<VerificationSourceContext>
-): VerificationSourceContext {
-  return {
-    ...DEFAULT_VERIFICATION_SOURCE_CONTEXT,
-    ...overrides,
-  };
 }
 
 /**
@@ -80,7 +23,7 @@ export function createVerificationSourceContext(
 export function buildGenerationSources(): VerificationSource[] {
   return [
     {
-      id: GENERATION_SOURCE_IDS.SAFE_URL_INPUT,
+      id: "safe-url-input",
       title: "Safe URL input",
       trust: "user-provided",
       summary: "Transaction URL is provided by the operator.",
@@ -89,7 +32,7 @@ export function buildGenerationSources(): VerificationSource[] {
       status: "enabled",
     },
     {
-      id: GENERATION_SOURCE_IDS.SAFE_API_RESPONSE,
+      id: "safe-api-response",
       title: "Safe Transaction Service response",
       trust: "api-sourced",
       summary: "Transaction payload and confirmations come from Safe API.",
@@ -98,7 +41,7 @@ export function buildGenerationSources(): VerificationSource[] {
       status: "enabled",
     },
     {
-      id: GENERATION_SOURCE_IDS.PACKAGED_AT_TIMESTAMP,
+      id: "packaged-at-timestamp",
       title: "Package timestamp",
       trust: "user-provided",
       summary: "packagedAt is generated from local system time.",
@@ -107,7 +50,7 @@ export function buildGenerationSources(): VerificationSource[] {
       status: "enabled",
     },
     {
-      id: GENERATION_SOURCE_IDS.EXPORTED_JSON,
+      id: "exported-json",
       title: "Evidence export",
       trust: "self-verified",
       summary: "Exported JSON is deterministic from fetched payload.",
@@ -125,13 +68,9 @@ export function buildGenerationSources(): VerificationSource[] {
 export function buildVerificationSources(
   context: VerificationSourceContext
 ): VerificationSource[] {
-  const consensusFailureReason = summarizeConsensusTrustDecisionReason(
-    context.consensusTrustDecisionReason
-  );
-
   return [
     {
-      id: VERIFICATION_SOURCE_IDS.EVIDENCE_PACKAGE,
+      id: "evidence-package",
       title: "Evidence package integrity",
       trust: "self-verified",
       summary: "Parsed and schema-validated locally.",
@@ -140,7 +79,7 @@ export function buildVerificationSources(
       status: "enabled",
     },
     {
-      id: VERIFICATION_SOURCE_IDS.HASH_RECOMPUTE,
+      id: "hash-recompute",
       title: "Safe tx hash",
       trust: "self-verified",
       summary: "Recomputed in your session.",
@@ -149,7 +88,7 @@ export function buildVerificationSources(
       status: "enabled",
     },
     {
-      id: VERIFICATION_SOURCE_IDS.SIGNATURES,
+      id: "signatures",
       title: "Signature checks",
       trust: "self-verified",
       summary: "Each signature is verified offline.",
@@ -159,7 +98,7 @@ export function buildVerificationSources(
     },
     context.hasUnsupportedSignatures
       ? {
-          id: VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE,
+          id: "signature-scheme-coverage",
           title: "Signature scheme coverage",
           trust: "api-sourced",
           summary: "Unsupported signature scheme detected.",
@@ -168,7 +107,7 @@ export function buildVerificationSources(
           status: "enabled",
         }
       : {
-          id: VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE,
+          id: "signature-scheme-coverage",
           title: "Signature scheme coverage",
           trust: "self-verified",
           summary: "All signatures are locally verifiable EOA schemes.",
@@ -176,50 +115,18 @@ export function buildVerificationSources(
             "Assumption: none additional. No contract signature (v=0) or pre-approved hash (v=1) entries were detected.",
           status: "disabled",
         },
-    context.hasOnchainPolicyProof
-      ? {
-          id: VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD,
-          title: "Safe owners and threshold",
-          trust: context.onchainPolicyProofTrust ?? "rpc-sourced",
-          summary:
-            "Owner set and threshold verified against on-chain storage proofs.",
-          detail:
-            "On-chain Merkle storage proofs confirm owners, threshold, nonce, modules, guard, fallback handler, and singleton at a pinned block.",
-          status: "enabled" as VerificationSourceStatus,
-        }
-      : {
-          id: VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD,
-          title: "Safe owners and threshold",
-          trust: "api-sourced" as TrustLevel,
-          summary: "Owner set and threshold are accepted from evidence.",
-          detail:
-            "Assumption: confirmations and confirmationsRequired in the package reflect the Safe's real policy for this transaction.",
-          status: "enabled" as VerificationSourceStatus,
-        },
-    context.hasOnchainPolicyProof
-      ? {
-          id: VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF,
-          title: "On-chain policy proof",
-          trust: context.onchainPolicyProofTrust ?? "rpc-sourced",
-          summary:
-            "Safe policy verified via eth_getProof Merkle storage proofs.",
-          detail:
-            "Storage proofs for owners, threshold, nonce, modules, guard, fallback handler, and singleton are verified against the provided state root.",
-          status: "enabled" as VerificationSourceStatus,
-        }
-      : {
-          id: VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF,
-          title: "On-chain policy proof",
-          trust: "api-sourced" as TrustLevel,
-          summary:
-            "No on-chain policy proof included. Safe policy is api-sourced.",
-          detail:
-            "Without storage proofs, the Safe's owners, threshold, and configuration are trusted from the API response. Enable proof generation to upgrade this to proof-verified.",
-          status: "disabled" as VerificationSourceStatus,
-        },
+    {
+      id: "safe-owners-threshold",
+      title: "Safe owners and threshold",
+      trust: "api-sourced",
+      summary: "Owner set and threshold are accepted from evidence.",
+      detail:
+        "Assumption: confirmations and confirmationsRequired in the package reflect the Safe's real policy for this transaction.",
+      status: "enabled",
+    },
     context.hasDecodedData
       ? {
-          id: VERIFICATION_SOURCE_IDS.DECODED_CALLDATA,
+          id: "decoded-calldata",
           title: "Decoded calldata",
           trust: "api-sourced",
           summary: "Decoded calldata is API-provided metadata.",
@@ -228,7 +135,7 @@ export function buildVerificationSources(
           status: "enabled",
         }
       : {
-          id: VERIFICATION_SOURCE_IDS.DECODED_CALLDATA,
+          id: "decoded-calldata",
           title: "Decoded calldata",
           trust: "api-sourced",
           summary: "No decoded calldata was included in evidence.",
@@ -236,55 +143,9 @@ export function buildVerificationSources(
             "Assumption: none for decoded metadata because this package contains only raw calldata.",
           status: "disabled",
         },
-    context.hasSimulation
-      ? {
-          id: VERIFICATION_SOURCE_IDS.SIMULATION,
-          title: "Transaction simulation",
-          trust: context.simulationTrust ?? "rpc-sourced",
-          summary:
-            "Transaction simulated via execTransaction with state overrides.",
-          detail:
-            "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified if backed by consensus proofs.",
-          status: "enabled" as VerificationSourceStatus,
-        }
-      : {
-          id: VERIFICATION_SOURCE_IDS.SIMULATION,
-          title: "Transaction simulation",
-          trust: "rpc-sourced" as TrustLevel,
-          summary: "No simulation included in evidence.",
-          detail:
-            "Without simulation data, the transaction's execution outcome is unknown until it is signed and broadcast.",
-          status: "disabled" as VerificationSourceStatus,
-        },
-    context.hasConsensusProof
-      ? {
-          id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
-          title: "Consensus verification",
-          trust: context.consensusVerified ? ("consensus-verified" as TrustLevel) : ("rpc-sourced" as TrustLevel),
-          summary: context.consensusVerified
-            ? "State root verified against Ethereum consensus via BLS sync committee signatures."
-            : consensusFailureReason
-              ? `Consensus proof included but not yet verified (${consensusFailureReason}).`
-              : "Consensus proof included but not yet verified (requires desktop app).",
-          detail: context.consensusVerified
-            ? "The state root used in policy proofs has been cryptographically verified against a finalized beacon block header signed by the Ethereum sync committee (512 validators)."
-            : consensusFailureReason
-              ? `Consensus trust was not upgraded because ${consensusFailureReason}.`
-              : "The evidence package contains beacon chain light client data. Verification requires the desktop app's Helios-based verifier.",
-          status: "enabled" as VerificationSourceStatus,
-        }
-      : {
-          id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
-          title: "Consensus verification",
-          trust: "rpc-sourced" as TrustLevel,
-          summary: "No consensus proof included. State root is RPC-trusted.",
-          detail:
-            "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
-          status: "disabled" as VerificationSourceStatus,
-        },
     context.hasSettings
       ? {
-          id: VERIFICATION_SOURCE_IDS.SETTINGS,
+          id: "settings",
           title: "Address and contract labels",
           trust: "user-provided",
           summary: "Resolved from your local settings file.",
@@ -293,7 +154,7 @@ export function buildVerificationSources(
           status: "enabled",
         }
       : {
-          id: VERIFICATION_SOURCE_IDS.SETTINGS,
+          id: "settings",
           title: "Address and contract labels",
           trust: "api-sourced",
           summary: "No local settings file was used.",

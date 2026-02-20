@@ -3,12 +3,9 @@ import {
   type EvidencePackage,
   type EvidenceVerificationReport,
   type SettingsConfig,
-  parseSafeUrlFlexible,
+  parseSafeUrl,
   fetchSafeTransaction,
-  fetchPendingTransactions,
   createEvidencePackage,
-  enrichWithOnchainProof,
-  enrichWithSimulation,
   exportEvidencePackage,
   parseEvidencePackage,
   verifyEvidencePackage,
@@ -16,7 +13,6 @@ import {
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
   buildVerificationSources,
-  createVerificationSourceContext,
   getChainName,
   interpretTransaction,
   computeSafeTxHashDetailed,
@@ -52,18 +48,15 @@ function printHelp() {
   console.log(`SafeLens CLI
 
 Usage:
-  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings] [--rpc-url <url>]
+  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings]
   safelens verify [--file evidence.json] [--json <string>] [--settings <path>] [--no-settings] [--format text|json]
   safelens sources
   safelens settings init [--path <file>]
   safelens settings show [--path <file>]
 
-Options:
-  --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
-
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
-  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --rpc-url https://eth.llamarpc.com
+  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --format json
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --no-settings
   safelens verify --file evidence.json
   safelens sources
@@ -102,35 +95,14 @@ function createVerifyPayload(
     warnings: report.targetWarnings,
     signatures: report.signatures,
     sources: report.sources,
-    hashDetails: report.hashDetails,
-    hashMatch: report.hashMatch,
-    policyProof: report.policyProof,
-    simulationVerification: report.simulationVerification,
   };
-}
-
-function formatTrustLevel(trust: string): string {
-  switch (trust) {
-    case "consensus-verified":
-      return colors.green("🛡 consensus-verified");
-    case "proof-verified":
-      return colors.blue("🔒 proof-verified");
-    case "self-verified":
-      return colors.green("✓ self-verified");
-    case "rpc-sourced":
-      return colors.yellow("⚡ rpc-sourced");
-    case "api-sourced":
-      return colors.yellow("⚠ api-sourced");
-    case "user-provided":
-      return colors.gray("👤 user-provided");
-    default:
-      return colors.gray(`? ${trust}`);
-  }
 }
 
 function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
   for (const source of sources) {
-    const trustLevel = formatTrustLevel(source.trust);
+    const trustLevel = source.trust === "self-verified"
+      ? colors.green("✓ self-verified")
+      : colors.yellow("⚠ api-sourced");
 
     const status = source.status === "enabled"
       ? colors.green("enabled")
@@ -169,11 +141,11 @@ function printWarningsSection(warnings: Array<{ level: string; message: string }
   const warningLines: string[] = [];
 
   for (const warning of warnings) {
-    const levelBadge = warning.level === "danger"
-      ? colors.bgRed(" DANGER ")
-      : warning.level === "warning"
-        ? colors.bgYellow(" WARNING ")
-        : colors.bgBlue(" INFO ");
+    const levelBadge = warning.level === "critical"
+      ? colors.bgRed(" CRITICAL ")
+      : warning.level === "medium"
+        ? colors.bgYellow(" MEDIUM ")
+        : colors.bgBlue(" LOW ");
 
     warningLines.push(bullet(`${levelBadge} ${warning.message}`));
   }
@@ -226,18 +198,9 @@ function printVerificationText(
   console.log("");
   console.log(box(
     (() => {
-      const hashBadge = report.hashMatch
-        ? trustBadge("self-verified")
-        : colors.red(colors.bold("MISMATCH"));
       const rows: Array<[string, string]> = [
-        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${hashBadge}`],
+        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
       ];
-
-      if (!report.hashMatch && hashDetails) {
-        rows.push(
-          ["Recomputed", `${formatAddress(hashDetails.safeTxHash)} ${colors.red("← expected")}`]
-        );
-      }
 
       if (hashDetails) {
         rows.push(
@@ -276,50 +239,8 @@ function printVerificationText(
     console.log(warningsOutput);
   }
 
-  // ── Policy Proof ───────────────────────────────────────────────────
-  if (report.policyProof) {
-    const pp = report.policyProof;
-    const proofRows: Array<[string, string]> = [];
-
-    for (const check of pp.checks) {
-      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
-      proofRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
-    }
-
-    const proofTitle = pp.valid
-      ? "🔒 On-Chain Policy Proof " + trustBadge("proof-verified")
-      : "🔒 On-Chain Policy Proof " + colors.red("(INVALID)");
-
-    console.log("");
-    console.log(box(table(proofRows, 22), proofTitle));
-  }
-
-  // ── Simulation ────────────────────────────────────────────────────
-  if (report.simulationVerification) {
-    const sv = report.simulationVerification;
-    const simRows: Array<[string, string]> = [];
-
-    for (const check of sv.checks) {
-      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
-      simRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
-    }
-
-    const simTrust = evidence.simulation?.trust ?? "rpc-sourced";
-    const simTitle = !sv.valid
-      ? "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)")
-      : sv.executionReverted
-        ? "⚡ Transaction Simulation " + colors.bgRed(" REVERTED ") + " " + trustBadge(simTrust)
-        : "⚡ Transaction Simulation " + trustBadge(simTrust);
-
-    console.log("");
-    console.log(box(table(simRows, 22), simTitle));
-  }
-
   // ── Signatures ──────────────────────────────────────────────────────
-  const signaturesTrustLevel =
-    summary.total === 0 || summary.invalid > 0 || summary.unsupported > 0
-      ? "api-sourced"
-      : "self-verified";
+  const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
 
   console.log("");
   const signaturesRows: Array<[string, string]> = [
@@ -353,49 +274,9 @@ async function runAnalyze(args: string[]) {
   const pretty = hasFlag(args, "--pretty") || !hasFlag(args, "--compact");
   const format = getOutputFormat(args, "text");
 
-  const rpcUrl = getFlag(args, "--rpc-url");
-
-  const parsed = parseSafeUrlFlexible(url);
-
-  if (parsed.type === "queue") {
-    // Queue URL — list pending transactions instead of analyzing one
-    const pending = await fetchPendingTransactions(parsed.data.chainId, parsed.data.safeAddress);
-    if (pending.length === 0) {
-      console.log("No pending transactions for this Safe.");
-      return;
-    }
-    console.log(`Found ${pending.length} pending transaction(s) for ${parsed.data.safeAddress}:\n`);
-    for (const ptx of pending) {
-      console.log(`  nonce ${ptx.nonce}  ${ptx.safeTxHash}  → ${ptx.to} (${ptx.isExecuted ? "executed" : "pending"})`);
-    }
-    console.log("\nTo analyze a specific transaction, use the full transaction URL with the &id= parameter.");
-    return;
-  }
-
-  const tx = await fetchSafeTransaction(parsed.data.chainId, parsed.data.safeTxHash);
-  let evidence = createEvidencePackage(tx, parsed.data.chainId, url);
-
-  // Fetch on-chain policy proof if RPC URL is provided
-  if (rpcUrl) {
-    try {
-      evidence = await enrichWithOnchainProof(evidence, { rpcUrl });
-    } catch (err) {
-      console.error(
-        `Warning: Failed to fetch on-chain policy proof: ${err instanceof Error ? err.message : err}`
-      );
-      console.error("Continuing without policy proof.\n");
-    }
-
-    try {
-      evidence = await enrichWithSimulation(evidence, { rpcUrl });
-    } catch (err) {
-      console.error(
-        `Warning: Failed to simulate transaction: ${err instanceof Error ? err.message : err}`
-      );
-      console.error("Continuing without simulation.\n");
-    }
-  }
-
+  const parsed = parseSafeUrl(url);
+  const tx = await fetchSafeTransaction(parsed.chainId, parsed.safeTxHash);
+  const evidence = createEvidencePackage(tx, parsed.chainId, url);
   const settings = await loadSettingsForVerify(args);
   const report = await verifyEvidencePackage(evidence, { settings });
   const json = pretty ? exportEvidencePackage(evidence) : JSON.stringify(evidence);
@@ -480,26 +361,20 @@ async function runSources() {
   console.log("");
   console.log("Verification sources reference:");
   printSourceFactsFromList(
-    buildVerificationSources(createVerificationSourceContext({
+    buildVerificationSources({
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
-      hasOnchainPolicyProof: false,
-      hasSimulation: false,
-      hasConsensusProof: false,
-    }))
+    })
   );
   console.log("");
   console.log("Verification sources without local settings:");
   printSourceFactsFromList(
-    buildVerificationSources(createVerificationSourceContext({
+    buildVerificationSources({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
-      hasOnchainPolicyProof: false,
-      hasSimulation: false,
-      hasConsensusProof: false,
-    }))
+    })
   );
 }
 

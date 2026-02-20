@@ -1,4 +1,4 @@
-const FLAGS_WITH_VALUES = new Set(["--out", "--json", "--file", "--settings", "--path", "--format", "--rpc-url"]);
+const FLAGS_WITH_VALUES = new Set(["--out", "--json", "--file", "--settings", "--path", "--format"]);
 
 export function getFlag(args: string[], flag: string): string | undefined {
   const index = args.indexOf(flag);

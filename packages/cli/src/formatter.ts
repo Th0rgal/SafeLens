@@ -65,23 +65,10 @@ export function badge(text: string, variant: "info" | "warning" | "critical" | "
   }
 }
 
-export function trustBadge(level: string): string {
-  switch (level) {
-    case "consensus-verified":
-      return colors.green("🛡");
-    case "proof-verified":
-      return colors.blue("🔒");
-    case "self-verified":
-      return colors.green("✓");
-    case "rpc-sourced":
-      return colors.yellow("⚡");
-    case "api-sourced":
-      return colors.yellow("⚠");
-    case "user-provided":
-      return colors.gray("👤");
-    default:
-      return colors.gray("?");
-  }
+export function trustBadge(level: "self-verified" | "api-sourced"): string {
+  return level === "self-verified"
+    ? colors.green("✓")
+    : colors.yellow("⚠");
 }
 
 export function severityBadge(severity: "info" | "warning" | "critical"): string {
@@ -302,7 +289,7 @@ export function divider(char: string = "─"): string {
  */
 export function legend(): string {
   return colors.dim(
-    `Legend: ${colors.blue("🔒")} = proof-verified  ${colors.green("✓")} = self-verified  ${colors.yellow("⚡")} = rpc-sourced  ${colors.yellow("⚠")} = api-sourced  ${colors.gray("👤")} = user-provided`
+    `Legend: ${colors.green("✓")} = self-verified  ${colors.yellow("⚠")} = api-sourced`
   );
 }
 

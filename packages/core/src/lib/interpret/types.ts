@@ -104,44 +104,6 @@ export interface SafePolicyChangeDetails {
   }>;
 }
 
-/** ERC-20 transfer details. */
-export interface ERC20TransferDetails {
-  /** The type of ERC-20 action detected. */
-  actionType: "transfer" | "approve" | "transferFrom";
-  /** The token contract address. */
-  token: TokenInfo;
-  /** Sender address (for transfer / transferFrom). */
-  from?: string;
-  /** Recipient address (for transfer / transferFrom). */
-  to?: string;
-  /** Spender address (for approve). */
-  spender?: string;
-  /** Raw amount (wei string). */
-  amount: string;
-  /** Human-readable formatted amount. */
-  amountFormatted: string;
-  /** Whether this is an unlimited approval (max uint256). */
-  isUnlimitedApproval?: boolean;
-}
-
-/** CoW Protocol setPreSignature details. */
-export interface CowSwapPreSignDetails {
-  /** The full orderUid (hex string). */
-  orderUid: string;
-  /** The 32-byte order digest extracted from the orderUid. */
-  orderDigest: string;
-  /** The owner address extracted from the orderUid. */
-  owner: string;
-  /** The validTo timestamp extracted from the orderUid (unix seconds). */
-  validTo: number;
-  /** Human-readable expiry date. */
-  validToFormatted: string;
-  /** Whether the order is being signed (true) or cancelled (false). */
-  signed: boolean;
-  /** The settlement contract address. */
-  settlementContract: string;
-}
-
 /** ERC-7730 generic interpretation details. */
 export interface ERC7730Details {
   fields: Array<{
@@ -163,14 +125,6 @@ export interface ERC7730Details {
 
 export type Interpretation =
   | {
-      id: "erc20-transfer";
-      protocol: "ERC-20";
-      action: "Transfer" | "Approve" | "TransferFrom";
-      severity: Severity;
-      summary: string;
-      details: ERC20TransferDetails;
-    }
-  | {
       id: "cowswap-twap";
       protocol: "CoW Swap";
       action: "TWAP Order";
@@ -185,14 +139,6 @@ export type Interpretation =
       severity: "critical";
       summary: string;
       details: SafePolicyChangeDetails;
-    }
-  | {
-      id: "cowswap-presign";
-      protocol: "CoW Protocol";
-      action: "Pre-Sign Order" | "Cancel Pre-Sign";
-      severity: "info";
-      summary: string;
-      details: CowSwapPreSignDetails;
     }
   | {
       id: "erc7730";

@@ -4,15 +4,9 @@ This document lists every trust assumption SafeLens makes today.
 
 SafeLens classifies each source as:
 
-- `proof-verified`: validated against cryptographic Merkle/consensus proofs
 - `self-verified`: validated locally with deterministic code
-- `rpc-sourced`: accepted from an RPC endpoint (e.g., simulation results)
 - `api-sourced`: accepted from remote API responses
 - `user-provided`: accepted from local operator input or local files
-
-Each section of the evidence package carries its own trust classification,
-allowing progressive trust upgrades (e.g., `api-sourced` → `proof-verified`)
-as proof infrastructure is added.
 
 ## Evidence Generation (`apps/generator`, CLI `analyze`)
 
@@ -31,34 +25,9 @@ as proof infrastructure is added.
 | Safe tx hash recomputation | self-verified | Local hash implementation is correct | Cross-check hashes with independent implementation for critical flows |
 | Signature recovery checks | self-verified | Signatures are matched to claimed owners for `safeTxHash` | Treat invalid/unsupported signatures as hard stop |
 | Signature scheme coverage | api-sourced when unsupported signatures exist | Contract signatures / pre-approved hashes are not fully verified locally | Use on-chain or Safe-native validation when unsupported signatures appear |
-| Safe owners and threshold | api-sourced (upgradable to proof-verified) | `confirmations` and `confirmationsRequired` in evidence reflect on-chain state | Include `onchainPolicyProof` to upgrade to proof-verified |
-| On-chain policy proof | proof-verified when present, disabled otherwise | Merkle storage proofs for owners, threshold, nonce, modules, guard, fallback handler, singleton are valid against provided state root | Verify state root against finalized beacon chain consensus (Phase 4) |
-| Transaction simulation | rpc-sourced when present, disabled otherwise | Simulation of `execTransaction` with state overrides reflects actual execution | Include consensus proofs to upgrade from rpc-sourced to proof-verified |
+| Safe owners and threshold | api-sourced | `confirmations` and `confirmationsRequired` in evidence reflect on-chain state | Compare against chain state at execution block for high-assurance workflows |
 | Decoded calldata metadata | api-sourced | Human-readable decode (`dataDecoded`) may be incorrect | Treat raw calldata + hash as canonical; decode independently when needed |
 | Local settings labels | user-provided | Address/contract labels are accurate | Keep settings under change control and review diffs |
-
-## Evidence Package Sections
-
-The evidence package (v1.1) supports optional sections, each with an embedded trust classification:
-
-| Section | Trust field | Description |
-|---|---|---|
-| Core transaction data | — (always present) | EIP-712 fields, confirmations, hash — self-verified on parse |
-| `onchainPolicyProof` | `.trust` | Merkle storage proofs for Safe policy state (Phase 2) |
-| `simulation` | `.trust` | Transaction simulation results with state diffs and logs (Phase 3) |
-
-Sections are independent and can be enabled progressively. A v1.0 package
-without these sections is fully supported and behaves identically to before.
-
-## Trust Level Hierarchy
-
-From highest to lowest assurance:
-
-1. **proof-verified** — Validated against cryptographic proofs (Merkle storage proofs, consensus proofs)
-2. **self-verified** — Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
-3. **rpc-sourced** — Accepted from an RPC endpoint (simulation results without consensus backing)
-4. **api-sourced** — Accepted from a remote API (Safe Transaction Service)
-5. **user-provided** — Accepted from local operator input (URLs, settings, timestamps)
 
 ## Desktop Airgap Scope
 

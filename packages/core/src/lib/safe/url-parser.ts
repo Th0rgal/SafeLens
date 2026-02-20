@@ -1,10 +1,15 @@
 import { SafeUrlData, SafeUrlParseResult } from "../types";
-import {
-  NETWORK_CAPABILITIES_BY_CHAIN_ID,
-  getNetworkCapability,
-  getNetworkCapabilityByPrefix,
-  SAFE_ADDRESS_SEARCH_CHAIN_IDS,
-} from "../networks/capabilities";
+
+const CHAIN_PREFIX_MAP: Record<string, number> = {
+  eth: 1, // Ethereum Mainnet
+  gor: 5, // Goerli
+  sep: 11155111, // Sepolia
+  matic: 137, // Polygon
+  arb1: 42161, // Arbitrum One
+  oeth: 10, // Optimism
+  gno: 100, // Gnosis Chain
+  base: 8453, // Base
+};
 
 /**
  * Parse a Safe transaction URL
@@ -25,11 +30,10 @@ export function parseSafeUrl(urlString: string): SafeUrlData {
       throw new Error("Invalid 'safe' parameter format. Expected format: 'chain:address'");
     }
 
-    const network = getNetworkCapabilityByPrefix(chainPrefix);
-    if (!network) {
+    const chainId = CHAIN_PREFIX_MAP[chainPrefix];
+    if (!chainId) {
       throw new Error(`Unsupported chain prefix: ${chainPrefix}`);
     }
-    const chainId = network.chainId;
 
     if (!/^0x[a-fA-F0-9]{40}$/.test(safeAddress)) {
       throw new Error("Invalid Safe address format");
@@ -84,11 +88,10 @@ export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {
       throw new Error("Invalid 'safe' parameter format. Expected format: 'chain:address'");
     }
 
-    const network = getNetworkCapabilityByPrefix(chainPrefix);
-    if (!network) {
+    const chainId = CHAIN_PREFIX_MAP[chainPrefix];
+    if (!chainId) {
       throw new Error(`Unsupported chain prefix: ${chainPrefix}`);
     }
-    const chainId = network.chainId;
 
     if (!/^0x[a-fA-F0-9]{40}$/.test(safeAddress)) {
       throw new Error("Invalid Safe address format");
@@ -122,30 +125,53 @@ export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {
  * Get the chain prefix string for a given chain ID (reverse of CHAIN_PREFIX_MAP)
  */
 export function getChainPrefix(chainId: number): string {
-  const network = getNetworkCapability(chainId);
-  if (!network) {
+  const entry = Object.entries(CHAIN_PREFIX_MAP).find(([, id]) => id === chainId);
+  if (!entry) {
     throw new Error(`Unsupported chain ID: ${chainId}`);
   }
-  return network.chainPrefix;
+  return entry[0];
 }
 
 /** Chain IDs with Safe Transaction Service support (excludes deprecated testnets) */
-export const SUPPORTED_CHAIN_IDS = SAFE_ADDRESS_SEARCH_CHAIN_IDS;
+export const SUPPORTED_CHAIN_IDS = [1, 11155111, 137, 42161, 10, 100, 8453] as const;
 
 /**
  * Get Safe Transaction Service API URL for a chain
  */
 export function getSafeApiUrl(chainId: number): string {
-  const network = getNetworkCapability(chainId);
-  if (!network) {
+  const apiUrls: Record<number, string> = {
+    1: "https://safe-transaction-mainnet.safe.global",
+    5: "https://safe-transaction-goerli.safe.global",
+    11155111: "https://safe-transaction-sepolia.safe.global",
+    137: "https://safe-transaction-polygon.safe.global",
+    42161: "https://safe-transaction-arbitrum.safe.global",
+    10: "https://safe-transaction-optimism.safe.global",
+    100: "https://safe-transaction-gnosis-chain.safe.global",
+    8453: "https://safe-transaction-base.safe.global",
+  };
+
+  const url = apiUrls[chainId];
+  if (!url) {
     throw new Error(`Unsupported chain ID: ${chainId}`);
   }
-  return network.safeApiUrl;
+
+  return url;
 }
 
 /**
  * Get chain name from chain ID
  */
 export function getChainName(chainId: number): string {
-  return NETWORK_CAPABILITIES_BY_CHAIN_ID[chainId]?.chainName ?? `Chain ${chainId}`;
+  const chainNames: Record<number, string> = {
+    1: "Ethereum Mainnet",
+    5: "Goerli",
+    11155111: "Sepolia",
+    137: "Polygon",
+    42161: "Arbitrum One",
+    10: "Optimism",
+    100: "Gnosis Chain",
+    8453: "Base",
+  };
+
+  return chainNames[chainId] || `Chain ${chainId}`;
 }
