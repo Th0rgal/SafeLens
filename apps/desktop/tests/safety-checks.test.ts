@@ -256,6 +256,21 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBe("some-new-error-code");
   });
 
+  it("falls back to verifier error text for known verifier codes without custom detail mapping", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("beacon"),
+      makeConsensusVerification({
+        valid: false,
+        error: "Finality update JSON parsing failed.",
+        error_code: "invalid-finality-update-json",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("error");
+    expect(status.detail).toBe("Finality update JSON parsing failed.");
+    expect(status.reasonCode).toBe("invalid-finality-update-json");
+  });
+
   it("keeps OP Stack success wording explicit about non-equivalence", () => {
     const status = classifyConsensusStatus(
       makeEvidence("opstack"),

@@ -36,12 +36,24 @@ export type SafetyAttentionItem = {
 };
 
 type ConsensusFailureDetailCode =
-  | ConsensusVerifierErrorCode
+  | Extract<
+      ConsensusVerifierErrorCode,
+      | "unsupported-consensus-mode"
+      | "unsupported-network"
+      | "envelope-network-mismatch"
+      | "opstack-consensus-verifier-pending"
+      | "linea-consensus-verifier-pending"
+      | "stale-consensus-envelope"
+      | "non-finalized-consensus-envelope"
+      | "state-root-mismatch"
+      | "envelope-state-root-mismatch"
+      | "envelope-block-number-mismatch"
+      | "invalid-proof-payload"
+      | "invalid-expected-state-root"
+    >
   | "consensus-mode-disabled-by-feature-flag";
 
-const CONSENSUS_ERROR_DETAILS: Partial<
-  Record<ConsensusFailureDetailCode, string>
-> = {
+const CONSENSUS_ERROR_DETAILS: Record<ConsensusFailureDetailCode, string> = {
   "consensus-mode-disabled-by-feature-flag":
     "Consensus verification for this mode is disabled in this build.",
   "unsupported-consensus-mode":
@@ -69,6 +81,12 @@ const CONSENSUS_ERROR_DETAILS: Partial<
   "invalid-expected-state-root":
     "Expected state root format is invalid.",
 };
+
+function isConsensusFailureDetailCode(
+  value: string
+): value is ConsensusFailureDetailCode {
+  return value in CONSENSUS_ERROR_DETAILS;
+}
 
 const NO_PROOF_CONSENSUS_REASON_CODES = [
   "consensus-mode-disabled-by-feature-flag",
@@ -110,19 +128,14 @@ function getConsensusFailureDetail(
   consensusVerification: ConsensusVerificationResult,
   fallbackSummary: string
 ): string {
-  const mapped = (() => {
-    const errorCode = consensusVerification.error_code;
-    if (!errorCode) {
-      return undefined;
-    }
-    if (isConsensusVerifierErrorCode(errorCode)) {
-      return CONSENSUS_ERROR_DETAILS[errorCode];
-    }
-    if (errorCode === "consensus-mode-disabled-by-feature-flag") {
-      return CONSENSUS_ERROR_DETAILS["consensus-mode-disabled-by-feature-flag"];
-    }
-    return undefined;
-  })();
+  const errorCode = consensusVerification.error_code;
+  const mapped =
+    errorCode &&
+    ((isConsensusVerifierErrorCode(errorCode) &&
+      isConsensusFailureDetailCode(errorCode)) ||
+      errorCode === "consensus-mode-disabled-by-feature-flag")
+      ? CONSENSUS_ERROR_DETAILS[errorCode]
+      : undefined;
   if (mapped) {
     return mapped;
   }
