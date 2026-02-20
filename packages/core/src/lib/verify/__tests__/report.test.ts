@@ -356,6 +356,89 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain("OP Stack envelope checks passed");
   });
 
+  it("allows OP Stack trust upgrade once consensus verification succeeds even if export reasons still include pending", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const onchainProof = makeOnchainProof();
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: onchainProof,
+      consensusProof: makeExecutionConsensusProof("opstack"),
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: ["opstack-consensus-verifier-pending"] as ExportContractReason[],
+        artifacts: {
+          consensusProof: true,
+          onchainPolicyProof: true,
+          simulation: false,
+        },
+      },
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root: onchainProof.stateRoot,
+        verified_block_number: onchainProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 0,
+        error: null,
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBeNull();
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("consensus-verified-opstack");
+  });
+
+  it("allows Linea trust upgrade once consensus verification succeeds even if export reasons still include pending", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, 59144, TX_URL);
+    const onchainProof = makeOnchainProof();
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      chainId: 59144,
+      onchainPolicyProof: onchainProof,
+      consensusProof: makeExecutionConsensusProof("linea"),
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: ["linea-consensus-verifier-pending"] as ExportContractReason[],
+        artifacts: {
+          consensusProof: true,
+          onchainPolicyProof: true,
+          simulation: false,
+        },
+      },
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: true,
+        verified_state_root: onchainProof.stateRoot,
+        verified_block_number: onchainProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 0,
+        error: null,
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBeNull();
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("consensus-verified-linea");
+  });
+
   it("fails policy proof when consensus proof root/block mismatches", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

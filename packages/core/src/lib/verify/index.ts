@@ -108,6 +108,7 @@ function evaluateConsensusTrustDecision(
     };
   }
   if (
+    !consensusVerification &&
     evidence.consensusProof?.consensusMode === "opstack" &&
     exportReasons.includes("opstack-consensus-verifier-pending")
   ) {
@@ -117,6 +118,7 @@ function evaluateConsensusTrustDecision(
     };
   }
   if (
+    !consensusVerification &&
     evidence.consensusProof?.consensusMode === "linea" &&
     exportReasons.includes("linea-consensus-verifier-pending")
   ) {
