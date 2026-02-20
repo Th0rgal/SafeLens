@@ -284,4 +284,21 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
     expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
   });
+
+  it("does not mark consensus fetch failure for opstack chains when rpc was not provided", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, 10, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.reasons).toContain("missing-consensus-proof");
+    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+    expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
+  });
 });

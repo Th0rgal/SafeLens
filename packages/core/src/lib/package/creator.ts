@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import type { Address } from "viem";
 import { getSafeApiUrl } from "../safe/url-parser";
+import { getNetworkCapability } from "../networks/capabilities";
 import {
   fetchOnchainPolicyProof,
   type FetchOnchainProofOptions,
@@ -213,11 +214,15 @@ export function finalizeEvidenceExport(
   evidence: EvidencePackage,
   options: FinalizeExportContractOptions
 ): EvidencePackage {
+  const consensusMode = getNetworkCapability(evidence.chainId)?.consensusMode;
+  const consensusFetchRequiresRpc =
+    consensusMode === "opstack" || consensusMode === "linea";
   const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
-  const consensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
+  const proofConsensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
   // Beacon is fully verifier-backed; non-beacon modes remain partial and
   // emit deterministic pending-verifier reasons for trust signaling.
-  const hasVerifierSupportedConsensusProof = hasConsensusProofArtifact && consensusMode === "beacon";
+  const hasVerifierSupportedConsensusProof =
+    hasConsensusProofArtifact && proofConsensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();
@@ -229,6 +234,10 @@ export function finalizeEvidenceExport(
       reasons.add("consensus-mode-disabled-by-feature-flag");
     } else if (options.consensusProofUnsupportedMode) {
       reasons.add("unsupported-consensus-mode");
+    } else if (consensusFetchRequiresRpc && !options.rpcProvided) {
+      // For execution-envelope consensus modes, no RPC means enrichment was
+      // skipped by configuration rather than failing at runtime.
+      reasons.add("missing-consensus-proof");
     } else {
       reasons.add(
         options.consensusProofFailed
@@ -237,9 +246,9 @@ export function finalizeEvidenceExport(
       );
     }
   } else if (!hasVerifierSupportedConsensusProof) {
-    if (consensusMode === "opstack") {
+    if (proofConsensusMode === "opstack") {
       reasons.add("opstack-consensus-verifier-pending");
-    } else if (consensusMode === "linea") {
+    } else if (proofConsensusMode === "linea") {
       reasons.add("linea-consensus-verifier-pending");
     } else {
       reasons.add("unsupported-consensus-mode");

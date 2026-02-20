@@ -134,6 +134,7 @@ Generator rollout flags:
 - Beacon light-client fetch remains beacon-only; OP Stack/Linea are tracked as separate execution-envelope consensus modes.
 - OP Stack/Linea envelope generation now enforces `blockTag: finalized` to keep export-time consensus claims aligned with verifier finality requirements.
 - CLI `analyze` now attempts consensus enrichment where supported and always stamps `exportContract` with explicit machine-readable partial/failure reasons.
+- Export contracts now treat OP Stack/Linea consensus without an RPC URL as `missing-consensus-proof` (configuration gap), not `consensus-proof-fetch-failed` (runtime failure).
 - Verification reports now preserve `invalid-proof-payload` as an explicit consensus trust reason, instead of collapsing malformed envelope failures into a generic invalid-result message.
 
 ### Cleanup
