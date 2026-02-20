@@ -22,6 +22,7 @@ import { useSettingsConfig } from "@/lib/settings/hooks";
 import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/lib/safety-checks";
 import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
+import { buildConsensusDetailRows } from "@/lib/consensus-details";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -54,44 +55,6 @@ const SIMULATION_REASON_CODES: SimulationReasonCode[] = [
   "simulation-fetch-failed",
   "missing-simulation",
 ];
-
-type ConsensusModeDisplay = {
-  label: string;
-  loadingText: string;
-  successText: (participants: number) => string;
-};
-
-const CONSENSUS_MODE_DISPLAY: Record<"beacon" | "opstack" | "linea", ConsensusModeDisplay> = {
-  beacon: {
-    label: "Beacon",
-    loadingText: "Verifying consensus proof via BLS sync committee signatures...",
-    successText: (participants) =>
-      `State root verified against Beacon consensus (${participants}/512 sync committee participants).`,
-  },
-  opstack: {
-    label: "OP Stack",
-    loadingText: "Validating OP Stack consensus envelope integrity...",
-    successText: () =>
-      "State root verified against OP Stack consensus data. Assurance is chain-specific and not equivalent to Beacon finality.",
-  },
-  linea: {
-    label: "Linea",
-    loadingText: "Validating Linea consensus envelope integrity...",
-    successText: () =>
-      "State root verified against Linea consensus data. Assurance is chain-specific and not equivalent to Beacon finality.",
-  },
-};
-
-function getConsensusModeDisplay(mode: string | undefined): ConsensusModeDisplay {
-  switch (mode) {
-    case "opstack":
-      return CONSENSUS_MODE_DISPLAY.opstack;
-    case "linea":
-      return CONSENSUS_MODE_DISPLAY.linea;
-    default:
-      return CONSENSUS_MODE_DISPLAY.beacon;
-  }
-}
 
 function getSimulationUnavailableReason(evidence: EvidencePackage): string {
   const reasonCode = getSimulationUnavailableReasonCode(evidence);
@@ -231,7 +194,6 @@ export default function VerifyScreen() {
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
   const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
-  const [consensusSourceTrust, setConsensusSourceTrust] = useState<TrustLevel>("rpc-sourced");
   const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>(
     "Consensus proof included but not yet verified (requires desktop app)."
   );
@@ -252,7 +214,6 @@ export default function VerifyScreen() {
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
       setConsensusVerification(undefined);
-      setConsensusSourceTrust("rpc-sourced");
       setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
       setShowSafetyDetails(false);
       return;
@@ -266,7 +227,6 @@ export default function VerifyScreen() {
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
     setConsensusVerification(undefined);
-    setConsensusSourceTrust("rpc-sourced");
     setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
     setShowSafetyDetails(false);
 
@@ -290,7 +250,6 @@ export default function VerifyScreen() {
         setSimulationVerification(report.simulationVerification);
         const initialConsensusSource = report.sources.find((source) => source.id === "consensus-proof");
         if (initialConsensusSource) {
-          setConsensusSourceTrust(initialConsensusSource.trust);
           setConsensusSourceSummary(initialConsensusSource.summary);
         }
 
@@ -320,7 +279,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(missingRootResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -351,7 +309,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(consensusResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -378,7 +335,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(failedResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -443,10 +399,6 @@ export default function VerifyScreen() {
         ? "api-sourced"
         : "self-verified";
   const networkSupport = evidence ? buildNetworkSupportStatus(evidence) : null;
-  const consensusModeDisplay = useMemo(
-    () => getConsensusModeDisplay(evidence?.consensusProof?.consensusMode),
-    [evidence?.consensusProof?.consensusMode]
-  );
   const safetyChecks = useMemo(() => {
     if (!evidence) return [];
     return [
@@ -537,6 +489,7 @@ export default function VerifyScreen() {
             checks={safetyChecks}
             hashMatch={hashMatch}
             networkSupport={networkSupport}
+            consensusVerification={consensusVerification}
             showDetails={showSafetyDetails}
             onToggleDetails={() => setShowSafetyDetails((value) => !value)}
           />
@@ -757,59 +710,6 @@ export default function VerifyScreen() {
                 />
               ) : (
                 <SimulationUnavailableCard evidence={evidence} />
-              )}
-
-              {(consensusVerification || evidence?.consensusProof) && (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-2">
-                      <CardTitle>{`Consensus Verification (${consensusModeDisplay.label})`}</CardTitle>
-                      <TrustBadge level={consensusSourceTrust} />
-                    </div>
-                    <CardDescription>
-                      {!consensusVerification
-                        ? consensusModeDisplay.loadingText
-                        : consensusVerification.valid
-                          ? consensusModeDisplay.successText(consensusVerification.sync_committee_participants)
-                          : consensusVerification.error ?? consensusSourceSummary}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {consensusVerification ? (
-                      <div className="space-y-1.5">
-                        {consensusVerification.checks.map((check) => (
-                          <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                            <span className="text-sm font-medium">{check.label}</span>
-                            <div className="flex items-center gap-2">
-                              {check.detail && (
-                                <span className="text-xs text-muted">{check.detail}</span>
-                              )}
-                              {check.passed ? (
-                                <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                                  <ShieldCheck className="h-3 w-3" />
-                                  Pass
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                                  <AlertTriangle className="h-3 w-3" />
-                                  Fail
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        {consensusVerification.verified_state_root && (
-                          <div className="mt-2 rounded-md border border-border/15 glass-subtle px-3 py-2">
-                            <div className="text-xs text-muted">Verified State Root</div>
-                            <div className="font-mono text-xs break-all">{consensusVerification.verified_state_root}</div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted animate-pulse">Running BLS verification...</div>
-                    )}
-                  </CardContent>
-                </Card>
               )}
 
               <Card>
@@ -1069,6 +969,7 @@ function ExecutionSafetyPanel({
   checks,
   hashMatch,
   networkSupport,
+  consensusVerification,
   showDetails,
   onToggleDetails,
 }: {
@@ -1076,6 +977,7 @@ function ExecutionSafetyPanel({
   checks: SafetyCheck[];
   hashMatch: boolean;
   networkSupport: NetworkSupportStatus | null;
+  consensusVerification: ConsensusVerificationResult | undefined;
   showDetails: boolean;
   onToggleDetails: () => void;
 }) {
@@ -1094,6 +996,7 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.packagedAt
   );
+  const consensusDetails = buildConsensusDetailRows(evidence, consensusVerification);
 
   return (
     <Card>
@@ -1150,6 +1053,21 @@ function ExecutionSafetyPanel({
               {networkSupport.badgeText}
             </span>
             {networkSupport.helperText && <span className="text-amber-300">{networkSupport.helperText}</span>}
+          </div>
+        )}
+        {showDetails && consensusDetails.length > 0 && (
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+            <div className="text-xs font-medium text-muted">Consensus details</div>
+            <div className="mt-2 space-y-1.5">
+              {consensusDetails.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                  <span className="text-muted">{item.label}</span>
+                  <span className={item.monospace ? "max-w-[70%] break-all font-mono text-[11px]" : ""}>
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <button
