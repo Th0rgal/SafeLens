@@ -53,6 +53,11 @@ export type EvidenceVerificationReport = {
   simulationVerification?: SimulationVerificationResult;
   /** Consensus verification result (from Tauri backend, if available). */
   consensusVerification?: ConsensusVerificationResult;
+  /**
+   * Deterministic reason why consensus trust did or did not upgrade.
+   * null means consensus trust upgraded to "consensus-verified".
+   */
+  consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
 };
 
 export interface VerifyEvidenceOptions {
@@ -69,15 +74,17 @@ interface BuildReportSourcesOptions {
 
 type ConsensusTrustDecision = {
   trusted: boolean;
-  reason:
-    | "missing-or-invalid-consensus-result"
-    | "missing-consensus-or-policy-proof"
-    | "missing-verified-root-or-block"
-    | "state-root-mismatch-flag"
-    | "state-root-mismatch-policy-proof"
-    | "block-number-mismatch-policy-proof"
-    | null;
+  reason: ConsensusTrustDecisionReason;
 };
+
+export type ConsensusTrustDecisionReason =
+  | "missing-or-invalid-consensus-result"
+  | "missing-consensus-or-policy-proof"
+  | "missing-verified-root-or-block"
+  | "state-root-mismatch-flag"
+  | "state-root-mismatch-policy-proof"
+  | "block-number-mismatch-policy-proof"
+  | null;
 
 /**
  * Trust upgrade boundary for consensus verification.
@@ -162,6 +169,7 @@ function buildReportSources(
       : options.evidence.onchainPolicyProof?.trust,
     simulationTrust: options.evidence.simulation?.trust,
     consensusVerified: consensusDecision.trusted,
+    consensusTrustDecisionReason: consensusDecision.reason,
   }));
 }
 
@@ -172,9 +180,15 @@ export function applyConsensusVerificationToReport(
     consensusVerification: ConsensusVerificationResult;
   }
 ): EvidenceVerificationReport {
+  const consensusDecision = evaluateConsensusTrustDecision(
+    evidence,
+    options.consensusVerification
+  );
+
   return {
     ...report,
     consensusVerification: options.consensusVerification,
+    consensusTrustDecisionReason: consensusDecision.reason,
     sources: buildReportSources({
       evidence,
       settings: options.settings,
@@ -342,5 +356,6 @@ export async function verifyEvidencePackage(
     hashMatch,
     policyProof,
     simulationVerification,
+    consensusTrustDecisionReason: undefined,
   };
 }

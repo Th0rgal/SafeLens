@@ -281,6 +281,7 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(consensusSource?.trust).toBe("consensus-verified");
     expect(consensusSource?.summary).toContain("verified against Ethereum consensus");
+    expect(upgraded.consensusTrustDecisionReason).toBeNull();
   });
 
   it("keeps consensus source rpc-sourced when consensus verification fails", async () => {
@@ -310,6 +311,9 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "missing-or-invalid-consensus-result"
+    );
   });
 
   it("keeps consensus source rpc-sourced when verified state root does not match onchain proof", async () => {
@@ -340,6 +344,9 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "state-root-mismatch-flag"
+    );
   });
 
   it("keeps consensus source rpc-sourced when verified block number does not match onchain proof", async () => {
@@ -369,6 +376,9 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "block-number-mismatch-policy-proof"
+    );
   });
 
   it("keeps consensus source rpc-sourced when onchain policy proof is missing", async () => {
@@ -397,6 +407,9 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
     expect(consensusSource?.trust).toBe("rpc-sourced");
     expect(consensusSource?.summary).toContain("not yet verified");
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "missing-consensus-or-policy-proof"
+    );
   });
 });
 

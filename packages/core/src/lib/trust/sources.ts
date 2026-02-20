@@ -1,4 +1,5 @@
 import type { TrustLevel } from "./types";
+import type { ConsensusTrustDecisionReason } from "../verify";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
 
@@ -49,6 +50,7 @@ export interface VerificationSourceContext {
   onchainPolicyProofTrust?: TrustLevel;
   simulationTrust?: TrustLevel;
   consensusVerified?: boolean;
+  consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
 }
 
 export const DEFAULT_VERIFICATION_SOURCE_CONTEXT: VerificationSourceContext = {
@@ -120,6 +122,30 @@ export function buildGenerationSources(): VerificationSource[] {
 export function buildVerificationSources(
   context: VerificationSourceContext
 ): VerificationSource[] {
+  const consensusFailureSummaryByReason: Record<
+    Exclude<ConsensusTrustDecisionReason, null>,
+    string
+  > = {
+    "missing-or-invalid-consensus-result":
+      "local consensus verification has not succeeded",
+    "missing-consensus-or-policy-proof":
+      "required consensus or on-chain policy proof is missing",
+    "missing-verified-root-or-block":
+      "verifier output did not include verified root and block",
+    "state-root-mismatch-flag":
+      "light client reported a state-root mismatch",
+    "state-root-mismatch-policy-proof":
+      "verified root does not match on-chain policy proof root",
+    "block-number-mismatch-policy-proof":
+      "verified block does not match on-chain policy proof block",
+  };
+
+  const consensusFailureReason =
+    context.consensusTrustDecisionReason &&
+    context.consensusTrustDecisionReason !== null
+      ? consensusFailureSummaryByReason[context.consensusTrustDecisionReason]
+      : null;
+
   return [
     {
       id: VERIFICATION_SOURCE_IDS.EVIDENCE_PACKAGE,
@@ -254,10 +280,14 @@ export function buildVerificationSources(
           trust: context.consensusVerified ? ("consensus-verified" as TrustLevel) : ("rpc-sourced" as TrustLevel),
           summary: context.consensusVerified
             ? "State root verified against Ethereum consensus via BLS sync committee signatures."
-            : "Consensus proof included but not yet verified (requires desktop app).",
+            : consensusFailureReason
+              ? `Consensus proof included but not yet verified (${consensusFailureReason}).`
+              : "Consensus proof included but not yet verified (requires desktop app).",
           detail: context.consensusVerified
             ? "The state root used in policy proofs has been cryptographically verified against a finalized beacon block header signed by the Ethereum sync committee (512 validators)."
-            : "The evidence package contains beacon chain light client data. Verification requires the desktop app's Helios-based verifier.",
+            : consensusFailureReason
+              ? `Consensus trust was not upgraded because ${consensusFailureReason}.`
+              : "The evidence package contains beacon chain light client data. Verification requires the desktop app's Helios-based verifier.",
           status: "enabled" as VerificationSourceStatus,
         }
       : {
