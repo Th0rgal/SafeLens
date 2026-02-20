@@ -98,4 +98,27 @@ describe("consensus mode routing", () => {
       "No consensus verification path is configured for chain ID 137."
     );
   });
+
+  it("rejects non-finalized block tags for opstack envelopes", async () => {
+    await expect(
+      fetchConsensusProof(10, {
+        rpcUrl: "https://example.invalid/rpc",
+        blockTag: "latest",
+      })
+    ).rejects.toThrow(
+      "Execution consensus envelopes require blockTag='finalized'; received 'latest'."
+    );
+  });
+
+  it("rejects non-finalized block tags for linea envelopes", async () => {
+    await expect(
+      fetchConsensusProof(59144, {
+        rpcUrl: "https://example.invalid/rpc",
+        blockTag: "safe",
+        enableExperimentalLineaConsensus: true,
+      })
+    ).rejects.toThrow(
+      "Execution consensus envelopes require blockTag='finalized'; received 'safe'."
+    );
+  });
 });

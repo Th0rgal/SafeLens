@@ -111,6 +111,11 @@ export async function fetchExecutionConsensusProof(
   }
 
   const blockTag = options.blockTag ?? "finalized";
+  if (blockTag !== "finalized") {
+    throw new Error(
+      `Execution consensus envelopes require blockTag='finalized'; received '${blockTag}'.`
+    );
+  }
   const block = await requestJsonRpc<ExecutionBlockHeader>(rpcUrl, "eth_getBlockByNumber", [
     blockTag,
     false,
