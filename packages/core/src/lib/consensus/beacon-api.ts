@@ -195,6 +195,7 @@ export async function fetchConsensusProof(
   }
 
   const consensusProof: ConsensusProof = {
+    consensusMode: "beacon",
     checkpoint: checkpoint as `0x${string}`,
     bootstrap: JSON.stringify(bootstrap.data),
     updates,

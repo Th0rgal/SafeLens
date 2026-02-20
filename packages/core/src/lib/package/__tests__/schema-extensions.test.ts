@@ -232,6 +232,40 @@ describe("export contract schema", () => {
 });
 
 describe("consensus proof network schema", () => {
+  it("accepts known consensus modes", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "beacon",
+      checkpoint:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      bootstrap: "{}",
+      updates: [],
+      finalityUpdate: "{}",
+      network: "mainnet",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+      finalizedSlot: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unsupported consensus modes", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "unknown",
+      checkpoint:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      bootstrap: "{}",
+      updates: [],
+      finalityUpdate: "{}",
+      network: "mainnet",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+      finalizedSlot: 1,
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects unsupported consensus networks", () => {
     const result = consensusProofSchema.safeParse({
       checkpoint:

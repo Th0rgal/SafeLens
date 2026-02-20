@@ -24,12 +24,18 @@ pub struct ConsensusProofInput {
     pub bootstrap: String,
     pub updates: Vec<String>,
     pub finality_update: String,
+    #[serde(default = "default_consensus_mode")]
+    pub consensus_mode: String,
     pub network: String,
     #[allow(dead_code)]
     pub state_root: String,
     pub expected_state_root: String,
     #[allow(dead_code)]
     pub block_number: u64,
+}
+
+fn default_consensus_mode() -> String {
+    "beacon".to_string()
 }
 
 /// Result returned to the frontend after verification.
@@ -284,6 +290,7 @@ fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
 }
 
 const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
+const ERR_UNSUPPORTED_CONSENSUS_MODE: &str = "unsupported-consensus-mode";
 const ERR_INVALID_CHECKPOINT: &str = "invalid-checkpoint-hash";
 const ERR_INVALID_BOOTSTRAP: &str = "invalid-bootstrap-json";
 const ERR_BOOTSTRAP_VERIFICATION_FAILED: &str = "bootstrap-verification-failed";
@@ -339,6 +346,16 @@ impl ConsensusSpec for GnosisConsensusSpec {
 /// 4. Extract the EVM state root from the finalized execution payload
 /// 5. Compare it against the claimed state root
 pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
+    if input.consensus_mode != "beacon" {
+        return fail_result(
+            ERR_UNSUPPORTED_CONSENSUS_MODE,
+            format!(
+                "Unsupported consensus mode for desktop verifier: {}. Only beacon is currently supported.",
+                input.consensus_mode
+            ),
+        );
+    }
+
     let network = match parse_network(&input.network) {
         Ok(network) => network,
         Err(err) => return fail_result(ERR_UNSUPPORTED_NETWORK, err),
@@ -681,7 +698,7 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_UNSUPPORTED_NETWORK,
+        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -769,6 +786,7 @@ mod tests {
             bootstrap: "{}".to_string(),
             updates: vec![],
             finality_update: "{}".to_string(),
+            consensus_mode: "beacon".to_string(),
             network: "polygon".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -788,6 +806,7 @@ mod tests {
             bootstrap: "{}".to_string(),
             updates: vec![],
             finality_update: "{}".to_string(),
+            consensus_mode: "beacon".to_string(),
             network: "mainnet".to_string(),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -798,5 +817,29 @@ mod tests {
 
         assert!(!result.valid);
         assert_eq!(result.error_code.as_deref(), Some(ERR_INVALID_CHECKPOINT));
+    }
+
+    #[test]
+    fn returns_machine_readable_error_code_for_unsupported_consensus_mode() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            bootstrap: "{}".to_string(),
+            updates: vec![],
+            finality_update: "{}".to_string(),
+            consensus_mode: "opstack".to_string(),
+            network: "mainnet".to_string(),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 0,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_UNSUPPORTED_CONSENSUS_MODE)
+        );
     }
 }

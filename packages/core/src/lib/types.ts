@@ -73,6 +73,10 @@ export const trustClassificationSchema = z.enum([
 
 export type TrustClassification = z.infer<typeof trustClassificationSchema>;
 
+// Consensus verifier mode used by desktop verification.
+export const consensusModeSchema = z.enum(["beacon", "opstack", "linea"]);
+export type ConsensusMode = z.infer<typeof consensusModeSchema>;
+
 // Storage proof for a single slot
 export const storageProofEntrySchema = z.object({
   key: hashSchema,
@@ -137,6 +141,8 @@ export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
 // Contains beacon chain light client data that allows offline BLS verification
 // of the state root against Ethereum consensus.
 export const consensusProofSchema = z.object({
+  /** Consensus verifier mode. Beacon is currently implemented in desktop verifier. */
+  consensusMode: consensusModeSchema.optional(),
   /** Beacon block root used as the bootstrap checkpoint */
   checkpoint: hashSchema,
   /** JSON-serialized light client bootstrap (sync committee + beacon header) */
