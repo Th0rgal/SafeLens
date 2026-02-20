@@ -1,5 +1,8 @@
 import type { TrustLevel } from "./types";
-import type { ConsensusTrustDecisionReason } from "../verify";
+import {
+  summarizeConsensusTrustDecisionReason,
+  type ConsensusTrustDecisionReason,
+} from "../verify/consensus-trust";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
 
@@ -122,29 +125,9 @@ export function buildGenerationSources(): VerificationSource[] {
 export function buildVerificationSources(
   context: VerificationSourceContext
 ): VerificationSource[] {
-  const consensusFailureSummaryByReason: Record<
-    Exclude<ConsensusTrustDecisionReason, null>,
-    string
-  > = {
-    "missing-or-invalid-consensus-result":
-      "local consensus verification has not succeeded",
-    "missing-consensus-or-policy-proof":
-      "required consensus or on-chain policy proof is missing",
-    "missing-verified-root-or-block":
-      "verifier output did not include verified root and block",
-    "state-root-mismatch-flag":
-      "light client reported a state-root mismatch",
-    "state-root-mismatch-policy-proof":
-      "verified root does not match on-chain policy proof root",
-    "block-number-mismatch-policy-proof":
-      "verified block does not match on-chain policy proof block",
-  };
-
-  const consensusFailureReason =
-    context.consensusTrustDecisionReason &&
-    context.consensusTrustDecisionReason !== null
-      ? consensusFailureSummaryByReason[context.consensusTrustDecisionReason]
-      : null;
+  const consensusFailureReason = summarizeConsensusTrustDecisionReason(
+    context.consensusTrustDecisionReason
+  );
 
   return [
     {

@@ -6,6 +6,7 @@ import {
   buildVerificationSources,
   createVerificationSourceContext,
 } from "../sources";
+import { CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON } from "../../verify";
 
 describe("buildVerificationSources", () => {
   it("documents generation assumptions with explicit trust levels", () => {
@@ -160,5 +161,27 @@ describe("buildVerificationSources", () => {
 
     const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
     expect(simSource?.trust).toBe("proof-verified");
+  });
+
+  it("uses centralized consensus reason summaries for non-upgrade trust output", () => {
+    const reason = "state-root-mismatch-policy-proof" as const;
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: false,
+      consensusTrustDecisionReason: reason,
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
+    expect(consensusSource?.detail).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
   });
 });

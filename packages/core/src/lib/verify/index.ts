@@ -7,6 +7,12 @@ import { verifySimulation, type SimulationVerificationResult } from "../simulati
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources, createVerificationSourceContext } from "../trust";
+import type { ConsensusTrustDecisionReason } from "./consensus-trust";
+export {
+  CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  summarizeConsensusTrustDecisionReason,
+} from "./consensus-trust";
+export type { ConsensusTrustDecisionReason } from "./consensus-trust";
 
 export type SignatureCheckSummary = {
   total: number;
@@ -76,15 +82,6 @@ type ConsensusTrustDecision = {
   trusted: boolean;
   reason: ConsensusTrustDecisionReason;
 };
-
-export type ConsensusTrustDecisionReason =
-  | "missing-or-invalid-consensus-result"
-  | "missing-consensus-or-policy-proof"
-  | "missing-verified-root-or-block"
-  | "state-root-mismatch-flag"
-  | "state-root-mismatch-policy-proof"
-  | "block-number-mismatch-policy-proof"
-  | null;
 
 /**
  * Trust upgrade boundary for consensus verification.
