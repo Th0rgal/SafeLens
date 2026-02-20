@@ -197,6 +197,7 @@ export interface FinalizeExportContractOptions {
   consensusProofAttempted: boolean;
   consensusProofFailed: boolean;
   consensusProofUnsupportedMode?: boolean;
+  consensusProofDisabledByFeatureFlag?: boolean;
   onchainPolicyProofAttempted: boolean;
   onchainPolicyProofFailed: boolean;
   simulationAttempted: boolean;
@@ -224,6 +225,8 @@ export function finalizeEvidenceExport(
   if (!hasConsensusProofArtifact) {
     if (!options.consensusProofAttempted) {
       reasons.add("missing-consensus-proof");
+    } else if (options.consensusProofDisabledByFeatureFlag) {
+      reasons.add("consensus-mode-disabled-by-feature-flag");
     } else if (options.consensusProofUnsupportedMode) {
       reasons.add("unsupported-consensus-mode");
     } else {

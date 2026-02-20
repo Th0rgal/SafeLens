@@ -202,6 +202,24 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
   });
 
+  it("records feature-flag-disabled consensus mode explicitly", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      consensusProofDisabledByFeatureFlag: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.reasons).toContain("consensus-mode-disabled-by-feature-flag");
+    expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+  });
+
   it("keeps export partial with OP Stack pending-verifier reason when envelope artifact exists", () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const evidence = {

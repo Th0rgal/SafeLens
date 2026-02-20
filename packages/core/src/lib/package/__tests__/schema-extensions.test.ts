@@ -254,6 +254,21 @@ describe("export contract schema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts feature-flag-disabled consensus reason", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "partial",
+      status: "partial",
+      isFullyVerifiable: false,
+      reasons: ["consensus-mode-disabled-by-feature-flag"],
+      artifacts: {
+        consensusProof: false,
+        onchainPolicyProof: true,
+        simulation: true,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("consensus proof network schema", () => {

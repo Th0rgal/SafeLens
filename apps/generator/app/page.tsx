@@ -38,6 +38,8 @@ const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
   "missing-consensus-proof": "Consensus proof was not included.",
   "unsupported-consensus-mode":
     "Consensus verification mode for this network is not implemented yet.",
+  "consensus-mode-disabled-by-feature-flag":
+    "Consensus verification mode for this network is currently disabled by rollout feature flag.",
   "opstack-consensus-verifier-pending":
     "OP Stack envelope checks are included, but full cryptographic consensus verification is still pending.",
   "linea-consensus-verifier-pending":
@@ -79,6 +81,7 @@ export default function AnalyzePage() {
     const rpcProvided = Boolean(trimmedRpc);
     let consensusProofFailed = false;
     let consensusProofUnsupportedMode = false;
+    let consensusProofDisabledByFeatureFlag = false;
     let onchainPolicyProofFailed = false;
     let simulationFailed = false;
     let onchainPolicyProofAttempted = false;
@@ -99,7 +102,11 @@ export default function AnalyzePage() {
         "code" in err &&
         err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
       ) {
-        consensusProofUnsupportedMode = true;
+        if ("reason" in err && err.reason === "disabled-by-feature-flag") {
+          consensusProofDisabledByFeatureFlag = true;
+        } else {
+          consensusProofUnsupportedMode = true;
+        }
       }
       console.warn("Failed to fetch consensus proof:", err);
       setConsensusWarning(
@@ -139,6 +146,7 @@ export default function AnalyzePage() {
       consensusProofAttempted: true,
       consensusProofFailed,
       consensusProofUnsupportedMode,
+      consensusProofDisabledByFeatureFlag,
       onchainPolicyProofAttempted,
       onchainPolicyProofFailed,
       simulationAttempted,
