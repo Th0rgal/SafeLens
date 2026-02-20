@@ -15,6 +15,10 @@ import {
   gnosis,
   base,
 } from "viem/chains";
+import {
+  NETWORK_CAPABILITIES_BY_CHAIN_ID,
+  getNetworkCapability,
+} from "./networks/capabilities";
 
 export const CHAIN_BY_ID: Record<number, Chain> = {
   1: mainnet,
@@ -27,12 +31,13 @@ export const CHAIN_BY_ID: Record<number, Chain> = {
 };
 
 /** Default public RPC endpoints per chain (rate-limited, best-effort). */
-export const DEFAULT_RPC_URLS: Record<number, string> = {
-  1: "https://ethereum-rpc.publicnode.com",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  42161: "https://arbitrum-one-rpc.publicnode.com",
-  10: "https://optimism-rpc.publicnode.com",
-  100: "https://gnosis-rpc.publicnode.com",
-  8453: "https://base-rpc.publicnode.com",
-};
+export const DEFAULT_RPC_URLS: Record<number, string> = Object.fromEntries(
+  Object.entries(NETWORK_CAPABILITIES_BY_CHAIN_ID)
+    .map(([chainId, capability]) => [Number(chainId), capability.defaultRpcUrl])
+    .filter((entry): entry is [number, string] => typeof entry[1] === "string")
+);
+
+/** Returns explicit capability info for proof/simulation support checks. */
+export function getExecutionCapability(chainId: number) {
+  return getNetworkCapability(chainId);
+}

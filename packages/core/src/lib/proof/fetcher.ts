@@ -16,7 +16,7 @@ import {
   type PublicClient,
 } from "viem";
 import type { OnchainPolicyProof, TrustClassification } from "../types";
-import { CHAIN_BY_ID, DEFAULT_RPC_URLS } from "../chains";
+import { CHAIN_BY_ID, DEFAULT_RPC_URLS, getExecutionCapability } from "../chains";
 import {
   SENTINEL,
   SLOT_SINGLETON,
@@ -65,6 +65,16 @@ export async function fetchOnchainPolicyProof(
   chainId: number,
   options: FetchOnchainProofOptions = {}
 ): Promise<OnchainPolicyProof> {
+  const capability = getExecutionCapability(chainId);
+  if (!capability) {
+    throw new Error(`Unsupported chain ID for proof fetching: ${chainId}`);
+  }
+  if (!capability.supportsOnchainPolicyProof) {
+    throw new Error(
+      `On-chain policy proof is not supported on ${capability.chainName} (chain ${chainId}).`
+    );
+  }
+
   const chain = CHAIN_BY_ID[chainId];
   if (!chain) {
     throw new Error(`Unsupported chain ID for proof fetching: ${chainId}`);

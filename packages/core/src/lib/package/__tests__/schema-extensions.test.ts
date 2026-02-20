@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   evidencePackageSchema,
   evidenceExportContractSchema,
+  consensusProofSchema,
   onchainPolicyProofSchema,
   simulationSchema,
   trustClassificationSchema,
@@ -227,6 +228,24 @@ describe("export contract schema", () => {
       },
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe("consensus proof network schema", () => {
+  it("rejects unsupported consensus networks", () => {
+    const result = consensusProofSchema.safeParse({
+      checkpoint:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      bootstrap: "{}",
+      updates: [],
+      finalityUpdate: "{}",
+      network: "holesky",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+      finalizedSlot: 1,
+    });
+    expect(result.success).toBe(false);
   });
 });
 

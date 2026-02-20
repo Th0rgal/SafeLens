@@ -26,7 +26,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { computeSafeTxHash } from "../safe/hash";
-import { CHAIN_BY_ID, DEFAULT_RPC_URLS } from "../chains";
+import { CHAIN_BY_ID, DEFAULT_RPC_URLS, getExecutionCapability } from "../chains";
 import {
   SENTINEL,
   SLOT_OWNER_COUNT,
@@ -101,6 +101,16 @@ export async function fetchSimulation(
   transaction: TransactionFields,
   options: FetchSimulationOptions = {}
 ): Promise<Simulation> {
+  const capability = getExecutionCapability(chainId);
+  if (!capability) {
+    throw new Error(`Unsupported chain ID for simulation: ${chainId}`);
+  }
+  if (!capability.supportsSimulation) {
+    throw new Error(
+      `Simulation is not supported on ${capability.chainName} (chain ${chainId}).`
+    );
+  }
+
   const chain = CHAIN_BY_ID[chainId];
   if (!chain) {
     throw new Error(`Unsupported chain ID for simulation: ${chainId}`);

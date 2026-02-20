@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CONSENSUS_NETWORKS } from "./networks/capabilities";
 
 // Ethereum address schema
 export const addressSchema = z
@@ -145,7 +146,7 @@ export const consensusProofSchema = z.object({
   /** JSON-serialized light client finality update (BLS-signed finalized header) */
   finalityUpdate: z.string(),
   /** Network identifier for selecting the correct fork config and genesis root */
-  network: z.enum(["mainnet", "sepolia", "holesky", "gnosis"]),
+  network: z.enum(CONSENSUS_NETWORKS),
   /** The EVM execution state root extracted from the finalized header */
   stateRoot: hashSchema,
   /** Block number of the finalized execution payload */

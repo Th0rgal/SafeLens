@@ -8,10 +8,16 @@
  */
 
 import type { ConsensusProof } from "../types";
+import {
+  CONSENSUS_NETWORKS,
+  type ConsensusNetwork,
+  CONSENSUS_SUPPORTED_CHAIN_IDS,
+  NETWORK_CAPABILITIES_BY_CHAIN_ID,
+} from "../networks/capabilities";
 
 /** Network-specific configuration for beacon chain consensus. */
 export interface BeaconNetworkConfig {
-  network: "mainnet" | "sepolia" | "holesky" | "gnosis";
+  network: ConsensusNetwork;
   /** Genesis root for the beacon chain (hex, 0x-prefixed). */
   genesisRoot: string;
   /** Genesis time as unix timestamp (seconds). */
@@ -24,50 +30,56 @@ export interface BeaconNetworkConfig {
   epochsPerSyncCommitteePeriod: number;
 }
 
-/** Known network configs. */
-export const BEACON_NETWORKS: Record<string, BeaconNetworkConfig> = {
-  mainnet: {
-    network: "mainnet",
-    genesisRoot:
-      "0x4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95",
-    genesisTime: 1606824023,
-    secondsPerSlot: 12,
-    slotsPerEpoch: 32,
-    epochsPerSyncCommitteePeriod: 256,
-  },
-  gnosis: {
-    network: "gnosis",
-    genesisRoot:
-      "0xf5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47",
-    genesisTime: 1638993340,
-    secondsPerSlot: 5,
-    slotsPerEpoch: 16,
-    epochsPerSyncCommitteePeriod: 256,
-  },
-  sepolia: {
-    network: "sepolia",
-    genesisRoot:
-      "0xd8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078",
-    genesisTime: 1655733600,
-    secondsPerSlot: 12,
-    slotsPerEpoch: 32,
-    epochsPerSyncCommitteePeriod: 256,
-  },
-};
+/** Known network configs sourced from the shared capability matrix. */
+export const BEACON_NETWORKS: Record<ConsensusNetwork, BeaconNetworkConfig> =
+  Object.fromEntries(
+    CONSENSUS_NETWORKS.map((networkName) => {
+      const network = Object.values(NETWORK_CAPABILITIES_BY_CHAIN_ID).find(
+        (entry) => entry.consensus?.network === networkName
+      );
+      if (!network?.consensus) {
+        throw new Error(`Missing consensus capability config for ${networkName}`);
+      }
+      return [
+        networkName,
+        {
+          network: network.consensus.network,
+          genesisRoot: network.consensus.genesisRoot,
+          genesisTime: network.consensus.genesisTime,
+          secondsPerSlot: network.consensus.secondsPerSlot,
+          slotsPerEpoch: network.consensus.slotsPerEpoch,
+          epochsPerSyncCommitteePeriod:
+            network.consensus.epochsPerSyncCommitteePeriod,
+        } satisfies BeaconNetworkConfig,
+      ];
+    })
+  ) as Record<ConsensusNetwork, BeaconNetworkConfig>;
 
-/** Map chainId to beacon network name. */
-export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, string> = {
-  1: "mainnet",
-  100: "gnosis",
-  11155111: "sepolia",
-};
+/** Map chainId to beacon network name using shared capabilities. */
+export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, ConsensusNetwork> =
+  Object.fromEntries(
+    CONSENSUS_SUPPORTED_CHAIN_IDS.map((chainId) => {
+      const capability = NETWORK_CAPABILITIES_BY_CHAIN_ID[chainId];
+      if (!capability?.consensus) {
+        throw new Error(`Missing consensus network for chain ${chainId}`);
+      }
+      return [chainId, capability.consensus.network];
+    })
+  ) as Record<number, ConsensusNetwork>;
 
-/** Default public beacon chain RPC endpoints. */
-export const DEFAULT_BEACON_RPC_URLS: Record<string, string> = {
-  mainnet: "https://lodestar-mainnet.chainsafe.io",
-  gnosis: "https://rpc.gnosischain.com/beacon",
-  sepolia: "https://lodestar-sepolia.chainsafe.io",
-};
+/** Default public beacon chain RPC endpoints sourced from shared capabilities. */
+export const DEFAULT_BEACON_RPC_URLS: Record<ConsensusNetwork, string> =
+  Object.fromEntries(
+    CONSENSUS_NETWORKS.map((networkName) => {
+      const network = Object.values(NETWORK_CAPABILITIES_BY_CHAIN_ID).find(
+        (entry) => entry.consensus?.network === networkName
+      );
+      if (!network?.consensus?.defaultBeaconRpcUrl) {
+        throw new Error(`Missing beacon RPC URL for consensus network ${networkName}`);
+      }
+      return [networkName, network.consensus.defaultBeaconRpcUrl];
+    })
+  ) as Record<ConsensusNetwork, string>;
 
 export interface FetchConsensusProofOptions {
   /** Custom beacon chain RPC URL. Falls back to a public endpoint. */
@@ -91,8 +103,9 @@ export async function fetchConsensusProof(
 ): Promise<ConsensusProof> {
   const networkName = CHAIN_ID_TO_BEACON_NETWORK[chainId];
   if (!networkName) {
+    const consensusChains = CONSENSUS_SUPPORTED_CHAIN_IDS.join(", ");
     throw new Error(
-      `No beacon chain config for chain ID ${chainId}. Consensus proofs are supported for Ethereum mainnet (1), Gnosis (100), and Sepolia (11155111).`
+      `No beacon chain config for chain ID ${chainId}. Consensus proofs are supported on chain IDs: ${consensusChains}.`
     );
   }
 
