@@ -30,10 +30,14 @@ export type SafetyCheck = {
 };
 
 export type SafetyAttentionItem = {
-  id: string;
+  id: SafetyAttentionItemId;
   detail: string;
   reasonCode?: string;
 };
+
+export type SafetyAttentionItemId =
+  | "network-support"
+  | `check-${SafetyCheckId}`;
 
 type ConsensusFailureDetailCode =
   | Extract<

@@ -457,6 +457,9 @@ describe("buildSafetyAttentionItems", () => {
     expect(items[0].id).toBe("check-chain-state-finalized");
     expect(items[0].reasonCode).toBe("state-root-mismatch");
     expect(items[2].id).toBe("network-support");
+    for (const item of items) {
+      expect(item.id).toMatch(/^network-support$|^check-(policy-authentic|chain-state-finalized|simulation-outcome)$/);
+    }
   });
 
   it("does not dedupe different checks that share identical detail text", () => {
