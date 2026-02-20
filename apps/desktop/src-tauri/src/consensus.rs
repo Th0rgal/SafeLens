@@ -1543,4 +1543,70 @@ mod tests {
             Some("proofPayload.block.timestamp is missing or invalid RFC3339 timestamp.")
         );
     }
+
+    #[test]
+    fn returns_state_root_mismatch_for_linea_envelope_root_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_STATE_ROOT_MISMATCH));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn returns_stale_error_for_linea_envelope_with_old_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-03T00:00:01Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_STALE_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Consensus envelope block timestamp is stale relative to package timestamp.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
 }
