@@ -3,6 +3,7 @@ import { fetchOnchainPolicyProof } from "../fetcher";
 import { onchainPolicyProofSchema } from "../../types";
 import { verifyPolicyProof } from "../verify-policy";
 import type { Address } from "viem";
+import { itLiveRpc } from "../../__tests__/live-rpc";
 
 const SAFE_ADDRESS = "0x9fC3dc011b461664c835F2527fffb1169b3C213e" as Address;
 
@@ -13,14 +14,8 @@ describe("fetchOnchainPolicyProof", () => {
     ).rejects.toThrow("Unsupported chain ID");
   });
 
-  it("fetches a valid proof from mainnet and passes Zod validation", async () => {
-    let proof;
-    try {
-      proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1);
-    } catch (err) {
-      console.warn("Skipping live RPC test:", err);
-      return;
-    }
+  itLiveRpc("fetches a valid proof from mainnet and passes Zod validation", async () => {
+    const proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1);
 
     // Zod schema validation
     const result = onchainPolicyProofSchema.safeParse(proof);
@@ -40,14 +35,8 @@ describe("fetchOnchainPolicyProof", () => {
     );
   }, 120_000);
 
-  it("fetched proof passes full cryptographic verification", async () => {
-    let proof;
-    try {
-      proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1);
-    } catch (err) {
-      console.warn("Skipping live RPC test:", err);
-      return;
-    }
+  itLiveRpc("fetched proof passes full cryptographic verification", async () => {
+    const proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1);
 
     // Run the full MPT proof verification
     const result = verifyPolicyProof(proof, SAFE_ADDRESS);
@@ -73,16 +62,10 @@ describe("fetchOnchainPolicyProof", () => {
     expect(checkIds).toContain("modules-linked-list");
   }, 120_000);
 
-  it("accepts a custom RPC URL", async () => {
-    let proof;
-    try {
-      proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1, {
-        rpcUrl: "https://ethereum-rpc.publicnode.com",
-      });
-    } catch (err) {
-      console.warn("Skipping live RPC test:", err);
-      return;
-    }
+  itLiveRpc("accepts a custom RPC URL", async () => {
+    const proof = await fetchOnchainPolicyProof(SAFE_ADDRESS, 1, {
+      rpcUrl: "https://ethereum-rpc.publicnode.com",
+    });
 
     expect(proof.blockNumber).toBeGreaterThan(0);
     expect(proof.decodedPolicy.owners).toHaveLength(5);

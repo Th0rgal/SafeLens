@@ -6,6 +6,7 @@ import {
   CHAIN_ID,
   TX_URL,
 } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
+import { itLiveRpc } from "../../__tests__/live-rpc";
 
 describe("enrichWithOnchainProof", () => {
   it("returns v1.0 package unchanged when no rpcUrl is passed (control)", () => {
@@ -14,19 +15,9 @@ describe("enrichWithOnchainProof", () => {
     expect(evidence.onchainPolicyProof).toBeUndefined();
   });
 
-  it("bumps version to 1.1 and attaches onchainPolicyProof", async () => {
-    // This test requires a live RPC. Skip if no network.
-    // We use a real public endpoint for Ethereum mainnet.
+  itLiveRpc("bumps version to 1.1 and attaches onchainPolicyProof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-
-    let enriched;
-    try {
-      enriched = await enrichWithOnchainProof(evidence);
-    } catch (err) {
-      // Network failures should not fail CI
-      console.warn("Skipping enrichment test (network unavailable):", err);
-      return;
-    }
+    const enriched = await enrichWithOnchainProof(evidence);
 
     expect(enriched.version).toBe("1.1");
     expect(enriched.onchainPolicyProof).toBeDefined();
@@ -40,16 +31,9 @@ describe("enrichWithOnchainProof", () => {
     expect(result.success).toBe(true);
   }, 60_000); // 60s timeout for RPC calls
 
-  it("preserves all original evidence fields after enrichment", async () => {
+  itLiveRpc("preserves all original evidence fields after enrichment", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-
-    let enriched;
-    try {
-      enriched = await enrichWithOnchainProof(evidence);
-    } catch {
-      console.warn("Skipping enrichment test (network unavailable)");
-      return;
-    }
+    const enriched = await enrichWithOnchainProof(evidence);
 
     // All original fields should be preserved
     expect(enriched.safeAddress).toBe(evidence.safeAddress);
@@ -63,16 +47,9 @@ describe("enrichWithOnchainProof", () => {
 });
 
 describe("enrichWithSimulation", () => {
-  it("bumps version to 1.1 and attaches simulation", async () => {
+  itLiveRpc("bumps version to 1.1 and attaches simulation", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-
-    let enriched;
-    try {
-      enriched = await enrichWithSimulation(evidence);
-    } catch (err) {
-      console.warn("Skipping simulation enrichment test (network unavailable):", err);
-      return;
-    }
+    const enriched = await enrichWithSimulation(evidence);
 
     expect(enriched.version).toBe("1.1");
     expect(enriched.simulation).toBeDefined();
@@ -86,16 +63,9 @@ describe("enrichWithSimulation", () => {
     expect(result.success).toBe(true);
   }, 60_000);
 
-  it("preserves all original evidence fields after simulation enrichment", async () => {
+  itLiveRpc("preserves all original evidence fields after simulation enrichment", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-
-    let enriched;
-    try {
-      enriched = await enrichWithSimulation(evidence);
-    } catch {
-      console.warn("Skipping simulation enrichment test (network unavailable)");
-      return;
-    }
+    const enriched = await enrichWithSimulation(evidence);
 
     expect(enriched.safeAddress).toBe(evidence.safeAddress);
     expect(enriched.safeTxHash).toBe(evidence.safeTxHash);
