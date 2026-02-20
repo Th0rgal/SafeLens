@@ -121,4 +121,27 @@ describe("proof alignment in package enrichment", () => {
         "0xa38574512fb60ec85617785cd52c30f918902b355bab53242fbdf3b40b7a1e7e",
     });
   });
+
+  it("pins onchain proof fetch to consensus block by default", async () => {
+    fetchOnchainPolicyProofMock.mockResolvedValue(
+      makeOnchainPolicyProof({ blockNumber: 21000042 })
+    );
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof({ blockNumber: 21000042 }),
+    };
+
+    await enrichWithOnchainProof(evidence, { rpcUrl: "https://rpc.example" });
+
+    expect(fetchOnchainPolicyProofMock).toHaveBeenCalledWith(
+      evidence.safeAddress,
+      evidence.chainId,
+      expect.objectContaining({
+        rpcUrl: "https://rpc.example",
+        blockNumber: 21000042,
+      })
+    );
+  });
 });

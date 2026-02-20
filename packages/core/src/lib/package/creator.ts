@@ -110,10 +110,14 @@ export async function enrichWithOnchainProof(
   evidence: EvidencePackage,
   options: FetchOnchainProofOptions = {}
 ): Promise<EvidencePackage> {
+  const blockNumber = options.blockNumber ?? evidence.consensusProof?.blockNumber;
   const proof = await fetchOnchainPolicyProof(
     evidence.safeAddress as Address,
     evidence.chainId,
-    options
+    {
+      ...options,
+      blockNumber,
+    }
   );
 
   if (evidence.consensusProof) {

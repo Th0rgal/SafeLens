@@ -24,6 +24,7 @@ import {
   SUPPORTED_CHAIN_IDS,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
+import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
@@ -61,6 +62,8 @@ export default function AnalyzePage() {
     let enriched = pkg;
     const trimmedRpc = rpcUrl.trim();
     const rpcProvided = Boolean(trimmedRpc);
+    const { consensusMode, shouldAttemptConsensusProof } = buildConsensusEnrichmentPlan(pkg.chainId);
+    let consensusProofAttempted = false;
     let consensusProofFailed = false;
     let consensusProofUnsupportedMode = false;
     let consensusProofDisabledByFeatureFlag = false;
@@ -71,29 +74,36 @@ export default function AnalyzePage() {
 
     // Fetch consensus proof first so policy proof can be pinned to the same
     // finalized execution block.
-    try {
-      enriched = await enrichWithConsensusProof(enriched, {
-        rpcUrl: trimmedRpc || undefined,
-        enableExperimentalLineaConsensus: lineaConsensusEnabled,
-      });
-    } catch (err) {
-      consensusProofFailed = true;
-      if (
-        typeof err === "object" &&
-        err !== null &&
-        "code" in err &&
-        err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
-      ) {
-        if ("reason" in err && err.reason === "disabled-by-feature-flag") {
-          consensusProofDisabledByFeatureFlag = true;
-        } else {
-          consensusProofUnsupportedMode = true;
+    if (shouldAttemptConsensusProof) {
+      consensusProofAttempted = true;
+      try {
+        enriched = await enrichWithConsensusProof(enriched, {
+          rpcUrl:
+            (consensusMode === "opstack" || consensusMode === "linea") &&
+            rpcProvided
+              ? trimmedRpc
+              : undefined,
+          enableExperimentalLineaConsensus: lineaConsensusEnabled,
+        });
+      } catch (err) {
+        consensusProofFailed = true;
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
+        ) {
+          if ("reason" in err && err.reason === "disabled-by-feature-flag") {
+            consensusProofDisabledByFeatureFlag = true;
+          } else {
+            consensusProofUnsupportedMode = true;
+          }
         }
+        console.warn("Failed to fetch consensus proof:", err);
+        setConsensusWarning(
+          `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+        );
       }
-      console.warn("Failed to fetch consensus proof:", err);
-      setConsensusWarning(
-        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
-      );
     }
 
     if (rpcProvided) {
@@ -125,7 +135,7 @@ export default function AnalyzePage() {
 
     return finalizeEvidenceExport(enriched, {
       rpcProvided,
-      consensusProofAttempted: true,
+      consensusProofAttempted,
       consensusProofFailed,
       consensusProofUnsupportedMode,
       consensusProofDisabledByFeatureFlag,
