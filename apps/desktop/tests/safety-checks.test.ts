@@ -36,6 +36,42 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBeUndefined();
   });
 
+  it("surfaces deterministic reason code/details for feature-flag disabled consensus mode", () => {
+    const status = classifyConsensusStatus(
+      {
+        exportContract: {
+          reasons: ["consensus-mode-disabled-by-feature-flag"],
+        },
+      } as EvidencePackage,
+      undefined,
+      "fallback summary"
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("consensus-mode-disabled-by-feature-flag");
+    expect(status.detail).toBe(
+      "Consensus verification for this mode is disabled in this build."
+    );
+  });
+
+  it("surfaces deterministic reason code/details for consensus fetch failures", () => {
+    const status = classifyConsensusStatus(
+      {
+        exportContract: {
+          reasons: ["consensus-proof-fetch-failed"],
+        },
+      } as EvidencePackage,
+      undefined,
+      "fallback summary"
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("consensus-proof-fetch-failed");
+    expect(status.detail).toBe(
+      "Consensus proof generation failed during package creation. Regenerate the package and retry."
+    );
+  });
+
   it("falls back to default no-proof detail when summary is empty", () => {
     const status = classifyConsensusStatus(makeEvidence(), undefined, "");
     expect(status.status).toBe("warning");

@@ -43,6 +43,36 @@ const CONSENSUS_ERROR_DETAILS: Partial<Record<string, string>> = {
     "Expected state root format is invalid.",
 };
 
+const NO_PROOF_CONSENSUS_REASON_CODES = [
+  "consensus-mode-disabled-by-feature-flag",
+  "unsupported-consensus-mode",
+  "consensus-proof-fetch-failed",
+  "missing-consensus-proof",
+] as const;
+
+type NoProofConsensusReasonCode = (typeof NO_PROOF_CONSENSUS_REASON_CODES)[number];
+
+const NO_PROOF_CONSENSUS_DETAILS: Record<NoProofConsensusReasonCode, string> = {
+  "consensus-mode-disabled-by-feature-flag":
+    "Consensus verification for this mode is disabled in this build.",
+  "unsupported-consensus-mode":
+    "This network/mode is not supported for consensus verification in this build.",
+  "consensus-proof-fetch-failed":
+    "Consensus proof generation failed during package creation. Regenerate the package and retry.",
+  "missing-consensus-proof":
+    "No consensus proof was included in this evidence package.",
+};
+
+function getNoProofConsensusReasonCode(
+  evidence: Pick<EvidencePackage, "exportContract">
+): NoProofConsensusReasonCode | null {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+  const matched = NO_PROOF_CONSENSUS_REASON_CODES.find((reasonCode) =>
+    exportReasons.includes(reasonCode)
+  );
+  return matched ?? null;
+}
+
 function getConsensusFailureDetail(
   consensusVerification: ConsensusVerificationResult,
   fallbackSummary: string
@@ -84,14 +114,17 @@ export function classifyConsensusStatus(
   fallbackSummary: string
 ): SafetyCheck {
   if (!evidence.consensusProof) {
+    const reasonCode = getNoProofConsensusReasonCode(evidence);
     return {
       id: "chain-state-finalized",
       label: "Chain state is finalized",
       status: "warning",
-      detail:
-        fallbackSummary.trim().length > 0
+      detail: reasonCode
+        ? NO_PROOF_CONSENSUS_DETAILS[reasonCode]
+        : fallbackSummary.trim().length > 0
           ? fallbackSummary
           : "No consensus proof was included in this evidence package.",
+      reasonCode: reasonCode ?? undefined,
     };
   }
 

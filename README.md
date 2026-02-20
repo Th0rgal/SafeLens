@@ -144,6 +144,7 @@ Generator rollout flags:
 - Desktop network support badges are now package-aware: if a package omits simulation or consensus artifacts, `ExecutionSafetyPanel` shows `Partial` with explicit helper text instead of a capability-only `Full` label.
 - `ExecutionSafetyPanel` now maps known consensus verifier `error_code` values to concise, actionable trust text (with raw verifier text fallback for unknown codes) to keep warning/error messaging deterministic and user-focused.
 - `ExecutionSafetyPanel` expanded view now surfaces machine-readable reason codes for warning/error rows, preserving deterministic trust semantics alongside concise user-facing text.
+- Missing-consensus warning rows now also expose deterministic export reason codes/details (for example `consensus-mode-disabled-by-feature-flag` and `consensus-proof-fetch-failed`) instead of falling back to generic copy.
 - Consensus mode/block/participants/state-root details now render inside `ExecutionSafetyPanel` expanded view; the separate standalone consensus card was removed to keep consensus signaling in one top-level safety component.
 
 ### Cleanup
