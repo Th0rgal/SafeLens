@@ -4,16 +4,18 @@ import {
   createEvidencePackage,
   enrichWithConsensusProof,
   enrichWithOnchainProof,
+  enrichWithSimulation,
   PROOF_ALIGNMENT_ERROR_CODE,
 } from "../creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 
 type BeaconConsensusProof = Extract<ConsensusProof, { checkpoint: string }>;
 
-const { fetchOnchainPolicyProofMock, fetchConsensusProofMock } = vi.hoisted(
+const { fetchOnchainPolicyProofMock, fetchConsensusProofMock, fetchSimulationMock } = vi.hoisted(
   () => ({
     fetchOnchainPolicyProofMock: vi.fn(),
     fetchConsensusProofMock: vi.fn(),
+    fetchSimulationMock: vi.fn(),
   })
 );
 
@@ -23,6 +25,10 @@ vi.mock("../../proof", () => ({
 
 vi.mock("../../consensus", () => ({
   fetchConsensusProof: fetchConsensusProofMock,
+}));
+
+vi.mock("../../simulation", () => ({
+  fetchSimulation: fetchSimulationMock,
 }));
 
 function makeOnchainPolicyProof(
@@ -80,6 +86,7 @@ describe("proof alignment in package enrichment", () => {
   beforeEach(() => {
     fetchOnchainPolicyProofMock.mockReset();
     fetchConsensusProofMock.mockReset();
+    fetchSimulationMock.mockReset();
   });
 
   it("rejects consensus enrichment when existing onchain proof is misaligned", async () => {
@@ -143,5 +150,44 @@ describe("proof alignment in package enrichment", () => {
         blockNumber: 21000042,
       })
     );
+  });
+
+  it("keeps version 1.2 when adding onchain proof after consensus proof", async () => {
+    fetchOnchainPolicyProofMock.mockResolvedValue(makeOnchainPolicyProof());
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const enriched = await enrichWithOnchainProof(evidence, {
+      rpcUrl: "https://rpc.example",
+    });
+
+    expect(enriched.version).toBe("1.2");
+  });
+
+  it("keeps version 1.2 when adding simulation after consensus proof", async () => {
+    fetchSimulationMock.mockResolvedValue({
+      success: true,
+      returnData: "0x",
+      gasUsed: "1",
+      logs: [],
+      blockNumber: 21000000,
+      trust: "rpc-sourced",
+    });
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const enriched = await enrichWithSimulation(evidence, {
+      rpcUrl: "https://rpc.example",
+    });
+
+    expect(enriched.version).toBe("1.2");
   });
 });

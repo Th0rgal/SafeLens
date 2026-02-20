@@ -126,7 +126,7 @@ export async function enrichWithOnchainProof(
 
   return {
     ...evidence,
-    version: "1.1",
+    version: withEnrichmentVersion(evidence.version),
     onchainPolicyProof: proof,
   };
 }
@@ -151,7 +151,7 @@ export async function enrichWithSimulation(
 
   return {
     ...evidence,
-    version: "1.1",
+    version: withEnrichmentVersion(evidence.version),
     simulation,
   };
 }
@@ -320,4 +320,8 @@ function assertProofAlignment(
     consensusStateRoot,
     consensusBlockNumber,
   });
+}
+
+function withEnrichmentVersion(version: EvidencePackage["version"]): "1.1" | "1.2" {
+  return version === "1.2" ? "1.2" : "1.1";
 }
