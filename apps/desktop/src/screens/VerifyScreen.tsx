@@ -52,6 +52,44 @@ const SIMULATION_REASON_CODES: SimulationReasonCode[] = [
   "missing-simulation",
 ];
 
+type ConsensusModeDisplay = {
+  label: string;
+  loadingText: string;
+  successText: (participants: number) => string;
+};
+
+const CONSENSUS_MODE_DISPLAY: Record<"beacon" | "opstack" | "linea", ConsensusModeDisplay> = {
+  beacon: {
+    label: "Beacon",
+    loadingText: "Verifying consensus proof via BLS sync committee signatures...",
+    successText: (participants) =>
+      `State root verified against Beacon consensus (${participants}/512 sync committee participants).`,
+  },
+  opstack: {
+    label: "OP Stack",
+    loadingText: "Validating OP Stack consensus envelope integrity...",
+    successText: () =>
+      "State root verified against OP Stack consensus data. Assurance is chain-specific and not equivalent to Beacon finality.",
+  },
+  linea: {
+    label: "Linea",
+    loadingText: "Validating Linea consensus envelope integrity...",
+    successText: () =>
+      "State root verified against Linea consensus data. Assurance is chain-specific and not equivalent to Beacon finality.",
+  },
+};
+
+function getConsensusModeDisplay(mode: string | undefined): ConsensusModeDisplay {
+  switch (mode) {
+    case "opstack":
+      return CONSENSUS_MODE_DISPLAY.opstack;
+    case "linea":
+      return CONSENSUS_MODE_DISPLAY.linea;
+    default:
+      return CONSENSUS_MODE_DISPLAY.beacon;
+  }
+}
+
 function getSimulationUnavailableReason(evidence: EvidencePackage): string {
   const exportReasons = evidence.exportContract?.reasons ?? [];
   const matchedReason = SIMULATION_REASON_CODES.find((code) =>
@@ -350,6 +388,10 @@ export default function VerifyScreen() {
         ? "api-sourced"
         : "self-verified";
   const networkSupport = evidence ? getNetworkSupportStatus(evidence.chainId) : null;
+  const consensusModeDisplay = useMemo(
+    () => getConsensusModeDisplay(evidence?.consensusProof?.consensusMode),
+    [evidence?.consensusProof?.consensusMode]
+  );
 
   return (
     <div className="space-y-6">
@@ -647,14 +689,14 @@ export default function VerifyScreen() {
             <Card>
               <CardHeader>
                 <div className="flex items-center gap-2">
-                  <CardTitle>Consensus Verification</CardTitle>
+                  <CardTitle>{`Consensus Verification (${consensusModeDisplay.label})`}</CardTitle>
                   <TrustBadge level={consensusSourceTrust} />
                 </div>
                 <CardDescription>
                   {!consensusVerification
-                    ? "Verifying consensus proof via BLS sync committee signatures..."
+                    ? consensusModeDisplay.loadingText
                     : consensusVerification.valid
-                      ? `State root verified against Ethereum consensus (${consensusVerification.sync_committee_participants}/512 validators)`
+                      ? consensusModeDisplay.successText(consensusVerification.sync_committee_participants)
                       : consensusVerification.error ?? consensusSourceSummary}
                 </CardDescription>
               </CardHeader>
