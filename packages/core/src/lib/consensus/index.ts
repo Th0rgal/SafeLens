@@ -44,8 +44,8 @@ export class UnsupportedConsensusModeError extends Error {
 /**
  * Fetch a consensus proof for a chain using explicit mode routing.
  * Beacon uses light-client proofs; opstack/linea return execution-header
- * proof envelopes for packaging while desktop verification remains explicit
- * about those modes being unsupported today.
+ * proof envelopes for packaging. Desktop verification runs deterministic
+ * envelope checks for those modes and emits explicit pending-verifier codes.
  */
 export async function fetchConsensusProof(
   chainId: number,

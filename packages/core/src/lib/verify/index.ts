@@ -107,6 +107,18 @@ function evaluateConsensusTrustDecision(
       reason: "unsupported-consensus-mode",
     };
   }
+  if (consensusVerification?.error_code === "opstack-consensus-verifier-pending") {
+    return {
+      trusted: false,
+      reason: "opstack-consensus-verifier-pending",
+    };
+  }
+  if (consensusVerification?.error_code === "linea-consensus-verifier-pending") {
+    return {
+      trusted: false,
+      reason: "linea-consensus-verifier-pending",
+    };
+  }
   if (consensusVerification?.error_code === "state-root-mismatch") {
     return {
       trusted: false,

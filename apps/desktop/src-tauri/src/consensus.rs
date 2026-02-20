@@ -296,6 +296,8 @@ fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
 
 const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
 const ERR_UNSUPPORTED_CONSENSUS_MODE: &str = "unsupported-consensus-mode";
+const ERR_OPSTACK_VERIFIER_PENDING: &str = "opstack-consensus-verifier-pending";
+const ERR_LINEA_VERIFIER_PENDING: &str = "linea-consensus-verifier-pending";
 const ERR_INVALID_CHECKPOINT: &str = "invalid-checkpoint-hash";
 const ERR_INVALID_BOOTSTRAP: &str = "invalid-bootstrap-json";
 const ERR_BOOTSTRAP_VERIFICATION_FAILED: &str = "bootstrap-verification-failed";
@@ -795,7 +797,13 @@ fn verify_execution_envelope(
             mode.display_name(),
             mode.display_name()
         )),
-        error_code: Some(ERR_UNSUPPORTED_CONSENSUS_MODE.into()),
+        error_code: Some(
+            match mode {
+                ExecutionConsensusMode::OpStack => ERR_OPSTACK_VERIFIER_PENDING,
+                ExecutionConsensusMode::Linea => ERR_LINEA_VERIFIER_PENDING,
+            }
+            .into(),
+        ),
         checks,
     }
 }
@@ -1173,7 +1181,8 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_INVALID_PROOF_PAYLOAD, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_LINEA_VERIFIER_PENDING,
+        ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_OPSTACK_VERIFIER_PENDING,
         ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
         ERR_UNSUPPORTED_NETWORK,
     };
@@ -1304,7 +1313,7 @@ mod tests {
     }
 
     #[test]
-    fn returns_machine_readable_error_code_for_unsupported_consensus_mode() {
+    fn returns_machine_readable_pending_error_code_for_opstack_mode() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
             bootstrap: None,
@@ -1327,7 +1336,7 @@ mod tests {
         assert!(!result.valid);
         assert_eq!(
             result.error_code.as_deref(),
-            Some(ERR_UNSUPPORTED_CONSENSUS_MODE)
+            Some(ERR_OPSTACK_VERIFIER_PENDING)
         );
         assert_eq!(result.verified_block_number, Some(1));
         assert_eq!(
@@ -1346,6 +1355,35 @@ mod tests {
             .checks
             .iter()
             .any(|check| check.id == "envelope-state-root" && check.passed));
+    }
+
+    #[test]
+    fn returns_machine_readable_pending_error_code_for_linea_mode() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_LINEA_VERIFIER_PENDING)
+        );
+        assert_eq!(result.verified_block_number, Some(1));
     }
 
     #[test]

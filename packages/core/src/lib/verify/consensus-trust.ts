@@ -5,8 +5,11 @@
  * logic and report/rendering surfaces. Keep them machine-readable and stable.
  */
 export const CONSENSUS_TRUST_DECISION_REASONS = [
-  // Consensus mode is recognized but verifier support is intentionally pending.
+  // Consensus mode is unknown to the desktop verifier.
   "unsupported-consensus-mode",
+  // Mode-specific envelope checks passed, but cryptographic verification is pending.
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
   // Local desktop consensus verification did not succeed yet.
   "missing-or-invalid-consensus-result",
   // Consensus envelope timestamp is too old at package generation time.
@@ -34,7 +37,11 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
   string
 > = {
   "unsupported-consensus-mode":
-    "consensus mode is included but not yet implemented in desktop verifier",
+    "consensus mode is not supported by the desktop verifier",
+  "opstack-consensus-verifier-pending":
+    "OP Stack envelope checks passed but cryptographic consensus verification is still pending",
+  "linea-consensus-verifier-pending":
+    "Linea envelope checks passed but cryptographic consensus verification is still pending",
   "missing-or-invalid-consensus-result":
     "local consensus verification has not succeeded",
   "stale-consensus-envelope":
