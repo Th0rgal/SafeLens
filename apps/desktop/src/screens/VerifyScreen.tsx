@@ -33,6 +33,15 @@ type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer
     : never
   : never;
 
+type SafetyStatus = "check" | "warning" | "error";
+
+type SafetyCheck = {
+  id: string;
+  label: string;
+  status: SafetyStatus;
+  detail: string;
+};
+
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
@@ -181,6 +190,153 @@ function WarningBanner({ warning, className }: { warning: TransactionWarning; cl
       <span>{warning.message}</span>
     </div>
   );
+}
+
+function classifyConsensusStatus(
+  evidence: EvidencePackage,
+  consensusVerification: ConsensusVerificationResult | undefined,
+  fallbackSummary: string
+): SafetyCheck {
+  if (!evidence.consensusProof) {
+    return {
+      id: "chain-state-finalized",
+      label: "Chain state is finalized",
+      status: "warning",
+      detail: "No consensus proof was included in this evidence package.",
+    };
+  }
+
+  if (!consensusVerification) {
+    return {
+      id: "chain-state-finalized",
+      label: "Chain state is finalized",
+      status: "warning",
+      detail: "Consensus verification is still running.",
+    };
+  }
+
+  if (consensusVerification.valid) {
+    return {
+      id: "chain-state-finalized",
+      label: "Chain state is finalized",
+      status: "check",
+      detail:
+        consensusVerification.verified_block_number != null
+          ? `Verified at block ${consensusVerification.verified_block_number}.`
+          : "Consensus verification passed.",
+    };
+  }
+
+  const warningCodes = new Set([
+    "unsupported-consensus-mode",
+    "stale-consensus-envelope",
+    "non-finalized-consensus-envelope",
+  ]);
+
+  return {
+    id: "chain-state-finalized",
+    label: "Chain state is finalized",
+    status: warningCodes.has(consensusVerification.error_code ?? "") ? "warning" : "error",
+    detail: consensusVerification.error ?? fallbackSummary,
+  };
+}
+
+function classifyPolicyStatus(
+  evidence: EvidencePackage,
+  policyProof: PolicyProofVerificationResult | undefined
+): SafetyCheck {
+  if (!evidence.onchainPolicyProof) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "warning",
+      detail: "No on-chain policy proof was included in this evidence package.",
+    };
+  }
+
+  if (!policyProof) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "warning",
+      detail: "Policy proof verification is still running.",
+    };
+  }
+
+  if (policyProof.valid) {
+    return {
+      id: "policy-authentic",
+      label: "Policy is authentic",
+      status: "check",
+      detail: "All policy fields matched the on-chain proof.",
+    };
+  }
+
+  return {
+    id: "policy-authentic",
+    label: "Policy is authentic",
+    status: "error",
+    detail: policyProof.errors[0] ?? "Policy proof verification failed.",
+  };
+}
+
+function classifySimulationStatus(
+  evidence: EvidencePackage,
+  simulationVerification: SimulationVerificationResult | undefined
+): SafetyCheck {
+  if (!simulationVerification || !evidence.simulation) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "warning",
+      detail: getSimulationUnavailableReason(evidence),
+    };
+  }
+
+  if (!simulationVerification.valid) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "error",
+      detail:
+        simulationVerification.errors[0] ??
+        "Simulation structure checks failed.",
+    };
+  }
+
+  if (simulationVerification.executionReverted) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "warning",
+      detail: "Simulation ran but the transaction reverted.",
+    };
+  }
+
+  return {
+    id: "simulation-outcome",
+    label: "Simulation outcome",
+    status: "check",
+    detail: "Simulation ran successfully.",
+  };
+}
+
+function formatRelativeTime(timestamp: string): string | null {
+  const parsed = new Date(timestamp);
+  const ms = parsed.getTime();
+  if (Number.isNaN(ms)) return null;
+
+  const diffMinutes = Math.max(0, Math.floor((Date.now() - ms) / 60000));
+  if (diffMinutes < 1) return "just now";
+  if (diffMinutes === 1) return "1 minute ago";
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours === 1) return "1 hour ago";
+  if (diffHours < 24) return `${diffHours} hours ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  return diffDays === 1 ? "1 day ago" : `${diffDays} days ago`;
 }
 
 export default function VerifyScreen() {
@@ -411,6 +567,14 @@ export default function VerifyScreen() {
     () => getConsensusModeDisplay(evidence?.consensusProof?.consensusMode),
     [evidence?.consensusProof?.consensusMode]
   );
+  const safetyChecks = useMemo(() => {
+    if (!evidence) return [];
+    return [
+      classifyPolicyStatus(evidence, policyProof),
+      classifyConsensusStatus(evidence, consensusVerification, consensusSourceSummary),
+      classifySimulationStatus(evidence, simulationVerification),
+    ];
+  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification]);
 
   return (
     <div className="space-y-6">
@@ -488,6 +652,13 @@ export default function VerifyScreen() {
 
       {verified && evidence && (
         <div className="space-y-6">
+          <ExecutionSafetyPanel
+            evidence={evidence}
+            checks={safetyChecks}
+            hashMatch={hashMatch}
+            networkSupport={networkSupport}
+          />
+
           <InterpretationCard
             dataDecoded={evidence.dataDecoded}
             txTo={evidence.transaction.to}
@@ -984,6 +1155,107 @@ function SimulationUnavailableCard({ evidence }: { evidence: EvidencePackage }) 
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{reason}</span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const SAFETY_STATUS_STYLE: Record<SafetyStatus, { text: string; badge: string; icon: typeof ShieldCheck }> = {
+  check: {
+    text: "text-emerald-300",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    icon: ShieldCheck,
+  },
+  warning: {
+    text: "text-amber-300",
+    badge: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    icon: AlertTriangle,
+  },
+  error: {
+    text: "text-red-300",
+    badge: "border-red-500/30 bg-red-500/10 text-red-300",
+    icon: AlertTriangle,
+  },
+};
+
+function ExecutionSafetyPanel({
+  evidence,
+  checks,
+  hashMatch,
+  networkSupport,
+}: {
+  evidence: EvidencePackage;
+  checks: SafetyCheck[];
+  hashMatch: boolean;
+  networkSupport: ReturnType<typeof getNetworkSupportStatus> | null;
+}) {
+  const hasError = !hashMatch || checks.some((check) => check.status === "error");
+  const hasWarning = checks.some((check) => check.status === "warning");
+
+  const verdict = hasError
+    ? { title: "Do not sign", detail: "One or more safety checks failed.", status: "error" as const }
+    : hasWarning
+      ? { title: "Review carefully", detail: "Some checks are partial or unavailable.", status: "warning" as const }
+      : { title: "Safe to sign", detail: "Core safety checks passed.", status: "check" as const };
+
+  const verdictStyle = SAFETY_STATUS_STYLE[verdict.status];
+  const VerdictIcon = verdictStyle.icon;
+  const simulationFreshness = evidence.simulation
+    ? `Simulated at block ${evidence.simulation.blockNumber} • package created ${formatRelativeTime(evidence.packagedAt) ?? "at an unknown time"}`
+    : "Simulation not performed for this package.";
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>Execution Safety</CardTitle>
+          <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${verdictStyle.badge}`}>
+            <VerdictIcon className="h-3 w-3" />
+            {verdict.title}
+          </span>
+        </div>
+        <CardDescription>{verdict.detail}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!hashMatch && (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            Safe transaction hash mismatch detected. Treat this package as unsafe.
+          </div>
+        )}
+        {checks.map((check) => {
+          const style = SAFETY_STATUS_STYLE[check.status];
+          const Icon = style.icon;
+          return (
+            <div key={check.id} className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{check.label}</span>
+                <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+                  <Icon className="h-3 w-3" />
+                  {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
+                </span>
+              </div>
+              <div className={`mt-1 text-xs ${style.text}`}>{check.detail}</div>
+            </div>
+          );
+        })}
+        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+          {simulationFreshness}
+        </div>
+        {networkSupport && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted">Network support:</span>
+            <span
+              className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
+                networkSupport.isFullySupported
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              }`}
+            >
+              {networkSupport.badgeText}
+            </span>
+            {networkSupport.helperText && <span className="text-amber-300">{networkSupport.helperText}</span>}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
