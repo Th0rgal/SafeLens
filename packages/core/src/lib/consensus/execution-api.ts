@@ -48,6 +48,17 @@ interface EnvelopePayload {
   };
 }
 
+function resolveEnvelopeNetwork(chainId: number, fallbackNetwork: string): string {
+  // Keep OP Mainnet envelope metadata aligned with desktop verifier contract.
+  // "oeth" is a Safe URL prefix, while consensus envelope metadata uses
+  // the canonical network identifier "optimism".
+  if (chainId === 10) {
+    return "optimism";
+  }
+
+  return fallbackNetwork;
+}
+
 function parseHexQuantity(value: string, fieldName: string): number {
   if (!/^0x[0-9a-fA-F]+$/.test(value)) {
     throw new Error(`Invalid hex quantity for ${fieldName}: ${value}`);
@@ -140,7 +151,10 @@ export async function fetchExecutionConsensusProof(
 
   return {
     consensusMode,
-    network: capability?.chainPrefix ?? String(chainId),
+    network: resolveEnvelopeNetwork(
+      chainId,
+      capability?.chainPrefix ?? String(chainId)
+    ),
     stateRoot: block.stateRoot,
     blockNumber,
     proofPayload: JSON.stringify(envelopePayload),

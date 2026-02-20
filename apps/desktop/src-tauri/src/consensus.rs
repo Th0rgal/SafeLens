@@ -343,11 +343,14 @@ impl ExecutionConsensusMode {
         }
     }
 
-    fn expected_network(self, chain_id: u64) -> Option<&'static str> {
+    fn expected_networks(self, chain_id: u64) -> Option<&'static [&'static str]> {
         match (self, chain_id) {
-            (Self::OpStack, 10) => Some("optimism"),
-            (Self::OpStack, 8453) => Some("base"),
-            (Self::Linea, 59144) => Some("linea"),
+            // Keep backward compatibility for previously generated envelopes
+            // that used Safe URL chain prefix ("oeth") instead of
+            // canonical OP Mainnet network metadata ("optimism").
+            (Self::OpStack, 10) => Some(&["optimism", "oeth"]),
+            (Self::OpStack, 8453) => Some(&["base"]),
+            (Self::Linea, 59144) => Some(&["linea"]),
             _ => None,
         }
     }
@@ -570,17 +573,25 @@ fn verify_execution_envelope(
         };
     }
 
-    let expected_network = mode
-        .expected_network(envelope_chain_id)
-        .unwrap_or(input.network.as_str());
-    let network_matches = input.network == expected_network;
+    let expected_networks = mode
+        .expected_networks(envelope_chain_id)
+        .unwrap_or(&[]);
+    let network_matches = expected_networks.is_empty()
+        || expected_networks
+            .iter()
+            .any(|network| input.network.eq_ignore_ascii_case(network));
+    let expected_network_detail = if expected_networks.is_empty() {
+        "(none)".to_string()
+    } else {
+        expected_networks.join(" or ")
+    };
     checks.push(ConsensusCheck {
         id: "envelope-network".into(),
         label: "Package network metadata matches chainId for consensus mode".into(),
         passed: network_matches,
         detail: Some(format!(
             "package network='{}', expected='{}'",
-            input.network, expected_network
+            input.network, expected_network_detail
         )),
     });
     if !network_matches {
@@ -593,7 +604,7 @@ fn verify_execution_envelope(
             error: Some(format!(
                 "Package network '{}' does not match expected network '{}' for chainId {} in {} mode.",
                 input.network,
-                expected_network,
+                expected_network_detail,
                 envelope_chain_id,
                 mode.display_name()
             )),
@@ -1922,13 +1933,45 @@ mod tests {
         assert_eq!(
             result.error.as_deref(),
             Some(
-                "Package network 'base' does not match expected network 'optimism' for chainId 10 in OP Stack mode."
+                "Package network 'base' does not match expected network 'optimism or oeth' for chainId 10 in OP Stack mode."
             )
         );
         assert!(result
             .checks
             .iter()
             .any(|check| check.id == "envelope-network" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_legacy_oeth_network_metadata_for_opstack_chain_id_10() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "oeth".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_OPSTACK_VERIFIER_PENDING)
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && check.passed));
     }
 
     #[test]

@@ -40,7 +40,7 @@ describe("consensus mode routing", () => {
 
     expect(proof).toMatchObject({
       consensusMode: "opstack",
-      network: "oeth",
+      network: "optimism",
       blockNumber: 16,
       stateRoot:
         "0x1111111111111111111111111111111111111111111111111111111111111111",
