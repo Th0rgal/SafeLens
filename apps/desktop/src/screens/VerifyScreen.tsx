@@ -21,6 +21,7 @@ import { HashVerificationDetails } from "@/components/hash-verification-details"
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/lib/safety-checks";
 import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
+import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -105,73 +106,6 @@ function getSimulationUnavailableReason(evidence: EvidencePackage): string {
   }
 
   return "No simulation result is available in this evidence package.";
-}
-
-function getNetworkSupportStatus(chainId: number): {
-  isFullySupported: boolean;
-  badgeText: string;
-  helperText: string | null;
-} {
-  const capability = getNetworkCapability(chainId);
-  if (!capability) {
-    return {
-      isFullySupported: false,
-      badgeText: "Partial",
-      helperText: "Partially supported: this network is unknown to SafeLens capabilities.",
-    };
-  }
-
-  const hasConsensusMode = Boolean(capability.consensusMode);
-  const hasFullConsensusVerification = Boolean(capability.consensus);
-  const hasSimulation = capability.supportsSimulation;
-
-  if (hasFullConsensusVerification && hasSimulation) {
-    return {
-      isFullySupported: true,
-      badgeText: "Full",
-      helperText: null,
-    };
-  }
-
-  if (!hasSimulation && !hasConsensusMode) {
-    return {
-      isFullySupported: false,
-      badgeText: "Partial",
-      helperText: "Partially supported: consensus verification and full simulation are not available on this network.",
-    };
-  }
-
-  if (!hasFullConsensusVerification && hasConsensusMode && hasSimulation) {
-    return {
-      isFullySupported: false,
-      badgeText: "Partial",
-      helperText:
-        "Partially supported: consensus envelope checks are available, but full cryptographic consensus verification is not available on this network yet.",
-    };
-  }
-
-  if (!hasSimulation && hasConsensusMode && !hasFullConsensusVerification) {
-    return {
-      isFullySupported: false,
-      badgeText: "Partial",
-      helperText:
-        "Partially supported: simulation is unavailable, and only consensus envelope checks are available (full cryptographic consensus verification is pending).",
-    };
-  }
-
-  if (!hasSimulation) {
-    return {
-      isFullySupported: false,
-      badgeText: "Partial",
-      helperText: "Partially supported: full simulation is not available on this network.",
-    };
-  }
-
-  return {
-    isFullySupported: false,
-    badgeText: "Partial",
-    helperText: "Partially supported: consensus verification is not available on this network.",
-  };
 }
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
@@ -491,7 +425,7 @@ export default function VerifyScreen() {
       : signatureResults.some((r) => r.status === "invalid" || r.status === "unsupported")
         ? "api-sourced"
         : "self-verified";
-  const networkSupport = evidence ? getNetworkSupportStatus(evidence.chainId) : null;
+  const networkSupport = evidence ? buildNetworkSupportStatus(evidence) : null;
   const consensusModeDisplay = useMemo(
     () => getConsensusModeDisplay(evidence?.consensusProof?.consensusMode),
     [evidence?.consensusProof?.consensusMode]
@@ -1124,7 +1058,7 @@ function ExecutionSafetyPanel({
   evidence: EvidencePackage;
   checks: SafetyCheck[];
   hashMatch: boolean;
-  networkSupport: ReturnType<typeof getNetworkSupportStatus> | null;
+  networkSupport: NetworkSupportStatus | null;
   showDetails: boolean;
   onToggleDetails: () => void;
 }) {
