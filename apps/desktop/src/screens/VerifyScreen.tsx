@@ -828,15 +828,33 @@ function ExecutionSafetyPanel({
             </div>
           );
         })}
-        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-          Checks summary: {passedChecks} passed, {warningChecks} warning
-          {warningChecks === 1 ? "" : "s"}, {errorChecks} error{errorChecks === 1 ? "" : "s"}.
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+            Checks: {passedChecks} passed, {warningChecks} warning
+            {warningChecks === 1 ? "" : "s"}, {errorChecks} error{errorChecks === 1 ? "" : "s"}.
+          </div>
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+            Coverage:{" "}
+            {networkSupport ? (
+              <span
+                className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
+                  networkSupport.isFullySupported
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                {networkSupport.badgeText}
+              </span>
+            ) : (
+              "Unknown"
+            )}
+          </div>
         </div>
         <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
           {simulationFreshness}
         </div>
         {networkSupport && (
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-start gap-2 text-xs">
             <span className="text-muted">Network support:</span>
             <span
               className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
@@ -848,7 +866,9 @@ function ExecutionSafetyPanel({
               {networkSupport.badgeText}
             </span>
             {showDetails && networkSupport.helperText && (
-              <span className="text-amber-300">{networkSupport.helperText}</span>
+              <span className="basis-full text-amber-300 sm:basis-auto">
+                {networkSupport.helperText}
+              </span>
             )}
           </div>
         )}
