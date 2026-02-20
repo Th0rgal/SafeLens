@@ -229,6 +229,7 @@ function classifyConsensusStatus(
 
   const warningCodes = new Set([
     "unsupported-consensus-mode",
+    "unsupported-network",
     "opstack-consensus-verifier-pending",
     "linea-consensus-verifier-pending",
     "stale-consensus-envelope",
