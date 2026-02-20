@@ -483,6 +483,41 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain("stale relative to package time");
   });
 
+  it("maps explicit non-finalized envelope error code to deterministic trust reason", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: null,
+        verified_block_number: null,
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error:
+          "Non-beacon consensus envelopes must use finalized blocks; got blockTag='latest'.",
+        error_code: "non-finalized-consensus-envelope",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "non-finalized-consensus-envelope"
+    );
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain(
+      "did not use a finalized execution header"
+    );
+  });
+
   it("keeps consensus source rpc-sourced when verified block number does not match onchain proof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

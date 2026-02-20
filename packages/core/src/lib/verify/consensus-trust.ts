@@ -11,6 +11,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "missing-or-invalid-consensus-result",
   // Consensus envelope timestamp is too old at package generation time.
   "stale-consensus-envelope",
+  // Consensus envelope did not use a finalized execution header.
+  "non-finalized-consensus-envelope",
   // Required payload artifacts are missing.
   "missing-consensus-or-policy-proof",
   // Verifier did not emit required root+block outputs.
@@ -37,6 +39,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "local consensus verification has not succeeded",
   "stale-consensus-envelope":
     "consensus envelope timestamp is stale relative to package time",
+  "non-finalized-consensus-envelope":
+    "consensus envelope did not use a finalized execution header",
   "missing-consensus-or-policy-proof":
     "required consensus or on-chain policy proof is missing",
   "missing-verified-root-or-block":

@@ -119,6 +119,12 @@ function evaluateConsensusTrustDecision(
       reason: "stale-consensus-envelope",
     };
   }
+  if (consensusVerification?.error_code === "non-finalized-consensus-envelope") {
+    return {
+      trusted: false,
+      reason: "non-finalized-consensus-envelope",
+    };
+  }
   if (
     consensusVerification &&
     !consensusVerification.state_root_matches &&

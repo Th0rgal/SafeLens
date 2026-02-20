@@ -308,6 +308,7 @@ const ERR_INVALID_EXPECTED_STATE_ROOT: &str = "invalid-expected-state-root";
 const ERR_STATE_ROOT_MISMATCH: &str = "state-root-mismatch";
 const ERR_INVALID_PROOF_PAYLOAD: &str = "invalid-proof-payload";
 const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
+const ERR_NON_FINALIZED_CONSENSUS_ENVELOPE: &str = "non-finalized-consensus-envelope";
 const NON_BEACON_MAX_BLOCK_AGE_SECS: i64 = 24 * 60 * 60;
 
 fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
@@ -480,6 +481,38 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         passed: true,
         detail: Some(payload_network),
     });
+
+    let envelope_block_tag = match payload.get("blockTag").and_then(Value::as_str) {
+        Some(block_tag) => block_tag,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.blockTag is missing or not a string.".into(),
+            )
+        }
+    };
+    let block_tag_is_finalized = envelope_block_tag == "finalized";
+    checks.push(ConsensusCheck {
+        id: "envelope-finality-tag".into(),
+        label: "Envelope blockTag is finalized".into(),
+        passed: block_tag_is_finalized,
+        detail: Some(format!("blockTag={}", envelope_block_tag)),
+    });
+    if !block_tag_is_finalized {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some(format!(
+                "Non-beacon consensus envelopes must use finalized blocks; got blockTag='{}'.",
+                envelope_block_tag
+            )),
+            error_code: Some(ERR_NON_FINALIZED_CONSENSUS_ENVELOPE.into()),
+            checks,
+        };
+    }
 
     let block = match payload.get("block") {
         Some(block) => block,
@@ -1086,8 +1119,9 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_INVALID_PROOF_PAYLOAD, ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH,
-        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
+        ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
+        ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1225,7 +1259,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1270,7 +1304,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1302,7 +1336,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v0\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v0\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1336,7 +1370,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0x1234\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0x1234\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1372,7 +1406,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
@@ -1393,6 +1427,44 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_beacon_envelope_with_non_finalized_block_tag() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"latest\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_NON_FINALIZED_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Non-beacon consensus envelopes must use finalized blocks; got blockTag='latest'."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-finality-tag" && !check.passed));
+    }
+
+    #[test]
     fn returns_stale_error_for_non_beacon_envelope_with_old_timestamp() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
@@ -1402,7 +1474,7 @@ mod tests {
             consensus_mode: "opstack".to_string(),
             network: "optimism".to_string(),
             proof_payload: Some(
-                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
             ),
             state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
                 .to_string(),
