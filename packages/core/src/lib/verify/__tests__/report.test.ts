@@ -450,6 +450,39 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain("state-root mismatch");
   });
 
+  it("maps explicit stale envelope error code to stale trust reason", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: enriched.onchainPolicyProof.stateRoot,
+        verified_block_number: enriched.onchainPolicyProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 0,
+        error:
+          "Consensus envelope block timestamp is stale relative to package timestamp.",
+        error_code: "stale-consensus-envelope",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "stale-consensus-envelope"
+    );
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain("stale relative to package time");
+  });
+
   it("keeps consensus source rpc-sourced when verified block number does not match onchain proof", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

@@ -113,6 +113,12 @@ function evaluateConsensusTrustDecision(
       reason: "state-root-mismatch-flag",
     };
   }
+  if (consensusVerification?.error_code === "stale-consensus-envelope") {
+    return {
+      trusted: false,
+      reason: "stale-consensus-envelope",
+    };
+  }
   if (
     consensusVerification &&
     !consensusVerification.state_root_matches &&

@@ -9,6 +9,8 @@ export const CONSENSUS_TRUST_DECISION_REASONS = [
   "unsupported-consensus-mode",
   // Local desktop consensus verification did not succeed yet.
   "missing-or-invalid-consensus-result",
+  // Consensus envelope timestamp is too old at package generation time.
+  "stale-consensus-envelope",
   // Required payload artifacts are missing.
   "missing-consensus-or-policy-proof",
   // Verifier did not emit required root+block outputs.
@@ -33,6 +35,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
     "consensus mode is included but not yet implemented in desktop verifier",
   "missing-or-invalid-consensus-result":
     "local consensus verification has not succeeded",
+  "stale-consensus-envelope":
+    "consensus envelope timestamp is stale relative to package time",
   "missing-consensus-or-policy-proof":
     "required consensus or on-chain policy proof is missing",
   "missing-verified-root-or-block":

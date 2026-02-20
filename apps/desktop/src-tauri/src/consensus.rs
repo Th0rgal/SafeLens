@@ -15,6 +15,7 @@ use helios_consensus_core::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use typenum::{U1, U128, U131072, U16, U2, U2048, U4096, U512, U64, U8, U8192};
 
 /// Input from the frontend: the consensus proof section of an evidence package.
@@ -35,6 +36,7 @@ pub struct ConsensusProofInput {
     #[allow(dead_code)]
     pub block_number: u64,
     pub package_chain_id: Option<u64>,
+    pub package_packaged_at: Option<String>,
 }
 
 fn default_consensus_mode() -> String {
@@ -305,6 +307,8 @@ const ERR_MISSING_EXECUTION_PAYLOAD: &str = "missing-execution-payload";
 const ERR_INVALID_EXPECTED_STATE_ROOT: &str = "invalid-expected-state-root";
 const ERR_STATE_ROOT_MISMATCH: &str = "state-root-mismatch";
 const ERR_INVALID_PROOF_PAYLOAD: &str = "invalid-proof-payload";
+const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
+const NON_BEACON_MAX_BLOCK_AGE_SECS: i64 = 24 * 60 * 60;
 
 fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
     match network {
@@ -566,6 +570,7 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         Ok(number) => number,
         Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
     };
+    let envelope_block_timestamp = block.get("timestamp").and_then(Value::as_str);
 
     let package_root_matches = envelope_state_root.eq_ignore_ascii_case(&input.state_root);
     checks.push(ConsensusCheck {
@@ -641,6 +646,58 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         };
     }
 
+    if let (Some(block_timestamp_raw), Some(packaged_at_raw)) = (
+        envelope_block_timestamp,
+        input.package_packaged_at.as_deref(),
+    ) {
+        let block_timestamp =
+            match parse_rfc3339_timestamp(block_timestamp_raw, "proofPayload.block.timestamp") {
+                Ok(timestamp) => timestamp,
+                Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+            };
+        let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
+            Ok(timestamp) => timestamp,
+            Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+        };
+
+        if packaged_at < block_timestamp {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!(
+                    "packagePackagedAt ({}) is earlier than proofPayload.block.timestamp ({}).",
+                    packaged_at_raw, block_timestamp_raw
+                ),
+            );
+        }
+
+        let age_seconds = packaged_at - block_timestamp;
+        let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
+        checks.push(ConsensusCheck {
+            id: "envelope-freshness".into(),
+            label: "Envelope block timestamp is fresh at packaging time".into(),
+            passed: is_fresh,
+            detail: Some(format!(
+                "Age at packaging: {}s (max {}s).",
+                age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
+            )),
+        });
+        if !is_fresh {
+            return ConsensusVerificationResult {
+                valid: false,
+                verified_state_root: Some(envelope_state_root),
+                verified_block_number: Some(envelope_block_number),
+                state_root_matches: true,
+                sync_committee_participants: 0,
+                error: Some(
+                    "Consensus envelope block timestamp is stale relative to package timestamp."
+                        .into(),
+                ),
+                error_code: Some(ERR_STALE_CONSENSUS_ENVELOPE.into()),
+                checks,
+            };
+        }
+    }
+
     ConsensusVerificationResult {
         valid: false,
         verified_state_root: Some(envelope_state_root),
@@ -654,6 +711,12 @@ fn verify_execution_envelope(input: ConsensusProofInput) -> ConsensusVerificatio
         error_code: Some(ERR_UNSUPPORTED_CONSENSUS_MODE.into()),
         checks,
     }
+}
+
+fn parse_rfc3339_timestamp(value: &str, field_name: &str) -> Result<i64, String> {
+    OffsetDateTime::parse(value, &Rfc3339)
+        .map(|timestamp| timestamp.unix_timestamp())
+        .map_err(|error| format!("Invalid {}: {}", field_name, error))
 }
 
 fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
@@ -1023,8 +1086,8 @@ mod tests {
     use super::{
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput, ERR_INVALID_CHECKPOINT,
-        ERR_INVALID_PROOF_PAYLOAD, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
-        ERR_UNSUPPORTED_NETWORK,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH,
+        ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
     };
     use std::time::{Duration, UNIX_EPOCH};
 
@@ -1122,6 +1185,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 0,
             package_chain_id: None,
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1144,6 +1208,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 0,
             package_chain_id: None,
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1168,6 +1233,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
             package_chain_id: Some(10),
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1212,6 +1278,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
             package_chain_id: Some(8453),
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1243,6 +1310,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
             package_chain_id: Some(10),
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1276,6 +1344,7 @@ mod tests {
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
             block_number: 1,
             package_chain_id: Some(10),
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1311,6 +1380,7 @@ mod tests {
                 "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
             block_number: 1,
             package_chain_id: Some(10),
+            package_packaged_at: None,
         });
 
         assert!(!result.valid);
@@ -1320,5 +1390,41 @@ mod tests {
             Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
         );
         assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn returns_stale_error_for_non_beacon_envelope_with_old_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-03T00:00:01Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_STALE_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Consensus envelope block timestamp is stale relative to package timestamp.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && !check.passed));
     }
 }

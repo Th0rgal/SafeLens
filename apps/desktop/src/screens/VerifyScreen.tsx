@@ -25,7 +25,11 @@ import { invoke } from "@tauri-apps/api/core";
 
 type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
   ? T extends object
-    ? T & { expectedStateRoot: string; packageChainId: number }
+    ? T & {
+        expectedStateRoot: string;
+        packageChainId: number;
+        packagePackagedAt?: string;
+      }
     : never
   : never;
 
@@ -234,6 +238,7 @@ export default function VerifyScreen() {
             ...currentEvidence.consensusProof,
             expectedStateRoot,
             packageChainId: currentEvidence.chainId,
+            packagePackagedAt: currentEvidence.packagedAt,
           };
 
           try {
