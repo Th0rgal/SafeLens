@@ -4,18 +4,25 @@ import {
   BEACON_NETWORKS,
   CHAIN_ID_TO_BEACON_NETWORK,
   DEFAULT_BEACON_RPC_URLS,
-  type FetchConsensusProofOptions,
+  type FetchConsensusProofOptions as BeaconFetchConsensusProofOptions,
   type BeaconNetworkConfig,
 } from "./beacon-api";
 import type { ConsensusProof } from "../types";
+import {
+  fetchExecutionConsensusProof,
+  type FetchExecutionConsensusProofOptions,
+} from "./execution-api";
 
 export {
   BEACON_NETWORKS,
   CHAIN_ID_TO_BEACON_NETWORK,
   DEFAULT_BEACON_RPC_URLS,
-  type FetchConsensusProofOptions,
   type BeaconNetworkConfig,
 };
+
+export interface FetchConsensusProofOptions
+  extends BeaconFetchConsensusProofOptions,
+    FetchExecutionConsensusProofOptions {}
 
 export const UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE =
   "unsupported-consensus-mode" as const;
@@ -36,8 +43,9 @@ export class UnsupportedConsensusModeError extends Error {
 
 /**
  * Fetch a consensus proof for a chain using explicit mode routing.
- * Beacon is implemented; opstack/linea are routed to deterministic
- * unsupported-mode errors until those verifier paths are added.
+ * Beacon uses light-client proofs; opstack/linea return execution-header
+ * proof envelopes for packaging while desktop verification remains explicit
+ * about those modes being unsupported today.
  */
 export async function fetchConsensusProof(
   chainId: number,
@@ -55,5 +63,5 @@ export async function fetchConsensusProof(
     return fetchBeaconConsensusProof(chainId, options);
   }
 
-  throw new UnsupportedConsensusModeError(chainId, capability.consensusMode);
+  return fetchExecutionConsensusProof(chainId, capability.consensusMode, options);
 }

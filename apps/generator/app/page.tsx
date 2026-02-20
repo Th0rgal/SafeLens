@@ -81,7 +81,9 @@ export default function AnalyzePage() {
     // Fetch consensus proof first so policy proof can be pinned to the same
     // finalized execution block.
     try {
-      enriched = await enrichWithConsensusProof(enriched);
+      enriched = await enrichWithConsensusProof(enriched, {
+        rpcUrl: trimmedRpc || undefined,
+      });
     } catch (err) {
       consensusProofFailed = true;
       if (

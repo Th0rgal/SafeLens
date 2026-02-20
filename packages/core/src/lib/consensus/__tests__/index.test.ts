@@ -1,25 +1,84 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  fetchConsensusProof,
-  UnsupportedConsensusModeError,
-} from "../index";
+import { fetchConsensusProof } from "../index";
 
 describe("consensus mode routing", () => {
-  it("returns an explicit unsupported mode error for opstack chains", async () => {
-    await expect(fetchConsensusProof(10)).rejects.toMatchObject({
-      code: "unsupported-consensus-mode",
-      chainId: 10,
-      consensusMode: "opstack",
-    } satisfies Partial<UnsupportedConsensusModeError>);
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("returns an explicit unsupported mode error for linea chains", async () => {
-    await expect(fetchConsensusProof(59144)).rejects.toMatchObject({
-      code: "unsupported-consensus-mode",
-      chainId: 59144,
+  it("returns an execution-header envelope for opstack chains", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              number: "0x10",
+              hash: "0x2222222222222222222222222222222222222222222222222222222222222222",
+              parentHash:
+                "0x3333333333333333333333333333333333333333333333333333333333333333",
+              stateRoot:
+                "0x1111111111111111111111111111111111111111111111111111111111111111",
+              timestamp: "0x5",
+            },
+          })
+        )
+      )
+    );
+
+    const proof = await fetchConsensusProof(10, {
+      rpcUrl: "https://example.invalid/rpc",
+      blockTag: "finalized",
+    });
+
+    expect(proof).toMatchObject({
+      consensusMode: "opstack",
+      network: "oeth",
+      blockNumber: 16,
+      stateRoot:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
+    });
+    expect("proofPayload" in proof).toBe(true);
+  });
+
+  it("returns an execution-header envelope for linea chains", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              number: "0x2a",
+              hash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              parentHash:
+                "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              stateRoot:
+                "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              timestamp: "0x64",
+            },
+          })
+        )
+      )
+    );
+
+    const proof = await fetchConsensusProof(59144, {
+      rpcUrl: "https://example.invalid/rpc",
+    });
+
+    expect(proof).toMatchObject({
       consensusMode: "linea",
-    } satisfies Partial<UnsupportedConsensusModeError>);
+      network: "linea",
+      blockNumber: 42,
+      stateRoot:
+        "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    });
+    expect("proofPayload" in proof).toBe(true);
   });
 
   it("rejects chains without any configured consensus path", async () => {
