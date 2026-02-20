@@ -119,10 +119,11 @@ function getNetworkSupportStatus(chainId: number): {
     };
   }
 
-  const hasConsensus = Boolean(capability.consensus);
+  const hasConsensusMode = Boolean(capability.consensusMode);
+  const hasFullConsensusVerification = Boolean(capability.consensus);
   const hasSimulation = capability.supportsSimulation;
 
-  if (hasConsensus && hasSimulation) {
+  if (hasFullConsensusVerification && hasSimulation) {
     return {
       isFullySupported: true,
       badgeText: "Full",
@@ -130,11 +131,29 @@ function getNetworkSupportStatus(chainId: number): {
     };
   }
 
-  if (!hasSimulation && !hasConsensus) {
+  if (!hasSimulation && !hasConsensusMode) {
     return {
       isFullySupported: false,
       badgeText: "Partial",
       helperText: "Partially supported: consensus verification and full simulation are not available on this network.",
+    };
+  }
+
+  if (!hasFullConsensusVerification && hasConsensusMode && hasSimulation) {
+    return {
+      isFullySupported: false,
+      badgeText: "Partial",
+      helperText:
+        "Partially supported: consensus envelope checks are available, but full cryptographic consensus verification is not available on this network yet.",
+    };
+  }
+
+  if (!hasSimulation && hasConsensusMode && !hasFullConsensusVerification) {
+    return {
+      isFullySupported: false,
+      badgeText: "Partial",
+      helperText:
+        "Partially supported: simulation is unavailable, and only consensus envelope checks are available (full cryptographic consensus verification is pending).",
     };
   }
 
