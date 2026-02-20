@@ -48,6 +48,43 @@ describe("consensus mode routing", () => {
     expect("proofPayload" in proof).toBe(true);
   });
 
+  it("returns an execution-header envelope for base", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            result: {
+              number: "0x20",
+              hash: "0x4444444444444444444444444444444444444444444444444444444444444444",
+              parentHash:
+                "0x5555555555555555555555555555555555555555555555555555555555555555",
+              stateRoot:
+                "0x6666666666666666666666666666666666666666666666666666666666666666",
+              timestamp: "0xa",
+            },
+          })
+        )
+      )
+    );
+
+    const proof = await fetchConsensusProof(8453, {
+      rpcUrl: "https://example.invalid/rpc",
+      blockTag: "finalized",
+    });
+
+    expect(proof).toMatchObject({
+      consensusMode: "opstack",
+      network: "base",
+      blockNumber: 32,
+      stateRoot:
+        "0x6666666666666666666666666666666666666666666666666666666666666666",
+    });
+    expect("proofPayload" in proof).toBe(true);
+  });
+
   it("returns an execution-header envelope for linea chains", async () => {
     vi.stubGlobal(
       "fetch",

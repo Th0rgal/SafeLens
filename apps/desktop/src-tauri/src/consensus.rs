@@ -1975,6 +1975,73 @@ mod tests {
     }
 
     #[test]
+    fn returns_machine_readable_pending_error_code_for_base_opstack_mode() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "base".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":8453,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x2\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(8453),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_OPSTACK_VERIFIER_PENDING)
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && check.passed));
+    }
+
+    #[test]
+    fn rejects_base_opstack_envelope_with_mismatched_package_network_metadata() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":8453,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x2\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(8453),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Package network 'optimism' does not match expected network 'base' for chainId 8453 in OP Stack mode."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && !check.passed));
+    }
+
+    #[test]
     fn rejects_linea_envelope_with_mismatched_package_network_metadata() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
