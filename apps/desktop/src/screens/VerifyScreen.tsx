@@ -7,7 +7,6 @@ import { useToast } from "@/components/ui/toast";
 import {
   parseEvidencePackage,
   getChainName,
-  getNetworkCapability,
   verifyEvidencePackage,
   applyConsensusVerificationToReport,
 } from "@safelens/core";
@@ -23,6 +22,10 @@ import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/netw
 import { buildConsensusDetailRows } from "@/lib/consensus-details";
 import { buildPolicyDetailRows } from "@/lib/policy-details";
 import { buildSimulationDetailRows } from "@/lib/simulation-details";
+import {
+  getSimulationUnavailableReason,
+  getSimulationUnavailableReasonCode,
+} from "@/lib/simulation-unavailable";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -42,41 +45,6 @@ const WARNING_STYLES: Record<string, { border: string; bg: string; text: string;
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
   danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
 };
-
-const SIMULATION_REASON_LABELS = {
-  "missing-rpc-url": "Simulation was skipped because no RPC URL was configured during package generation.",
-  "simulation-fetch-failed": "Simulation could not be fetched during package generation.",
-  "missing-simulation": "No simulation result was included in this package.",
-} as const;
-
-type SimulationReasonCode = keyof typeof SIMULATION_REASON_LABELS;
-const SIMULATION_REASON_CODES: SimulationReasonCode[] = [
-  "missing-rpc-url",
-  "simulation-fetch-failed",
-  "missing-simulation",
-];
-
-function getSimulationUnavailableReason(evidence: EvidencePackage): string {
-  const reasonCode = getSimulationUnavailableReasonCode(evidence);
-  if (reasonCode) return SIMULATION_REASON_LABELS[reasonCode];
-
-  const capability = getNetworkCapability(evidence.chainId);
-  if (capability && !capability.supportsSimulation) {
-    return "Simulation is not available for this network in SafeLens yet.";
-  }
-
-  return "No simulation result is available in this evidence package.";
-}
-
-function getSimulationUnavailableReasonCode(
-  evidence: EvidencePackage
-): SimulationReasonCode | null {
-  const exportReasons = evidence.exportContract?.reasons ?? [];
-  const matchedReason = SIMULATION_REASON_CODES.find((code) =>
-    exportReasons.includes(code)
-  );
-  return matchedReason ?? null;
-}
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
   const style = WARNING_STYLES[warning.level];
