@@ -78,6 +78,40 @@ describe("classifyConsensusStatus", () => {
     expect(status.detail).toContain("No consensus proof");
   });
 
+  it("surfaces deterministic pending reason for opstack when verifier output is absent", () => {
+    const status = classifyConsensusStatus(
+      {
+        consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"],
+        exportContract: {
+          reasons: ["opstack-consensus-verifier-pending"],
+        },
+      } as EvidencePackage,
+      undefined,
+      "fallback summary"
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("opstack-consensus-verifier-pending");
+    expect(status.detail).toContain("full cryptographic consensus verification is not available yet");
+  });
+
+  it("surfaces deterministic pending reason for linea when verifier output is absent", () => {
+    const status = classifyConsensusStatus(
+      {
+        consensusProof: { consensusMode: "linea" } as EvidencePackage["consensusProof"],
+        exportContract: {
+          reasons: ["linea-consensus-verifier-pending"],
+        },
+      } as EvidencePackage,
+      undefined,
+      "fallback summary"
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("linea-consensus-verifier-pending");
+    expect(status.detail).toContain("full cryptographic consensus verification is not available yet");
+  });
+
   it("returns warning for partial-support consensus errors", () => {
     const status = classifyConsensusStatus(
       makeEvidence("opstack"),

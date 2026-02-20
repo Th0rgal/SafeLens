@@ -52,6 +52,13 @@ const NO_PROOF_CONSENSUS_REASON_CODES = [
 
 type NoProofConsensusReasonCode = (typeof NO_PROOF_CONSENSUS_REASON_CODES)[number];
 
+const PENDING_CONSENSUS_REASON_CODES = [
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
+] as const;
+
+type PendingConsensusReasonCode = (typeof PENDING_CONSENSUS_REASON_CODES)[number];
+
 const NO_PROOF_CONSENSUS_DETAILS: Record<NoProofConsensusReasonCode, string> = {
   "consensus-mode-disabled-by-feature-flag":
     "Consensus verification for this mode is disabled in this build.",
@@ -68,6 +75,16 @@ function getNoProofConsensusReasonCode(
 ): NoProofConsensusReasonCode | null {
   const exportReasons = evidence.exportContract?.reasons ?? [];
   const matched = NO_PROOF_CONSENSUS_REASON_CODES.find((reasonCode) =>
+    exportReasons.includes(reasonCode)
+  );
+  return matched ?? null;
+}
+
+function getPendingConsensusReasonCode(
+  evidence: Pick<EvidencePackage, "exportContract">
+): PendingConsensusReasonCode | null {
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+  const matched = PENDING_CONSENSUS_REASON_CODES.find((reasonCode) =>
     exportReasons.includes(reasonCode)
   );
   return matched ?? null;
@@ -129,11 +146,15 @@ export function classifyConsensusStatus(
   }
 
   if (!consensusVerification) {
+    const reasonCode = getPendingConsensusReasonCode(evidence);
     return {
       id: "chain-state-finalized",
       label: "Chain state is finalized",
       status: "warning",
-      detail: "Consensus verification is still running.",
+      detail: reasonCode
+        ? CONSENSUS_ERROR_DETAILS[reasonCode] ?? "Consensus verification is still running."
+        : "Consensus verification is still running.",
+      reasonCode: reasonCode ?? undefined,
     };
   }
 
