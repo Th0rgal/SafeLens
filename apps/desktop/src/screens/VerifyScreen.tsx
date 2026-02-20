@@ -19,6 +19,7 @@ import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
 import { HashVerificationDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
+import { classifyConsensusStatus, type SafetyCheck, type SafetyStatus } from "@/lib/safety-checks";
 import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
 import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -32,15 +33,6 @@ type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer
       }
     : never
   : never;
-
-type SafetyStatus = "check" | "warning" | "error";
-
-type SafetyCheck = {
-  id: string;
-  label: string;
-  status: SafetyStatus;
-  detail: string;
-};
 
 const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
@@ -190,58 +182,6 @@ function WarningBanner({ warning, className }: { warning: TransactionWarning; cl
       <span>{warning.message}</span>
     </div>
   );
-}
-
-function classifyConsensusStatus(
-  evidence: EvidencePackage,
-  consensusVerification: ConsensusVerificationResult | undefined,
-  fallbackSummary: string
-): SafetyCheck {
-  if (!evidence.consensusProof) {
-    return {
-      id: "chain-state-finalized",
-      label: "Chain state is finalized",
-      status: "warning",
-      detail: "No consensus proof was included in this evidence package.",
-    };
-  }
-
-  if (!consensusVerification) {
-    return {
-      id: "chain-state-finalized",
-      label: "Chain state is finalized",
-      status: "warning",
-      detail: "Consensus verification is still running.",
-    };
-  }
-
-  if (consensusVerification.valid) {
-    return {
-      id: "chain-state-finalized",
-      label: "Chain state is finalized",
-      status: "check",
-      detail:
-        consensusVerification.verified_block_number != null
-          ? `Verified at block ${consensusVerification.verified_block_number}.`
-          : "Consensus verification passed.",
-    };
-  }
-
-  const warningCodes = new Set([
-    "unsupported-consensus-mode",
-    "unsupported-network",
-    "opstack-consensus-verifier-pending",
-    "linea-consensus-verifier-pending",
-    "stale-consensus-envelope",
-    "non-finalized-consensus-envelope",
-  ]);
-
-  return {
-    id: "chain-state-finalized",
-    label: "Chain state is finalized",
-    status: warningCodes.has(consensusVerification.error_code ?? "") ? "warning" : "error",
-    detail: consensusVerification.error ?? fallbackSummary,
-  };
 }
 
 function classifyPolicyStatus(
