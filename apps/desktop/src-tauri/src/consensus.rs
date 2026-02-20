@@ -1641,6 +1641,78 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_beacon_envelope_with_invalid_parent_hash() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0x1234\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.parentHash:")),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_invalid_state_root() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0x1234\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.stateRoot:")),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
     fn returns_explicit_state_root_mismatch_code_for_package_envelope_mismatch() {
         let result = verify_consensus_proof(ConsensusProofInput {
             checkpoint: None,
