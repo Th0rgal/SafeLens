@@ -108,6 +108,12 @@ function evaluateConsensusTrustDecision(
       reason: "unsupported-consensus-mode",
     };
   }
+  if (consensusVerification?.error_code === "unsupported-network") {
+    return {
+      trusted: false,
+      reason: "unsupported-network",
+    };
+  }
   if (consensusVerification?.error_code === "opstack-consensus-verifier-pending") {
     return {
       trusted: false,

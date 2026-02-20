@@ -7,6 +7,8 @@
 export const CONSENSUS_TRUST_DECISION_REASONS = [
   // Consensus mode is unknown to the desktop verifier.
   "unsupported-consensus-mode",
+  // Consensus mode is known, but envelope chain is outside supported rollout scope.
+  "unsupported-network",
   // Mode-specific envelope checks passed, but cryptographic verification is pending.
   "opstack-consensus-verifier-pending",
   "linea-consensus-verifier-pending",
@@ -38,6 +40,8 @@ export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
 > = {
   "unsupported-consensus-mode":
     "consensus mode is not supported by the desktop verifier",
+  "unsupported-network":
+    "consensus envelope chain is not supported for this consensus mode",
   "opstack-consensus-verifier-pending":
     "OP Stack envelope checks passed but cryptographic consensus verification is still pending",
   "linea-consensus-verifier-pending":
