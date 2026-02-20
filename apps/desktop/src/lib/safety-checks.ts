@@ -1,4 +1,5 @@
 import {
+  type ConsensusMode,
   findLegacyPendingConsensusExportReason,
   isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
@@ -139,24 +140,30 @@ function getConsensusFailureStatus(
 }
 
 function getConsensusSuccessDetail(
-  consensusMode: string | undefined,
+  consensusMode: ConsensusMode | undefined,
   verifiedBlockNumber: number | null
 ): string {
-  if (consensusMode === "opstack") {
-    return verifiedBlockNumber != null
-      ? `State root verified against OP Stack consensus data at block ${verifiedBlockNumber}. Assurance is chain-specific and not equivalent to Beacon finality.`
-      : "State root verified against OP Stack consensus data. Assurance is chain-specific and not equivalent to Beacon finality.";
+  switch (consensusMode) {
+    case "opstack":
+      return verifiedBlockNumber != null
+        ? `State root verified against OP Stack consensus data at block ${verifiedBlockNumber}. Assurance is chain-specific and not equivalent to Beacon finality.`
+        : "State root verified against OP Stack consensus data. Assurance is chain-specific and not equivalent to Beacon finality.";
+    case "linea":
+      return verifiedBlockNumber != null
+        ? `State root verified against Linea consensus data at block ${verifiedBlockNumber}. Assurance is chain-specific and not equivalent to Beacon finality.`
+        : "State root verified against Linea consensus data. Assurance is chain-specific and not equivalent to Beacon finality.";
+    case "beacon":
+    case undefined:
+      return verifiedBlockNumber != null
+        ? `Verified at block ${verifiedBlockNumber}.`
+        : "Consensus verification passed.";
+    default:
+      return assertUnreachableConsensusMode(consensusMode);
   }
+}
 
-  if (consensusMode === "linea") {
-    return verifiedBlockNumber != null
-      ? `State root verified against Linea consensus data at block ${verifiedBlockNumber}. Assurance is chain-specific and not equivalent to Beacon finality.`
-      : "State root verified against Linea consensus data. Assurance is chain-specific and not equivalent to Beacon finality.";
-  }
-
-  return verifiedBlockNumber != null
-    ? `Verified at block ${verifiedBlockNumber}.`
-    : "Consensus verification passed.";
+function assertUnreachableConsensusMode(mode: never): never {
+  throw new Error(`Unhandled consensus mode: ${String(mode)}`);
 }
 
 export function classifyPolicyStatus(

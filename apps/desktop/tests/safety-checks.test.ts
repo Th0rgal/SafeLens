@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type {
+  ConsensusMode,
   ConsensusVerificationResult,
   EvidencePackage,
   PolicyProofVerificationResult,
@@ -13,7 +14,7 @@ import {
   type SafetyCheck,
 } from "../src/lib/safety-checks";
 
-function makeEvidence(consensusMode?: "beacon" | "opstack" | "linea"): EvidencePackage {
+function makeEvidence(consensusMode?: ConsensusMode): EvidencePackage {
   if (!consensusMode) {
     return {} as EvidencePackage;
   }
@@ -289,6 +290,23 @@ describe("classifyConsensusStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toContain("Linea");
     expect(status.detail).toContain("not equivalent to Beacon finality");
+  });
+
+  it("uses neutral success wording for beacon consensus", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("beacon"),
+      makeConsensusVerification({
+        valid: true,
+        state_root_matches: true,
+        verified_state_root: `0x${"a".repeat(64)}`,
+        verified_block_number: 999,
+        error: null,
+        error_code: null,
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("check");
+    expect(status.detail).toBe("Verified at block 999.");
   });
 });
 
