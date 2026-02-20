@@ -94,16 +94,16 @@ function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
 ): ConsensusTrustDecision {
-  if (!consensusVerification?.valid) {
-    return {
-      trusted: false,
-      reason: "missing-or-invalid-consensus-result",
-    };
-  }
   if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
     return {
       trusted: false,
       reason: "missing-consensus-or-policy-proof",
+    };
+  }
+  if (!consensusVerification?.valid) {
+    return {
+      trusted: false,
+      reason: "missing-or-invalid-consensus-result",
     };
   }
 
@@ -335,6 +335,10 @@ export async function verifyEvidencePackage(
     simulationVerification = verifySimulation(evidence.simulation);
   }
 
+  const consensusDecision = evidence.consensusProof
+    ? evaluateConsensusTrustDecision(evidence)
+    : { trusted: false, reason: undefined };
+
   return {
     proposer,
     targetWarnings,
@@ -353,6 +357,6 @@ export async function verifyEvidencePackage(
     hashMatch,
     policyProof,
     simulationVerification,
-    consensusTrustDecisionReason: undefined,
+    consensusTrustDecisionReason: consensusDecision.reason,
   };
 }

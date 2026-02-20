@@ -227,6 +227,35 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(check!.passed).toBe(true);
   });
 
+  it("records deterministic trust reason before desktop consensus verification runs", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      consensusProof: makeConsensusProof(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "missing-or-invalid-consensus-result"
+    );
+  });
+
+  it("uses prerequisite-missing reason when consensus proof exists without onchain policy proof", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "missing-consensus-or-policy-proof"
+    );
+  });
+
   it("fails policy proof when consensus proof root/block mismatches", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {
