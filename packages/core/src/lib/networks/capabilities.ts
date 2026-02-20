@@ -18,6 +18,8 @@ export interface BeaconConsensusConfig {
   defaultBeaconRpcUrl: string;
 }
 
+export type ConsensusVerifierMode = "beacon" | "opstack" | "linea";
+
 export interface NetworkCapability {
   chainId: number;
   chainPrefix: string;
@@ -26,6 +28,7 @@ export interface NetworkCapability {
   defaultRpcUrl?: string;
   supportsOnchainPolicyProof: boolean;
   supportsSimulation: boolean;
+  consensusMode?: ConsensusVerifierMode;
   consensus?: BeaconConsensusConfig;
   enabledInSafeAddressSearch: boolean;
 }
@@ -39,6 +42,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "mainnet",
       genesisRoot:
@@ -59,6 +63,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "sepolia",
       genesisRoot:
@@ -79,6 +84,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-holesky-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "holesky",
       genesisRoot:
@@ -99,6 +105,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-hoodi-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "hoodi",
       genesisRoot:
@@ -139,6 +146,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://optimism-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "opstack",
     enabledInSafeAddressSearch: true,
   },
   {
@@ -149,6 +157,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://gnosis-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "gnosis",
       genesisRoot:
@@ -169,6 +178,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://base-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "opstack",
     enabledInSafeAddressSearch: true,
   },
   {
@@ -179,6 +189,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://linea-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "linea",
     enabledInSafeAddressSearch: true,
   },
   // Legacy Safe chain prefix retained for URL parsing compatibility.

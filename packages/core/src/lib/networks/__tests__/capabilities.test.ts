@@ -35,6 +35,13 @@ describe("network capability matrix", () => {
   it("maps prefixes back to network capability entries", () => {
     const gnosis = getNetworkCapabilityByPrefix("gno");
     expect(gnosis?.chainId).toBe(100);
+    expect(gnosis?.consensusMode).toBe("beacon");
     expect(gnosis?.consensus?.network).toBe("gnosis");
+  });
+
+  it("labels pending verifier integrations with explicit consensus modes", () => {
+    expect(getNetworkCapability(10)?.consensusMode).toBe("opstack");
+    expect(getNetworkCapability(8453)?.consensusMode).toBe("opstack");
+    expect(getNetworkCapability(59144)?.consensusMode).toBe("linea");
   });
 });
