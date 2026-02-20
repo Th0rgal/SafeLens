@@ -129,6 +129,24 @@ describe("classifyConsensusStatus", () => {
     expect(status.reasonCode).toBe("unsupported-network");
   });
 
+  it("returns warning with explicit stale guidance for Linea stale envelopes", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("linea"),
+      makeConsensusVerification({
+        valid: false,
+        error:
+          "Consensus envelope block timestamp is stale relative to package timestamp.",
+        error_code: "stale-consensus-envelope",
+      }),
+      "fallback summary"
+    );
+    expect(status.status).toBe("warning");
+    expect(status.detail).toBe(
+      "Consensus envelope is stale versus package creation time. Regenerate evidence with fresher consensus data."
+    );
+    expect(status.reasonCode).toBe("stale-consensus-envelope");
+  });
+
   it("returns error for envelope network metadata mismatches", () => {
     const status = classifyConsensusStatus(
       makeEvidence("opstack"),

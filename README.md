@@ -155,6 +155,7 @@ Generator rollout flags:
 - Desktop non-beacon verifier now emits explicit envelope-linkage error codes (`envelope-state-root-mismatch`, `envelope-block-number-mismatch`) when package consensus metadata does not match the envelope, and UI/core trust mapping treats them as deterministic integrity failures.
 - Core consensus trust evaluation now centralizes `consensusVerification.error_code -> consensusTrustDecisionReason` mapping in one helper, reducing drift risk as OP Stack/Linea verifier codes expand.
 - Package export-contract regressions now pin both `opstack` and `linea` envelope modes to deterministic partial reasons (`*-consensus-verifier-pending` with artifact present, `missing-consensus-proof` when RPC is omitted) to keep non-beacon trust signaling symmetric.
+- Linea stale-envelope handling is now regression-locked in both core trust mapping and desktop `ExecutionSafetyPanel` warning copy (`stale-consensus-envelope`) to keep `#20` stale semantics deterministic end-to-end.
 - Core consensus routing tests now explicitly pin `holesky` and `hoodi` to the Beacon fetch path (not execution-envelope fetchers) to keep `#18` support deterministic.
 - Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.
 - Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.

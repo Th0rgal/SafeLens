@@ -693,6 +693,42 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     expect(consensusSource?.summary).toContain("stale relative to package time");
   });
 
+  it("maps explicit stale envelope error code to stale trust reason for Linea mode", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, 59144, TX_URL);
+    const onchainProof = makeOnchainProof();
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      chainId: 59144,
+      onchainPolicyProof: onchainProof,
+      consensusProof: makeExecutionConsensusProof("linea"),
+    };
+
+    const baseReport = await verifyEvidencePackage(enriched);
+    const upgraded = applyConsensusVerificationToReport(baseReport, enriched, {
+      consensusVerification: {
+        valid: false,
+        verified_state_root: onchainProof.stateRoot,
+        verified_block_number: onchainProof.blockNumber,
+        state_root_matches: true,
+        sync_committee_participants: 0,
+        error:
+          "Consensus envelope block timestamp is stale relative to package timestamp.",
+        error_code: "stale-consensus-envelope",
+        checks: [],
+      },
+    });
+
+    expect(upgraded.consensusTrustDecisionReason).toBe(
+      "stale-consensus-envelope"
+    );
+    const consensusSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.trust).toBe("rpc-sourced");
+    expect(consensusSource?.summary).toContain("stale relative to package time");
+  });
+
   it("maps explicit non-finalized envelope error code to deterministic trust reason", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {
