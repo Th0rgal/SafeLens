@@ -218,8 +218,18 @@ export const SAFE_ADDRESS_SEARCH_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
   (network) => network.enabledInSafeAddressSearch
 ).map((network) => network.chainId) as readonly number[];
 
+export const BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
+  (network) => network.consensusMode === "beacon" && Boolean(network.consensus)
+).map((network) => network.chainId) as readonly number[];
+
+export const EXECUTION_ENVELOPE_CONSENSUS_SUPPORTED_CHAIN_IDS =
+  NETWORK_CAPABILITIES_LIST.filter(
+    (network) =>
+      network.consensusMode === "opstack" || network.consensusMode === "linea"
+  ).map((network) => network.chainId) as readonly number[];
+
 export const CONSENSUS_SUPPORTED_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
-  (network) => Boolean(network.consensus)
+  (network) => Boolean(network.consensusMode)
 ).map((network) => network.chainId) as readonly number[];
 
 export function getNetworkCapability(chainId: number): NetworkCapability | null {

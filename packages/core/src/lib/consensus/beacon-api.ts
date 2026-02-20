@@ -11,7 +11,7 @@ import type { ConsensusProof } from "../types";
 import {
   CONSENSUS_NETWORKS,
   type ConsensusNetwork,
-  CONSENSUS_SUPPORTED_CHAIN_IDS,
+  BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS,
   NETWORK_CAPABILITIES_BY_CHAIN_ID,
 } from "../networks/capabilities";
 
@@ -58,7 +58,7 @@ export const BEACON_NETWORKS: Record<ConsensusNetwork, BeaconNetworkConfig> =
 /** Map chainId to beacon network name using shared capabilities. */
 export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, ConsensusNetwork> =
   Object.fromEntries(
-    CONSENSUS_SUPPORTED_CHAIN_IDS.map((chainId) => {
+    BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS.map((chainId) => {
       const capability = NETWORK_CAPABILITIES_BY_CHAIN_ID[chainId];
       if (!capability?.consensus) {
         throw new Error(`Missing consensus network for chain ${chainId}`);
@@ -103,7 +103,7 @@ export async function fetchConsensusProof(
 ): Promise<ConsensusProof> {
   const networkName = CHAIN_ID_TO_BEACON_NETWORK[chainId];
   if (!networkName) {
-    const consensusChains = CONSENSUS_SUPPORTED_CHAIN_IDS.join(", ");
+    const consensusChains = BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS.join(", ");
     throw new Error(
       `No beacon chain config for chain ID ${chainId}. Consensus proofs are supported on chain IDs: ${consensusChains}.`
     );
