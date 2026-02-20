@@ -137,6 +137,7 @@ Generator rollout flags:
 - Export contracts now treat OP Stack/Linea consensus without an RPC URL as `missing-consensus-proof` (configuration gap), not `consensus-proof-fetch-failed` (runtime failure).
 - Verification reports now preserve `invalid-proof-payload` as an explicit consensus trust reason, instead of collapsing malformed envelope failures into a generic invalid-result message.
 - Verification reports now preserve `invalid-expected-state-root` as an explicit consensus trust reason when policy root formatting is invalid.
+- Verification reports now preserve export-contract `unsupported-consensus-mode` as an explicit consensus trust reason when consensus proof is intentionally omitted, instead of collapsing to generic missing-proof output.
 - Desktop non-beacon verification now enforces package `network` metadata consistency with envelope `chainId` (`opstack`: `10->optimism`, `8453->base`; `linea`: `59144->linea`) and emits deterministic `envelope-network-mismatch` on metadata divergence (separate from rollout-scope `unsupported-network`).
 - OP Mainnet envelope metadata now uses canonical `network: "optimism"`; desktop verifier still accepts legacy `network: "oeth"` for backward compatibility.
 - Added explicit OP Stack `base` regression coverage in core generation and desktop verification tests to lock `chainId 8453 <-> network "base"` behavior.

@@ -326,6 +326,34 @@ describe("verifyEvidencePackage with onchainPolicyProof", () => {
     );
   });
 
+  it("uses explicit unsupported-consensus-mode reason when consensus proof was omitted", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = {
+      ...evidence,
+      version: "1.2" as const,
+      exportContract: {
+        mode: "partial" as const,
+        status: "partial" as const,
+        isFullyVerifiable: false,
+        reasons: ["unsupported-consensus-mode"] as ExportContractReason[],
+        artifacts: {
+          consensusProof: false,
+          onchainPolicyProof: false,
+          simulation: false,
+        },
+      },
+    };
+
+    const result = await verifyEvidencePackage(enriched);
+    expect(result.consensusTrustDecisionReason).toBe(
+      "unsupported-consensus-mode"
+    );
+    const consensusSource = result.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+    );
+    expect(consensusSource?.summary).toContain("not supported");
+  });
+
   it("uses explicit OP Stack pending reason before desktop consensus verification runs", async () => {
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const enriched = {

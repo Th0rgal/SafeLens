@@ -113,6 +113,15 @@ function evaluateConsensusTrustDecision(
     };
   }
   if (
+    !evidence.consensusProof &&
+    exportReasons.includes("unsupported-consensus-mode")
+  ) {
+    return {
+      trusted: false,
+      reason: "unsupported-consensus-mode",
+    };
+  }
+  if (
     !consensusVerification &&
     evidence.consensusProof?.consensusMode === "opstack" &&
     exportReasons.includes("opstack-consensus-verifier-pending")
