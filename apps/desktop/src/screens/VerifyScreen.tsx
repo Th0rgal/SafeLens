@@ -98,9 +98,7 @@ export default function VerifyScreen() {
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
   const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
-  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>(
-    "Consensus proof included but not yet verified (requires desktop app)."
-  );
+  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>("");
   const [showSafetyDetails, setShowSafetyDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
@@ -118,7 +116,7 @@ export default function VerifyScreen() {
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
       setConsensusVerification(undefined);
-      setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+      setConsensusSourceSummary("");
       setShowSafetyDetails(false);
       return;
     }

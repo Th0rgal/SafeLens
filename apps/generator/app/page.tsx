@@ -34,8 +34,7 @@ import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
-const ENABLE_LINEA_CONSENSUS_ENV = "NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS";
-const lineaConsensusEnabled = process.env[ENABLE_LINEA_CONSENSUS_ENV] === "1";
+const lineaConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS === "1";
 
 type PendingTx = SafeTransaction & { _chainId: number };
 
