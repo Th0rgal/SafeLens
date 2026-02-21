@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { interpretERC20Transfer } from "../erc20-transfer";
+import { interpretERC20Transfer } from "../token-transfer";
 import { interpretTransaction } from "../index";
 import type { ERC20TransferDetails } from "../types";
 

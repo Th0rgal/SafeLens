@@ -33,7 +33,8 @@ function compactAddress(address: string): string {
 export function buildSimulationDetailRows(
   evidence: SimulationEvidence,
   simulationVerification: SimulationVerificationResult | undefined,
-  unavailableReason: string
+  unavailableReason: string,
+  nativeTokenSymbol?: string | null,
 ): SimulationDetailRow[] {
   if (!simulationVerification || !evidence.simulation) {
     return [
@@ -65,7 +66,11 @@ export function buildSimulationDetailRows(
     evidence.simulation.logs ?? [],
     evidence.safeAddress,
     evidence.chainId,
-    { maxTransferPreviews: 5 }
+    {
+      nativeTransfers: evidence.simulation.nativeTransfers,
+      nativeSymbol: nativeTokenSymbol ?? undefined,
+      maxTransferPreviews: 5,
+    },
   );
 
   if (summary.totalEvents > 0) {

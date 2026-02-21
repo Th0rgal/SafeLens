@@ -13,7 +13,7 @@
 
 import type { ComponentType } from "react";
 import type { Interpretation, Severity } from "@safelens/core";
-import { ERC20TransferCard } from "./erc20-transfer-card";
+import { ERC20TransferCard } from "./token-transfer-card";
 import { CowSwapTwapCard } from "./cowswap-twap-card";
 import { CowSwapPreSignCard } from "./cowswap-presign-card";
 import { SafePolicyCard } from "./safe-policy-card";

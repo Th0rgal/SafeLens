@@ -201,16 +201,29 @@ export const consensusProofSchema = z.union([
 
 export type ConsensusProof = z.infer<typeof consensusProofSchema>;
 
-// Simulation section (Phase 3 will populate these)
+// Native transfer entry from debug_traceCall value transfers
+export const nativeTransferSchema = z.object({
+  from: addressSchema,
+  to: addressSchema,
+  value: z.string(),
+});
+
+export type NativeTransferEntry = z.infer<typeof nativeTransferSchema>;
+
+// Simulation section
 export const simulationSchema = z.object({
   success: z.boolean(),
   returnData: hexDataSchema.nullable(),
   gasUsed: z.string(),
   logs: z.array(simulationLogSchema),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
+  /** Native ETH/gas-token transfers extracted from trace data. */
+  nativeTransfers: z.array(nativeTransferSchema).optional(),
   blockNumber: z.number(),
   /** RFC3339 timestamp for the block used during simulation, when available. */
   blockTimestamp: z.string().datetime({ offset: true }).optional(),
+  /** Whether debug_traceCall was available for this simulation. */
+  traceAvailable: z.boolean().optional(),
   trust: trustClassificationSchema,
 });
 

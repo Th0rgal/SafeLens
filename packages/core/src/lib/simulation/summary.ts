@@ -1,5 +1,5 @@
-import type { SimulationLog } from "../types";
-import { decodeSimulationEvents } from "./event-decoder";
+import type { SimulationLog, NativeTransferEntry } from "../types";
+import { decodeSimulationEvents, decodeNativeTransfers } from "./event-decoder";
 
 export type SimulationTransferPreview = {
   direction: "send" | "receive" | "internal";
@@ -23,9 +23,13 @@ export function summarizeSimulationEvents(
   logs: SimulationLog[],
   safeAddress?: string,
   chainId?: number,
-  options: { maxTransferPreviews?: number } = {}
+  options: { nativeTransfers?: NativeTransferEntry[]; nativeSymbol?: string; maxTransferPreviews?: number } = {}
 ): SimulationEventsSummary {
-  const decodedEvents = decodeSimulationEvents(logs, safeAddress, chainId);
+  const logEvents = decodeSimulationEvents(logs, safeAddress, chainId);
+  const nativeEvents = options.nativeTransfers?.length
+    ? decodeNativeTransfers(options.nativeTransfers, safeAddress ?? "", options.nativeSymbol ?? "ETH")
+    : [];
+  const decodedEvents = [...nativeEvents, ...logEvents];
   const transferEvents = decodedEvents.filter((event) => event.kind === "transfer");
   const approvals = decodedEvents.filter((event) => event.kind === "approval");
   const maxTransferPreviews = options.maxTransferPreviews ?? 5;
