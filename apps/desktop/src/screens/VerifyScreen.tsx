@@ -578,7 +578,9 @@ export default function VerifyScreen() {
   );
 }
 
-const SAFETY_STATUS_STYLE: Record<SafetyStatus, { text: string; badge: string; icon: typeof ShieldCheck }> = {
+type VerificationStatus = SafetyStatus | "skipped";
+
+const SAFETY_STATUS_STYLE: Record<VerificationStatus, { text: string; badge: string; icon: typeof ShieldCheck }> = {
   check: {
     text: "text-emerald-300",
     badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
@@ -593,6 +595,11 @@ const SAFETY_STATUS_STYLE: Record<SafetyStatus, { text: string; badge: string; i
     text: "text-red-300",
     badge: "border-red-500/30 bg-red-500/10 text-red-300",
     icon: AlertTriangle,
+  },
+  skipped: {
+    text: "text-muted",
+    badge: "border-border/30 bg-white/5 text-muted",
+    icon: HelpCircle,
   },
 };
 
@@ -788,11 +795,26 @@ function ExecutionSafetyPanel({
     return `Verified at ${blockPart}.`;
   })();
 
+  const DATA_ABSENT_REASON_CODES = new Set([
+    "missing-onchain-policy-proof",
+    "missing-rpc-url",
+    "missing-consensus-or-policy-proof",
+    "missing-consensus-proof",
+    "consensus-proof-fetch-failed",
+  ]);
+
+  const nonPassingChecks = checks.filter((c) => c.status !== "check");
+  const allDataAbsent = nonPassingChecks.length > 0 && nonPassingChecks.every(
+    (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
+  );
+
   const verification = hasError
     ? { label: "Verification Failed", description: "One or more safety checks failed. Do not sign.", status: "error" as const }
-    : hasWarning
-      ? { label: "Partially Verified", description: "Some checks are partial or unavailable.", status: "warning" as const }
-      : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
+    : hasWarning && allDataAbsent
+      ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
+      : hasWarning
+        ? { label: "Partially Verified", description: "Some checks are partial or unavailable.", status: "warning" as const }
+        : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
 
   const verificationStyle = SAFETY_STATUS_STYLE[verification.status];
   const VerificationIcon = verificationStyle.icon;
@@ -904,7 +926,7 @@ function ExecutionSafetyPanel({
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Top attention hint (collapsed view) */}
-        {!showDetails && topAttention && (
+        {!showDetails && topAttention && topAttention.reasonCode !== "missing-onchain-policy-proof" && (
           <div className={`rounded-md border px-3 py-2 text-xs ${
             verification.status === "error"
               ? "border-red-500/30 bg-red-500/10 text-red-300"
@@ -998,7 +1020,7 @@ function ExecutionSafetyPanel({
           </div>
         ) : (
           <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-            Simulation not available, {getSimulationUnavailableReason(evidence).toLowerCase()} Token effects could not be previewed.
+            Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
           </div>
         )}
 

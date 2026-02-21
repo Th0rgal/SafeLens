@@ -2,7 +2,7 @@ import { getNetworkCapability, type EvidencePackage } from "@safelens/core";
 
 const SIMULATION_REASON_LABELS = {
   "missing-rpc-url":
-    "Simulation was skipped because no RPC URL was configured during package generation.",
+    "No RPC URL was provided during package generation.",
   "simulation-fetch-failed":
     "Simulation could not be fetched during package generation.",
   "missing-simulation": "No simulation result was included in this package.",

@@ -16,7 +16,7 @@ describe("simulation unavailable reason helpers", () => {
 
     expect(getSimulationUnavailableReasonCode(evidence)).toBe("missing-rpc-url");
     expect(getSimulationUnavailableReason(evidence)).toBe(
-      "Simulation was skipped because no RPC URL was configured during package generation."
+      "No RPC URL was provided during package generation."
     );
   });
 
