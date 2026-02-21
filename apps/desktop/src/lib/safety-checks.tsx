@@ -59,6 +59,7 @@ type ConsensusFailureDetailCode =
       | "envelope-block-number-mismatch"
       | "invalid-proof-payload"
       | "invalid-expected-state-root"
+      | "missing-policy-state-root"
     >
   | "consensus-mode-disabled-by-feature-flag";
 
@@ -88,6 +89,8 @@ const CONSENSUS_ERROR_DETAILS: Record<ConsensusFailureDetailCode, string> = {
     "Consensus proof payload is invalid or malformed.",
   "invalid-expected-state-root":
     "Expected state root format is invalid.",
+  "missing-policy-state-root":
+    "Consensus proof is present but cannot be cross-verified — no on-chain policy proof was included. Regenerate with an RPC URL for full verification.",
 };
 
 function isConsensusFailureDetailCode(

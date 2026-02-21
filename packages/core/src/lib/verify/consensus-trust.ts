@@ -65,6 +65,7 @@ export const CONSENSUS_VERIFIER_ERROR_CODES = [
   "envelope-state-root-mismatch",
   "envelope-block-number-mismatch",
   "invalid-expected-state-root",
+  "missing-policy-state-root",
 ] as const;
 
 export type ConsensusVerifierErrorCode =
@@ -95,6 +96,7 @@ const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
   "envelope-state-root-mismatch": "invalid-proof-payload",
   "envelope-block-number-mismatch": "invalid-proof-payload",
   "invalid-expected-state-root": "invalid-expected-state-root",
+  "missing-policy-state-root": "missing-consensus-or-policy-proof",
 };
 
 const CONSENSUS_VERIFIER_ERROR_CODE_SET: ReadonlySet<string> = new Set(
@@ -112,6 +114,7 @@ const WARNING_CONSENSUS_TRUST_REASONS = new Set<
   "linea-consensus-verifier-pending",
   "stale-consensus-envelope",
   "non-finalized-consensus-envelope",
+  "missing-consensus-or-policy-proof",
 ]);
 
 export const CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON: Record<
