@@ -6,14 +6,18 @@ function makeEvidence(
   chainId: number,
   options: {
     consensusProof?: boolean;
+    onchainPolicyProof?: boolean;
     simulation?: boolean;
     exportReasons?: NonNullable<EvidencePackage["exportContract"]>["reasons"];
   } = {}
-): Pick<EvidencePackage, "chainId" | "consensusProof" | "simulation" | "exportContract"> {
+): Pick<EvidencePackage, "chainId" | "consensusProof" | "onchainPolicyProof" | "simulation" | "exportContract"> {
   return {
     chainId,
     consensusProof: options.consensusProof
       ? ({ consensusMode: "beacon" } as EvidencePackage["consensusProof"])
+      : undefined,
+    onchainPolicyProof: options.onchainPolicyProof
+      ? ({} as EvidencePackage["onchainPolicyProof"])
       : undefined,
     simulation: options.simulation
       ? ({ simulationResult: { success: true } } as EvidencePackage["simulation"])
@@ -27,12 +31,22 @@ function makeEvidence(
 describe("buildNetworkSupportStatus", () => {
   it("returns full support when network and package include full verification artifacts", () => {
     const status = buildNetworkSupportStatus(
-      makeEvidence(1, { consensusProof: true, simulation: true })
+      makeEvidence(1, { consensusProof: true, onchainPolicyProof: true, simulation: true })
     );
 
     expect(status.isFullySupported).toBe(true);
     expect(status.badgeText).toBe("Full");
     expect(status.helperText).toBeNull();
+  });
+
+  it("returns partial support when package is missing on-chain policy proof", () => {
+    const status = buildNetworkSupportStatus(
+      makeEvidence(1, { consensusProof: true, onchainPolicyProof: false, simulation: true })
+    );
+
+    expect(status.isFullySupported).toBe(false);
+    expect(status.badgeText).toBe("Partial");
+    expect(status.helperText).toContain("on-chain policy proof was not included");
   });
 
   it("returns partial support when package is missing simulation artifact", () => {
@@ -59,6 +73,7 @@ describe("buildNetworkSupportStatus", () => {
     const status = buildNetworkSupportStatus({
       chainId: 10,
       consensusProof: { consensusMode: "opstack" } as EvidencePackage["consensusProof"],
+      onchainPolicyProof: {} as EvidencePackage["onchainPolicyProof"],
       simulation: { simulationResult: { success: true } } as EvidencePackage["simulation"],
     });
 
@@ -69,7 +84,7 @@ describe("buildNetworkSupportStatus", () => {
 
   it("returns full support for holesky when package includes consensus and simulation", () => {
     const status = buildNetworkSupportStatus(
-      makeEvidence(17000, { consensusProof: true, simulation: true })
+      makeEvidence(17000, { consensusProof: true, onchainPolicyProof: true, simulation: true })
     );
 
     expect(status.isFullySupported).toBe(true);
@@ -79,7 +94,7 @@ describe("buildNetworkSupportStatus", () => {
 
   it("returns full support for hoodi when package includes consensus and simulation", () => {
     const status = buildNetworkSupportStatus(
-      makeEvidence(560048, { consensusProof: true, simulation: true })
+      makeEvidence(560048, { consensusProof: true, onchainPolicyProof: true, simulation: true })
     );
 
     expect(status.isFullySupported).toBe(true);

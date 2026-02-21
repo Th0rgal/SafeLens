@@ -55,7 +55,7 @@ function getConsensusSupportReasonText(
 export function buildNetworkSupportStatus(
   evidence: Pick<
     EvidencePackage,
-    "chainId" | "consensusProof" | "simulation" | "exportContract"
+    "chainId" | "consensusProof" | "onchainPolicyProof" | "simulation" | "exportContract"
   >
 ): NetworkSupportStatus {
   const capability = getNetworkCapability(evidence.chainId);
@@ -68,6 +68,7 @@ export function buildNetworkSupportStatus(
   const hasConsensusMode = Boolean(capability.consensusMode);
   const supportsSimulation = capability.supportsSimulation;
   const hasConsensusProof = Boolean(evidence.consensusProof);
+  const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const exportReasons = evidence.exportContract?.reasons ?? [];
   const consensusSupportReasonText = getConsensusSupportReasonText(exportReasons);
@@ -103,6 +104,14 @@ export function buildNetworkSupportStatus(
   if (!hasConsensusProof) {
     return partial(
       "Partially supported for this package: no consensus proof was included."
+    );
+  }
+
+  // Policy proof is required for full verification — without it, the
+  // desktop verifier cannot confirm the on-chain Safe state independently.
+  if (!hasOnchainPolicyProof) {
+    return partial(
+      "Partially supported for this package: on-chain policy proof was not included."
     );
   }
 

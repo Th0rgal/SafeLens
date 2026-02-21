@@ -129,7 +129,14 @@ export default function VerifyScreen() {
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
     setConsensusVerification(undefined);
-    setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+    // Only set "included but not yet verified" when a proof actually exists.
+    // Otherwise classifyConsensusStatus sees this as a fallback and misleadingly
+    // reports "included" for packages that have no consensus proof at all.
+    setConsensusSourceSummary(
+      currentEvidence?.consensusProof
+        ? "Consensus proof included but not yet verified (requires desktop app)."
+        : "",
+    );
     setShowSafetyDetails(false);
 
     let cancelled = false;
