@@ -1,7 +1,7 @@
 //! Consensus proof verification using Helios consensus-core.
 //!
 //! Verifies BLS sync committee signatures over beacon block headers
-//! to authenticate the EVM state root. This is a pure computation —
+//! to authenticate the EVM state root. This is a pure computation,
 //! no network access needed. All data comes from the evidence package.
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -313,6 +313,7 @@ const ERR_INVALID_PROOF_PAYLOAD: &str = "invalid-proof-payload";
 const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
 const ERR_NON_FINALIZED_CONSENSUS_ENVELOPE: &str = "non-finalized-consensus-envelope";
 const NON_BEACON_MAX_BLOCK_AGE_SECS: i64 = 24 * 60 * 60;
+const NON_BEACON_MAX_FUTURE_SKEW_SECS: i64 = 60;
 
 #[derive(Clone, Copy)]
 enum ExecutionConsensusMode {
@@ -855,7 +856,33 @@ fn verify_execution_envelope(
         Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
     };
 
-    let age_seconds = (packaged_at - envelope_block_timestamp).max(0);
+    let raw_age = packaged_at - envelope_block_timestamp;
+    let future_dated = raw_age < -NON_BEACON_MAX_FUTURE_SKEW_SECS;
+    if future_dated {
+        checks.push(ConsensusCheck {
+            id: "envelope-freshness".into(),
+            label: "Envelope block timestamp is fresh at packaging time".into(),
+            passed: false,
+            detail: Some(format!(
+                "Envelope timestamp is {}s ahead of package timestamp (max allowed skew {}s).",
+                -raw_age, NON_BEACON_MAX_FUTURE_SKEW_SECS
+            )),
+        });
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: true,
+            sync_committee_participants: 0,
+            error: Some(
+                "Consensus envelope block timestamp is too far in the future relative to package timestamp.".into(),
+            ),
+            error_code: Some(ERR_INVALID_PROOF_PAYLOAD.into()),
+            checks,
+        };
+    }
+
+    let age_seconds = raw_age.max(0);
     let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
     checks.push(ConsensusCheck {
         id: "envelope-freshness".into(),

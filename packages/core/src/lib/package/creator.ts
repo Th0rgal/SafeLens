@@ -221,13 +221,12 @@ export function finalizeEvidenceExport(
   const consensusMode = getNetworkCapability(evidence.chainId)?.consensusMode;
   const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
   const proofConsensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
-  // All known consensus modes are verifier-backed in desktop as of PR #21.
-  // Keep the explicit mode gate so unknown future modes stay partial by default.
+  // Only beacon mode provides independent cryptographic verification (BLS
+  // sync committee signatures). OP Stack/Linea envelopes are RPC-sourced
+  // header reads without an independent trust boundary, so they must not
+  // promote packages to fully-verifiable.
   const hasVerifierSupportedConsensusProof =
-    hasConsensusProofArtifact &&
-    (proofConsensusMode === "beacon" ||
-      proofConsensusMode === "opstack" ||
-      proofConsensusMode === "linea");
+    hasConsensusProofArtifact && proofConsensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();

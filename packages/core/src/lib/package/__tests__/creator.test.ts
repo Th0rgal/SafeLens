@@ -237,7 +237,7 @@ describe("finalizeEvidenceExport", () => {
       network: "linea" as const,
     },
   ])(
-    "marks export fully verifiable when $consensusMode consensus artifact exists with policy proof and simulation",
+    "marks export partial when $consensusMode consensus artifact exists — only beacon is verifier-supported",
     ({ chainId, consensusMode, network }) => {
       const base = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
       const evidence = {
@@ -296,16 +296,9 @@ describe("finalizeEvidenceExport", () => {
         simulationFailed: false,
       });
 
-      expect(finalized.exportContract?.mode).toBe("fully-verifiable");
-      expect(finalized.exportContract?.status).toBe("complete");
-      expect(finalized.exportContract?.isFullyVerifiable).toBe(true);
-      expect(finalized.exportContract?.reasons).not.toContain(
-        "opstack-consensus-verifier-pending"
-      );
-      expect(finalized.exportContract?.reasons).not.toContain(
-        "linea-consensus-verifier-pending"
-      );
-      expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
+      expect(finalized.exportContract?.mode).toBe("partial");
+      expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
+      expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
       expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
     }
   );
