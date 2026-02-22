@@ -233,17 +233,15 @@ function buildReportSources(
 
   const simulationTrust =
     options.evidence.simulation &&
-    options.simulationVerification?.valid &&
-    options.simulationWitnessVerification?.valid &&
-    options.policyProof?.valid &&
-    options.evidence.onchainPolicyProof &&
-    options.evidence.simulationWitness &&
-    options.evidence.simulationWitness.stateRoot.toLowerCase() ===
-      options.evidence.onchainPolicyProof.stateRoot.toLowerCase() &&
-    options.evidence.simulationWitness.blockNumber ===
-      options.evidence.onchainPolicyProof.blockNumber
-      ? "proof-verified"
+    options.evidence.simulationWitness
+      ? "rpc-sourced"
       : options.evidence.simulation?.trust;
+  const simulationVerificationReason =
+    options.evidence.simulation && options.evidence.simulationWitness
+      ? options.simulationWitnessVerification?.valid
+        ? "simulation-replay-not-run"
+        : "simulation-witness-proof-failed"
+      : undefined;
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
         options.evidence.dataDecoded,
@@ -278,6 +276,8 @@ function buildReportSources(
     decodedCalldataVerification,
     hasOnchainPolicyProof: Boolean(options.evidence.onchainPolicyProof),
     hasSimulation: Boolean(options.evidence.simulation),
+    hasSimulationWitness: Boolean(options.evidence.simulationWitness),
+    simulationVerificationReason,
     hasConsensusProof: Boolean(options.evidence.consensusProof),
     // After successful local Merkle verification, upgrade trust from
     // "rpc-sourced" to "proof-verified", the proof was cryptographically
