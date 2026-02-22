@@ -13,7 +13,14 @@ import {
   type ConsensusNetwork,
   BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS,
   NETWORK_CAPABILITIES_BY_CHAIN_ID,
+  type BeaconNetworkCapability,
 } from "../networks/capabilities";
+
+function isBeaconNetworkCapability(
+  network: (typeof NETWORK_CAPABILITIES_BY_CHAIN_ID)[number]
+): network is BeaconNetworkCapability {
+  return network?.consensusMode === "beacon" && Boolean(network?.consensus);
+}
 
 /** Network-specific configuration for beacon chain consensus. */
 export interface BeaconNetworkConfig {
@@ -35,7 +42,8 @@ export const BEACON_NETWORKS: Record<ConsensusNetwork, BeaconNetworkConfig> =
   Object.fromEntries(
     CONSENSUS_NETWORKS.map((networkName) => {
       const network = Object.values(NETWORK_CAPABILITIES_BY_CHAIN_ID).find(
-        (entry) => entry.consensus?.network === networkName
+        (entry): entry is BeaconNetworkCapability =>
+          entry.consensusMode === "beacon" && entry.consensus?.network === networkName
       );
       if (!network?.consensus) {
         throw new Error(`Missing consensus capability config for ${networkName}`);
@@ -60,7 +68,7 @@ export const CHAIN_ID_TO_BEACON_NETWORK: Record<number, ConsensusNetwork> =
   Object.fromEntries(
     BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS.map((chainId) => {
       const capability = NETWORK_CAPABILITIES_BY_CHAIN_ID[chainId];
-      if (!capability?.consensus) {
+      if (!isBeaconNetworkCapability(capability)) {
         throw new Error(`Missing consensus network for chain ${chainId}`);
       }
       return [chainId, capability.consensus.network];
@@ -72,7 +80,9 @@ export const DEFAULT_BEACON_RPC_URLS: Record<ConsensusNetwork, string> =
   Object.fromEntries(
     CONSENSUS_NETWORKS.map((networkName) => {
       const network = Object.values(NETWORK_CAPABILITIES_BY_CHAIN_ID).find(
-        (entry) => entry.consensus?.network === networkName
+        (entry): entry is BeaconNetworkCapability =>
+          entry.consensusMode === "beacon" &&
+          entry.consensus?.network === networkName
       );
       if (!network?.consensus?.defaultBeaconRpcUrl) {
         throw new Error(`Missing beacon RPC URL for consensus network ${networkName}`);
