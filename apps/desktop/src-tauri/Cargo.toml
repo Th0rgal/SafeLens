@@ -15,7 +15,7 @@ tauri-plugin-dialog = "2"
 window-vibrancy = "0.5"
 
 # Helios consensus verification (Phase 4)
-helios-consensus-core = { git = "https://github.com/a16z/helios", package = "helios-consensus-core" }
+helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda319ed1ecb5fb82c71f4fa755a32e01031a", package = "helios-consensus-core" }
 alloy = { version = "1.0.3", default-features = false, features = ["consensus", "ssz"] }
 tree_hash = "0.10.0"
 eyre = "0.6.8"
