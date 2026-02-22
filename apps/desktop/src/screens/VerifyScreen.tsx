@@ -817,7 +817,7 @@ function ExecutionSafetyPanel({
               >
                 {verification.status === "check" ? (
                   <div className="text-muted">
-                    This evidence includes a locally replayed simulation (`revm`) using
+                    This evidence includes a locally replayed simulation revm using
                     RPC-derived witness/state inputs, then verified locally against
                     finalized chain state using an embedded Helios light client.
                     On-chain conditions may change before execution, so the actual
