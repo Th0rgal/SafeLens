@@ -110,7 +110,13 @@ export type SimulationReplayVerificationResult = {
   success: boolean;
   reason: Extract<
     SimulationVerificationReason,
-    "simulation-replay-not-run" | "simulation-replay-exec-error"
+    | "simulation-replay-not-run"
+    | "simulation-replay-exec-error"
+    | "simulation-witness-incomplete"
+    | "simulation-replay-mismatch-success"
+    | "simulation-replay-mismatch-return-data"
+    | "simulation-replay-mismatch-logs"
+    | "simulation-replay-mismatch-gas"
   >;
   error?: string | null;
 };
@@ -245,9 +251,12 @@ function buildReportSources(
   );
 
   const simulationTrust =
-    options.evidence.simulation &&
-    options.evidence.simulationWitness
-      ? "rpc-sourced"
+    options.evidence.simulation && options.evidence.simulationWitness
+      ? options.simulationWitnessVerification?.valid &&
+        options.simulationReplayVerification?.executed &&
+        options.simulationReplayVerification.success
+        ? "proof-verified"
+        : "rpc-sourced"
       : options.evidence.simulation?.trust;
   const simulationVerificationReason =
     !options.evidence.simulation
@@ -256,9 +265,10 @@ function buildReportSources(
         ? "missing-simulation-witness"
         : !options.simulationWitnessVerification?.valid
           ? "simulation-witness-proof-failed"
-          : options.simulationReplayVerification?.reason ===
-              "simulation-replay-exec-error"
-            ? "simulation-replay-exec-error"
+          : options.simulationReplayVerification
+            ? options.simulationReplayVerification.success
+              ? undefined
+              : options.simulationReplayVerification.reason
             : "simulation-replay-not-run";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(

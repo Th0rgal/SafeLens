@@ -264,6 +264,42 @@ describe("buildVerificationSources", () => {
     expect(simSource?.summary).toContain("Local replay execution failed");
   });
 
+  it("explains incomplete witness when replay world state is missing", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: true,
+      hasSimulationWitness: true,
+      simulationTrust: "rpc-sourced",
+      simulationVerificationReason: "simulation-witness-incomplete",
+      hasConsensusProof: false,
+    }));
+
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
+    expect(simSource?.trust).toBe("rpc-sourced");
+    expect(simSource?.summary).toContain("incomplete");
+  });
+
+  it("explains replay mismatch with deterministic reason wording", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: true,
+      hasSimulationWitness: true,
+      simulationTrust: "rpc-sourced",
+      simulationVerificationReason: "simulation-replay-mismatch-return-data",
+      hasConsensusProof: false,
+    }));
+
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
+    expect(simSource?.trust).toBe("rpc-sourced");
+    expect(simSource?.summary).toContain("return data mismatched");
+  });
+
   it("respects custom trust levels for policy proof and simulation", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
@@ -281,6 +317,7 @@ describe("buildVerificationSources", () => {
 
     const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
     expect(simSource?.trust).toBe("proof-verified");
+    expect(simSource?.summary).toContain("Local replay matched");
   });
 
   it("uses centralized consensus reason summaries for non-upgrade trust output", () => {

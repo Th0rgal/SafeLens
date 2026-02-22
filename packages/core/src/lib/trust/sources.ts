@@ -15,7 +15,12 @@ export type SimulationVerificationReason =
   | "missing-simulation-witness"
   | "simulation-replay-not-run"
   | "simulation-replay-exec-error"
-  | "simulation-witness-proof-failed";
+  | "simulation-witness-proof-failed"
+  | "simulation-witness-incomplete"
+  | "simulation-replay-mismatch-success"
+  | "simulation-replay-mismatch-return-data"
+  | "simulation-replay-mismatch-logs"
+  | "simulation-replay-mismatch-gas";
 
 interface ConsensusSourceMetadata {
   name: string;
@@ -311,21 +316,45 @@ export function buildVerificationSources(
             context.simulationVerificationReason === "missing-simulation-witness"
               ? "No simulation witness was included; simulation remains RPC-sourced."
               : context.simulationVerificationReason === "simulation-witness-proof-failed"
-              ? "Simulation witness checks failed; simulation remains RPC-sourced."
+                ? "Simulation witness checks failed; simulation remains RPC-sourced."
+                : context.simulationVerificationReason === "simulation-witness-incomplete"
+                  ? "Simulation witness is incomplete for local replay; simulation remains RPC-sourced."
+                  : context.simulationVerificationReason === "simulation-replay-mismatch-success"
+                    ? "Local replay success/revert result mismatched packaged simulation."
+                    : context.simulationVerificationReason === "simulation-replay-mismatch-return-data"
+                      ? "Local replay return data mismatched packaged simulation."
+                      : context.simulationVerificationReason === "simulation-replay-mismatch-logs"
+                        ? "Local replay logs mismatched packaged simulation."
+                        : context.simulationVerificationReason === "simulation-replay-mismatch-gas"
+                          ? "Local replay gas policy mismatched packaged simulation."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Simulation witness checks passed, but local replay was not run."
                 : context.simulationVerificationReason === "simulation-replay-exec-error"
                   ? "Local replay execution failed; simulation remains RPC-sourced."
+                  : context.simulationTrust === "proof-verified"
+                    ? "Local replay matched packaged simulation output."
                 : "Transaction simulated via execTransaction with state overrides.",
           detail:
             context.simulationVerificationReason === "missing-simulation-witness"
               ? "Simulation output was packaged without a witness artifact. Treat simulation outcome as RPC-trusted until witness generation and local replay verification are both available."
               : context.simulationVerificationReason === "simulation-witness-proof-failed"
-              ? "Simulation output was compared against witness metadata, but witness proof validation failed. Treat simulation outcome as RPC-trusted until witness and replay verification both pass."
+                ? "Simulation output was compared against witness metadata, but witness proof validation failed. Treat simulation outcome as RPC-trusted until witness and replay verification both pass."
+                : context.simulationVerificationReason === "simulation-witness-incomplete"
+                  ? "The witness did not include a complete replay world state (accounts/storage/code). Treat simulation outcome as RPC-trusted until complete replay inputs are provided and replay verification passes."
+                  : context.simulationVerificationReason === "simulation-replay-mismatch-success"
+                    ? "Local replay produced a different success/revert status than the packaged simulation. Treat simulation outcome as unverified and investigate witness/package integrity."
+                    : context.simulationVerificationReason === "simulation-replay-mismatch-return-data"
+                      ? "Local replay output bytes differ from the packaged simulation output. Treat simulation outcome as unverified and investigate witness/package integrity."
+                      : context.simulationVerificationReason === "simulation-replay-mismatch-logs"
+                        ? "Local replay emitted a different ordered log set than the packaged simulation. Treat simulation outcome as unverified and investigate witness/package integrity."
+                        : context.simulationVerificationReason === "simulation-replay-mismatch-gas"
+                          ? "Local replay gas policy check failed because replay gas exceeded packaged simulation gas. Treat simulation outcome as unverified and investigate witness/package integrity."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Witness anchoring checks passed, but this verifier path does not execute a full local EVM replay yet. Trust remains RPC-sourced until replay verification is available and passes."
                 : context.simulationVerificationReason === "simulation-replay-exec-error"
                   ? "Witness anchoring checks passed, but local replay execution failed. Treat simulation outcome as RPC-trusted until replay verification executes and passes."
+                  : context.simulationTrust === "proof-verified"
+                    ? "Witness anchoring checks passed and local replay matched success/revert status, return data, ordered logs, and gas policy. Simulation trust upgrades to proof-verified."
                 : "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified only when a full local replay verifier confirms the packaged result.",
           status: "enabled" as VerificationSourceStatus,
         }
