@@ -85,6 +85,13 @@ describe("verifySimulation", () => {
     expect(check?.passed).toBe(true);
   });
 
+  it("fails for uppercase-0X hex gas quantity", () => {
+    const result = verifySimulation(makeValidSimulation({ gasUsed: "0X5208" }));
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "gas-used");
+    expect(check?.passed).toBe(false);
+  });
+
   it("fails for malformed hex gas quantity", () => {
     const result = verifySimulation(makeValidSimulation({ gasUsed: "0x" }));
     expect(result.valid).toBe(false);

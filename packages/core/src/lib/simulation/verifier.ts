@@ -6,7 +6,7 @@
  * when a replay-complete simulation witness is present.
  */
 
-import type { Simulation } from "../types";
+import { evmQuantitySchema, type Simulation } from "../types";
 
 export interface SimulationCheck {
   id: string;
@@ -24,7 +24,7 @@ export interface SimulationVerificationResult {
 }
 
 function parseEvmQuantity(raw: string): bigint | null {
-  if (!/^(?:0[xX][0-9a-fA-F]+|[0-9]+)$/.test(raw)) {
+  if (!evmQuantitySchema.safeParse(raw).success) {
     return null;
   }
   try {
