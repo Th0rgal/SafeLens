@@ -181,16 +181,16 @@ export async function fetchConsensusProof(
     // for periods B through A−1 (start_period = B, count = A − B).
     const count = result.attestedPeriod - result.bootstrapPeriod;
     try {
-      const updatesResponse = await fetchBeaconJson(
+      const updatesResponse = (await fetchBeaconJson(
         `${baseUrl}/eth/v1/beacon/light_client/updates?start_period=${result.bootstrapPeriod}&count=${Math.min(count, 128)}`
-      );
-      const updatesArray = Array.isArray(updatesResponse)
+      )) as { data?: unknown } | unknown[];
+      const updatesArray: unknown[] = Array.isArray(updatesResponse)
         ? updatesResponse
-        : updatesResponse.data ?? updatesResponse;
+        : (updatesResponse.data as unknown[]) ?? updatesResponse;
 
       const updates: string[] = [];
       for (const update of updatesArray) {
-        const updateData = update.data ?? update;
+        const updateData = (update as { data?: unknown }).data ?? update;
         updates.push(JSON.stringify(updateData));
       }
 
@@ -228,12 +228,21 @@ async function fetchBeaconProofAttempt(
   slotsPerPeriod: number,
 ): Promise<BeaconProofAttemptResult> {
   // Step 1: Fetch the latest finality update
-  const finalityUpdate = await fetchBeaconJson(
+  const finalityUpdate = (await fetchBeaconJson(
     `${baseUrl}/eth/v1/beacon/light_client/finality_update`
-  );
+  )) as {
+    data: {
+      finalized_header: {
+        beacon: { slot: number };
+        execution?: { block_number: number; state_root: string };
+      };
+      attested_header: {
+        beacon: { slot: number };
+      };
+    };
+  };
 
-  const finalizedSlot =
-    finalityUpdate.data.finalized_header.beacon.slot;
+  const finalizedSlot = finalityUpdate.data.finalized_header.beacon.slot;
   const finalizedBlockNumber =
     finalityUpdate.data.finalized_header.execution?.block_number;
   const finalizedStateRoot =
@@ -259,8 +268,7 @@ async function fetchBeaconProofAttempt(
   const bootstrapPeriod = Math.floor(
     Number((bootstrap as { data: { header: { beacon: { slot: number } } } }).data.header.beacon.slot) / slotsPerPeriod
   );
-  const attestedSlot =
-    (finalityUpdate as { data: { attested_header: { beacon: { slot: number } } } }).data.attested_header.beacon.slot;
+  const attestedSlot = finalityUpdate.data.attested_header.beacon.slot;
   const attestedPeriod = Math.floor(Number(attestedSlot) / slotsPerPeriod);
 
   return {
@@ -341,10 +349,10 @@ async function fetchHeaderRoot(
   baseUrl: string,
   slot: number,
 ): Promise<string> {
-  const response = await fetchBeaconJson(
+  const response = (await fetchBeaconJson(
     `${baseUrl}/eth/v1/beacon/headers/${slot}`
-  );
-  return response.data.root as string;
+  )) as { data: { root: string } };
+  return response.data.root;
 }
 
 /** Check whether an error is an HTTP 404 from the beacon API. */
@@ -375,7 +383,7 @@ function buildConsensusProof(
  * Note: Beacon API responses are not Zod-validated — malformed data causes runtime
  * errors during generation, not verification. The Rust Helios path handles SSZ
  * validation during offline verification. */
-async function fetchBeaconJson(url: string): Promise<any> {
+async function fetchBeaconJson(url: string): Promise<unknown> {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
   });
