@@ -177,4 +177,59 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
     expect(simulationSource?.trust).toBe("rpc-sourced");
     expect(simulationSource?.summary).toContain("Local replay execution failed");
   });
+
+  it("upgrades simulation trust to proof-verified when replay matches", async () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const simulation = makeSimulation();
+    const enriched = {
+      ...base,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation,
+      simulationWitness: makeWitness(simulation),
+    };
+
+    const report = await verifyEvidencePackage(enriched);
+    const upgraded = applySimulationReplayVerificationToReport(report, enriched, {
+      simulationReplayVerification: {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-not-run",
+        error: null,
+      },
+    });
+
+    const simulationSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
+    );
+    expect(simulationSource?.trust).toBe("proof-verified");
+    expect(simulationSource?.summary).toContain("Local replay matched");
+  });
+
+  it("surfaces deterministic replay mismatch reasons", async () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const simulation = makeSimulation();
+    const enriched = {
+      ...base,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation,
+      simulationWitness: makeWitness(simulation),
+    };
+
+    const report = await verifyEvidencePackage(enriched);
+    const upgraded = applySimulationReplayVerificationToReport(report, enriched, {
+      simulationReplayVerification: {
+        executed: true,
+        success: false,
+        reason: "simulation-replay-mismatch-return-data",
+        error: "return data mismatch",
+      },
+    });
+    const simulationSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
+    );
+    expect(simulationSource?.trust).toBe("rpc-sourced");
+    expect(simulationSource?.summary).toContain("return data mismatched");
+  });
 });
