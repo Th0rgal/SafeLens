@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Address, Hex } from "viem";
 import { createEvidencePackage } from "../../package/creator";
-import { verifyEvidencePackage } from "..";
+import {
+  applySimulationReplayVerificationToReport,
+  verifyEvidencePackage,
+} from "..";
 import { VERIFICATION_SOURCE_IDS } from "../../trust/sources";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 import type { OnchainPolicyProof, Simulation, SimulationWitness } from "../../types";
@@ -146,5 +149,32 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
       (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
     );
     expect(simulationSource?.trust).toBe("rpc-sourced");
+  });
+
+  it("surfaces replay execution errors deterministically", async () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const simulation = makeSimulation();
+    const enriched = {
+      ...base,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation,
+      simulationWitness: makeWitness(simulation),
+    };
+
+    const report = await verifyEvidencePackage(enriched);
+    const upgraded = applySimulationReplayVerificationToReport(report, enriched, {
+      simulationReplayVerification: {
+        executed: true,
+        success: false,
+        reason: "simulation-replay-exec-error",
+        error: "local revm replay failed",
+      },
+    });
+    const simulationSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
+    );
+    expect(simulationSource?.trust).toBe("rpc-sourced");
+    expect(simulationSource?.summary).toContain("Local replay execution failed");
   });
 });

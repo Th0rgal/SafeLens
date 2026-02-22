@@ -23,6 +23,7 @@ import {
   mapConsensusVerifierErrorCodeToTrustReason,
   type ConsensusTrustDecisionReason,
 } from "./consensus-trust";
+import type { SimulationVerificationReason } from "../trust/sources";
 export {
   CONSENSUS_VERIFIER_ERROR_CODES,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
@@ -89,6 +90,7 @@ export type EvidenceVerificationReport = {
   policyProof?: PolicyProofVerificationResult;
   simulationVerification?: SimulationVerificationResult;
   simulationWitnessVerification?: SimulationWitnessVerificationResult;
+  simulationReplayVerification?: SimulationReplayVerificationResult;
   /** Consensus verification result (from Tauri backend, if available). */
   consensusVerification?: ConsensusVerificationResult;
   /**
@@ -103,6 +105,16 @@ export interface VerifyEvidenceOptions {
   settings?: SettingsConfig | null;
 }
 
+export type SimulationReplayVerificationResult = {
+  executed: boolean;
+  success: boolean;
+  reason: Extract<
+    SimulationVerificationReason,
+    "simulation-replay-not-run" | "simulation-replay-exec-error"
+  >;
+  error?: string | null;
+};
+
 interface BuildReportSourcesOptions {
   evidence: EvidencePackage;
   settings?: SettingsConfig | null;
@@ -110,6 +122,7 @@ interface BuildReportSourcesOptions {
   policyProof?: PolicyProofVerificationResult;
   simulationVerification?: SimulationVerificationResult;
   simulationWitnessVerification?: SimulationWitnessVerificationResult;
+  simulationReplayVerification?: SimulationReplayVerificationResult;
   consensusVerification?: ConsensusVerificationResult;
 }
 
@@ -241,9 +254,15 @@ function buildReportSources(
       ? undefined
       : !options.evidence.simulationWitness
         ? "missing-simulation-witness"
-        : options.simulationWitnessVerification?.valid
-          ? "simulation-replay-not-run"
-          : "simulation-witness-proof-failed";
+        : !options.simulationWitnessVerification?.valid
+          ? "simulation-witness-proof-failed"
+          : options.simulationReplayVerification?.reason ===
+              "simulation-replay-exec-error"
+            ? "simulation-replay-exec-error"
+            : options.simulationReplayVerification?.reason ===
+                "simulation-replay-not-run"
+              ? "simulation-replay-not-run"
+              : "simulation-replay-not-run";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
         options.evidence.dataDecoded,
@@ -317,7 +336,31 @@ export function applyConsensusVerificationToReport(
       policyProof: report.policyProof,
       simulationVerification: report.simulationVerification,
       simulationWitnessVerification: report.simulationWitnessVerification,
+      simulationReplayVerification: report.simulationReplayVerification,
       consensusVerification: options.consensusVerification,
+    }),
+  };
+}
+
+export function applySimulationReplayVerificationToReport(
+  report: EvidenceVerificationReport,
+  evidence: EvidencePackage,
+  options: VerifyEvidenceOptions & {
+    simulationReplayVerification: SimulationReplayVerificationResult;
+  }
+): EvidenceVerificationReport {
+  return {
+    ...report,
+    simulationReplayVerification: options.simulationReplayVerification,
+    sources: buildReportSources({
+      evidence,
+      settings: options.settings,
+      signatureSummary: report.signatures.summary,
+      policyProof: report.policyProof,
+      simulationVerification: report.simulationVerification,
+      simulationWitnessVerification: report.simulationWitnessVerification,
+      simulationReplayVerification: options.simulationReplayVerification,
+      consensusVerification: report.consensusVerification,
     }),
   };
 }
@@ -497,6 +540,7 @@ export async function verifyEvidencePackage(
     policyProof,
     simulationVerification,
     simulationWitnessVerification,
+    simulationReplayVerification: undefined,
     consensusTrustDecisionReason: consensusDecision.reason,
   };
 }

@@ -14,6 +14,7 @@ export type DecodedCalldataVerificationStatus =
 export type SimulationVerificationReason =
   | "missing-simulation-witness"
   | "simulation-replay-not-run"
+  | "simulation-replay-exec-error"
   | "simulation-witness-proof-failed";
 
 interface ConsensusSourceMetadata {
@@ -313,6 +314,8 @@ export function buildVerificationSources(
               ? "Simulation witness checks failed; simulation remains RPC-sourced."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Simulation witness checks passed, but local replay was not run."
+                : context.simulationVerificationReason === "simulation-replay-exec-error"
+                  ? "Local replay execution failed; simulation remains RPC-sourced."
                 : "Transaction simulated via execTransaction with state overrides.",
           detail:
             context.simulationVerificationReason === "missing-simulation-witness"
@@ -321,6 +324,8 @@ export function buildVerificationSources(
               ? "Simulation output was compared against witness metadata, but witness proof validation failed. Treat simulation outcome as RPC-trusted until witness and replay verification both pass."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Witness anchoring checks passed, but this verifier path does not execute a full local EVM replay yet. Trust remains RPC-sourced until replay verification is available and passes."
+                : context.simulationVerificationReason === "simulation-replay-exec-error"
+                  ? "Witness anchoring checks passed, but local replay execution failed. Treat simulation outcome as RPC-trusted until replay verification executes and passes."
                 : "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified only when a full local replay verifier confirms the packaged result.",
           status: "enabled" as VerificationSourceStatus,
         }

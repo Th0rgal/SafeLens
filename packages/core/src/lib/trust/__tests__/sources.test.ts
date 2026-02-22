@@ -246,6 +246,24 @@ describe("buildVerificationSources", () => {
     expect(simSource?.summary).toContain("witness checks failed");
   });
 
+  it("explains replay-exec-error when local replay execution fails", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: true,
+      hasSimulationWitness: true,
+      simulationTrust: "rpc-sourced",
+      simulationVerificationReason: "simulation-replay-exec-error",
+      hasConsensusProof: false,
+    }));
+
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
+    expect(simSource?.trust).toBe("rpc-sourced");
+    expect(simSource?.summary).toContain("Local replay execution failed");
+  });
+
   it("respects custom trust levels for policy proof and simulation", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
