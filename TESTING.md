@@ -85,6 +85,14 @@ bun run type-check
 
 This includes `packages/core`, `packages/cli`, `apps/generator`, and `apps/desktop`.
 
+## Replay benchmark (desktop)
+
+```bash
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml benchmark_replay_latency_profiles -- --ignored --nocapture
+```
+
+This prints p50/p95 latency for deterministic local replay profiles and is used to track replay performance regressions.
+
 ## URL parsing tests
 
 ### Valid URLs

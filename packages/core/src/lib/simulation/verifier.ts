@@ -1,10 +1,9 @@
 /**
  * Simulation verification: structural consistency checks.
  *
- * Since we cannot re-run the simulation without an RPC, verification
- * is limited to structural integrity: valid hex formats, consistent
- * addresses, and sensible values. The trust label communicates that
- * the simulation result is RPC-sourced and not independently verifiable.
+ * Core verification here remains structural (hex formats, addresses, values).
+ * Full replay verification runs in the desktop verifier path via local `revm`
+ * when a replay-complete simulation witness is present.
  */
 
 import type { Simulation } from "../types";

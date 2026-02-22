@@ -192,7 +192,7 @@ describe("buildVerificationSources", () => {
     expect(simSource?.summary).toContain("simulated");
   });
 
-  it("explains replay-not-run when witness checks pass but local replay is unavailable", () => {
+  it("explains replay-not-run when witness checks pass but local replay did not execute in this run", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
@@ -207,7 +207,7 @@ describe("buildVerificationSources", () => {
 
     const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
     expect(simSource?.trust).toBe("rpc-sourced");
-    expect(simSource?.summary).toContain("local replay was not run");
+    expect(simSource?.summary).toContain("local replay was unavailable");
   });
 
   it("explains missing witness when simulation has no witness artifact", () => {

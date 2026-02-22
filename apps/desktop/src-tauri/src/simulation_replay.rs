@@ -372,6 +372,7 @@ fn to_hex_prefixed(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     fn target_account(address: &str, code: &str) -> ReplayWitnessAccount {
         ReplayWitnessAccount {
@@ -486,5 +487,74 @@ mod tests {
 
         assert!(result.executed);
         assert!(result.success);
+    }
+
+    fn percentile(sorted: &[u128], p: f64) -> u128 {
+        let idx = ((sorted.len() as f64 - 1.0) * p).round() as usize;
+        sorted[idx]
+    }
+
+    #[test]
+    #[ignore = "manual benchmark run; use -- --ignored --nocapture"]
+    fn benchmark_replay_latency_profiles() {
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+        let iterations = 50usize;
+
+        // Scenario A: short successful return path.
+        let success_code = "0x602a60005260206000f3";
+        // Scenario B: deterministic revert path.
+        let revert_code = "0x60006000fd";
+        let scenarios = vec![
+            ("erc20-transfer-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
+            ("allowance-swap-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
+            ("multisend-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
+            ("revert-path", revert_code, false, "0x", Vec::<ReplaySimulationLog>::new()),
+        ];
+
+        for (name, code, expected_success, expected_return, expected_logs) in scenarios {
+            let mut samples_ms = Vec::with_capacity(iterations);
+            for _ in 0..iterations {
+                let input = SimulationReplayInput {
+                    chain_id: 1,
+                    safe_address: caller.to_string(),
+                    transaction: ReplayTransaction {
+                        to: target.to_string(),
+                        value: "0".to_string(),
+                        data: Some("0x".to_string()),
+                        safe_tx_gas: Some("500000".to_string()),
+                    },
+                    simulation: ReplaySimulation {
+                        success: expected_success,
+                        return_data: Some(expected_return.to_string()),
+                        gas_used: "500000".to_string(),
+                        logs: expected_logs.clone(),
+                    },
+                    simulation_witness: ReplayWitness {
+                        replay_accounts: Some(vec![
+                            caller_account(caller),
+                            target_account(target, code),
+                        ]),
+                        replay_caller: Some(caller.to_string()),
+                        replay_gas_limit: Some(500000),
+                    },
+                };
+
+                let started = Instant::now();
+                let result = verify_simulation_replay(input);
+                let elapsed = started.elapsed().as_millis();
+                assert!(result.executed, "{name} should execute replay");
+                assert!(
+                    result.success,
+                    "{name} should have matched expected simulation output"
+                );
+                samples_ms.push(elapsed);
+            }
+
+            samples_ms.sort_unstable();
+            let p50 = percentile(&samples_ms, 0.50);
+            let p95 = percentile(&samples_ms, 0.95);
+            println!("{name}: p50={}ms p95={}ms samples={}", p50, p95, iterations);
+        }
     }
 }
