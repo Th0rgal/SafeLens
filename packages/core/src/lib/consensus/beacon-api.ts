@@ -202,8 +202,8 @@ export async function fetchConsensusProof(
 /** Intermediate result from a single beacon proof fetching attempt. */
 interface BeaconProofAttemptResult {
   checkpoint: string;
-  bootstrap: any;
-  finalityUpdate: any;
+  bootstrap: unknown;
+  finalityUpdate: unknown;
   finalizedSlot: number;
   finalizedBlockNumber: number;
   finalizedStateRoot: string;
@@ -247,10 +247,10 @@ async function fetchBeaconProofAttempt(
 
   // Compute sync periods
   const bootstrapPeriod = Math.floor(
-    Number(bootstrap.data.header.beacon.slot) / slotsPerPeriod
+    Number((bootstrap as { data: { header: { beacon: { slot: number } } } }).data.header.beacon.slot) / slotsPerPeriod
   );
   const attestedSlot =
-    finalityUpdate.data.attested_header.beacon.slot;
+    (finalityUpdate as { data: { attested_header: { beacon: { slot: number } } } }).data.attested_header.beacon.slot;
   const attestedPeriod = Math.floor(Number(attestedSlot) / slotsPerPeriod);
 
   return {
@@ -279,7 +279,7 @@ async function fetchBootstrapWithFallback(
   baseUrl: string,
   finalizedSlot: number,
   slotsPerEpoch: number,
-): Promise<{ checkpoint: string; bootstrap: any }> {
+): Promise<{ checkpoint: string; bootstrap: unknown }> {
   // Try the finalized slot directly first.
   const primaryRoot = await fetchHeaderRoot(baseUrl, finalizedSlot);
   try {
@@ -351,9 +351,9 @@ function buildConsensusProof(
   return {
     consensusMode: "beacon",
     checkpoint: result.checkpoint as `0x${string}`,
-    bootstrap: JSON.stringify(result.bootstrap.data),
+    bootstrap: JSON.stringify((result.bootstrap as { data: unknown }).data),
     updates,
-    finalityUpdate: JSON.stringify(result.finalityUpdate.data),
+    finalityUpdate: JSON.stringify((result.finalityUpdate as { data: unknown }).data),
     network: config.network,
     stateRoot: result.finalizedStateRoot as `0x${string}`,
     blockNumber: result.finalizedBlockNumber,
@@ -361,7 +361,10 @@ function buildConsensusProof(
   };
 }
 
-/** Fetch JSON from a beacon chain API endpoint with error handling. */
+/** Fetch JSON from a beacon chain API endpoint with error handling.
+ * Note: Beacon API responses are not Zod-validated — malformed data causes runtime
+ * errors during generation, not verification. The Rust Helios path handles SSZ
+ * validation during offline verification. */
 async function fetchBeaconJson(url: string): Promise<any> {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
