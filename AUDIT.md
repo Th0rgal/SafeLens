@@ -175,7 +175,7 @@ The app is intended to be installed on a computer you trust. Even if your main c
 |---|---|---|---|
 | viem | ^2.x | Standard EVM library, wide adoption, typed | RLP/ABI decoding bugs |
 | zod | ^3.x | Schema validation, no network access | Validation bypass |
-| helios-consensus-core | (Rust) | a]16z-maintained Ethereum light client | BLS verification bugs |
+| helios-consensus-core | (Rust) | a16z-maintained Ethereum light client | BLS verification bugs |
 | alloy-primitives | (Rust) | Standard Ethereum types | Type handling bugs |
 
 All verification-path dependencies are local-only (no network access). Generation-path additionally uses viem's HTTP transport.
