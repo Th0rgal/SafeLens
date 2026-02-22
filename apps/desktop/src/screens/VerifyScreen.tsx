@@ -683,6 +683,13 @@ function ExecutionSafetyPanel({
   // ── Verification status ───────────────────────────────────────────
   const hasError = checksForVerificationStatus.some((check) => check.status === "error");
   const hasWarning = checksForVerificationStatus.some((check) => check.status === "warning");
+  const replayRequired = Boolean(evidence.simulation && evidence.simulationWitness);
+  const replayResultAvailable = Boolean(simulationReplayVerification);
+  const replayPassed =
+    simulationReplayVerification?.executed === true &&
+    simulationReplayVerification.success === true;
+  const replayFailed = replayRequired && replayResultAvailable && !replayPassed;
+  const replayPending = replayRequired && !replayResultAvailable;
 
   const freshnessDescription = (() => {
     const sim = evidence.simulation;
@@ -710,12 +717,24 @@ function ExecutionSafetyPanel({
     (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
   );
 
-  const verification = hasError
-    ? { label: "Verification Failed", description: "One or more safety checks failed. Do not sign.", status: "error" as const }
+  const verification = hasError || replayFailed
+    ? {
+        label: "Verification Failed",
+        description: replayFailed
+          ? simulationReplayVerification?.error ?? "Local replay verification failed. Do not sign."
+          : "One or more safety checks failed. Do not sign.",
+        status: "error" as const,
+      }
     : hasWarning && allDataAbsent
       ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
-      : hasWarning
-        ? { label: "Partially Verified", description: "Some checks are partial or unavailable.", status: "warning" as const }
+      : hasWarning || replayPending
+        ? {
+            label: "Partially Verified",
+            description: replayPending
+              ? "Local replay verification is still running."
+              : "Some checks are partial or unavailable.",
+            status: "warning" as const,
+          }
         : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
 
   const verificationStyle = SAFETY_STATUS_STYLE[verification.status];
@@ -934,6 +953,11 @@ function ExecutionSafetyPanel({
         ) : simulationAvailable && simulationVerification?.executionReverted ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
             Token effects could not be determined because the simulation reverted.
+          </div>
+        ) : witnessOnlySimulation && replayFailed ? (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            Local replay verification failed. Token effects cannot be trusted.
+            {simulationReplayVerification?.error ? ` ${simulationReplayVerification.error}` : ""}
           </div>
         ) : witnessOnlySimulation ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
