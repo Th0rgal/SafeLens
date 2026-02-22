@@ -301,7 +301,7 @@ describe("computeRemainingApprovals", () => {
   const SPENDER = "0xcccccccccccccccccccccccccccccccccccccccc";
   const TOKEN = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
 
-  function makeEvent(overrides: Partial<DecodedEvent>): DecodedEvent {
+  function makeEvent(overrides: Partial<DecodedEvent> = {}): DecodedEvent {
     return {
       kind: "approval",
       token: TOKEN,
