@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { decodeSimulationEvents } from "../event-decoder";
+import {
+  decodeSimulationEvents,
+  decodeNativeTransfers,
+  computeRemainingApprovals,
+  type DecodedEvent,
+} from "../event-decoder";
 import type { SimulationLog } from "../../types";
 
 const SAFE = "0x1234567890abcdef1234567890abcdef12345678";
@@ -213,5 +218,149 @@ describe("decodeSimulationEvents", () => {
       expect(events[1].direction).toBe("receive");
       expect(events[1].tokenSymbol).toBe("USDC");
     });
+  });
+});
+
+// ── decodeNativeTransfers ──────────────────────────────────────────
+
+describe("decodeNativeTransfers", () => {
+  it("returns empty array for empty input", () => {
+    expect(decodeNativeTransfers([], SAFE, "ETH")).toEqual([]);
+  });
+
+  it("decodes a native send transfer", () => {
+    const events = decodeNativeTransfers(
+      [{ from: SAFE, to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", value: "1000000000000000000" }],
+      SAFE,
+      "ETH",
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("transfer");
+    expect(events[0].direction).toBe("send");
+    expect(events[0].tokenSymbol).toBe("ETH");
+    expect(events[0].tokenDecimals).toBe(18);
+    expect(events[0].amountFormatted).toContain("1");
+    expect(events[0].amountFormatted).toContain("ETH");
+    expect(events[0].token).toBe("0x0000000000000000000000000000000000000000");
+  });
+
+  it("decodes a native receive transfer", () => {
+    const events = decodeNativeTransfers(
+      [{ from: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", to: SAFE, value: "2500000000000000000" }],
+      SAFE,
+      "ETH",
+    );
+
+    expect(events).toHaveLength(1);
+    expect(events[0].direction).toBe("receive");
+    expect(events[0].amountFormatted).toContain("2.5");
+  });
+
+  it("uses the provided native symbol", () => {
+    const events = decodeNativeTransfers(
+      [{ from: SAFE, to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", value: "1000000000000000000" }],
+      SAFE,
+      "MATIC",
+    );
+
+    expect(events[0].tokenSymbol).toBe("MATIC");
+    expect(events[0].amountFormatted).toContain("MATIC");
+  });
+
+  it("lowercases addresses for consistent comparison", () => {
+    const events = decodeNativeTransfers(
+      [{ from: "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", to: SAFE, value: "1" }],
+      SAFE,
+      "ETH",
+    );
+
+    expect(events[0].from).toBe("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect(events[0].direction).toBe("receive");
+  });
+
+  it("handles multiple transfers", () => {
+    const events = decodeNativeTransfers(
+      [
+        { from: SAFE, to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", value: "100" },
+        { from: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", to: SAFE, value: "200" },
+      ],
+      SAFE,
+      "ETH",
+    );
+
+    expect(events).toHaveLength(2);
+    expect(events[0].direction).toBe("send");
+    expect(events[1].direction).toBe("receive");
+  });
+});
+
+// ── computeRemainingApprovals ──────────────────────────────────────
+
+describe("computeRemainingApprovals", () => {
+  const SPENDER = "0xcccccccccccccccccccccccccccccccccccccccc";
+  const TOKEN = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+
+  function makeEvent(overrides: Partial<DecodedEvent>): DecodedEvent {
+    return {
+      kind: "approval",
+      token: TOKEN,
+      tokenSymbol: "WETH",
+      tokenDecimals: 18,
+      amountFormatted: "100 WETH",
+      amountRaw: "100000000000000000000",
+      from: SAFE,
+      to: SPENDER,
+      direction: "send",
+      ...overrides,
+    };
+  }
+
+  it("returns empty array when no events", () => {
+    expect(computeRemainingApprovals([])).toEqual([]);
+  });
+
+  it("returns empty array when no approval events", () => {
+    const events = [makeEvent({ kind: "transfer" })];
+    expect(computeRemainingApprovals(events)).toEqual([]);
+  });
+
+  it("filters out zero-amount approvals", () => {
+    const events = [makeEvent({ amountRaw: "0", amountFormatted: "0 WETH" })];
+    expect(computeRemainingApprovals(events)).toEqual([]);
+  });
+
+  it("extracts approval details correctly", () => {
+    const events = [makeEvent()];
+    const approvals = computeRemainingApprovals(events);
+
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0].amountFormatted).toBe("100 WETH");
+    expect(approvals[0].isUnlimited).toBe(false);
+    expect(approvals[0].spender).toBe(SPENDER);
+    expect(approvals[0].token).toBe(TOKEN);
+    expect(approvals[0].tokenSymbol).toBe("WETH");
+  });
+
+  it("detects unlimited approvals", () => {
+    const events = [makeEvent({ amountFormatted: "Unlimited WETH" })];
+    const approvals = computeRemainingApprovals(events);
+
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0].isUnlimited).toBe(true);
+  });
+
+  it("skips non-approval events and returns only approvals", () => {
+    const events = [
+      makeEvent({ kind: "transfer" }),
+      makeEvent({ kind: "approval" }),
+      makeEvent({ kind: "wrap" }),
+      makeEvent({ kind: "approval", amountFormatted: "Unlimited WETH" }),
+    ];
+    const approvals = computeRemainingApprovals(events);
+
+    expect(approvals).toHaveLength(2);
+    expect(approvals[0].isUnlimited).toBe(false);
+    expect(approvals[1].isUnlimited).toBe(true);
   });
 });

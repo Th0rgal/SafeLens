@@ -74,4 +74,26 @@ describe("summarizeSimulationEvents", () => {
     expect(summary.transferPreviews).toHaveLength(1);
     expect(summary.transfersOut).toBe(2);
   });
+
+  it("includes native transfers in summary when provided", () => {
+    const logs: SimulationLog[] = [
+      {
+        address: "0x6b175474e89094c44da98b954eedeac495271d0f",
+        topics: [TRANSFER_TOPIC, pad32(SAFE), pad32("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")],
+        data: uint256Hex(100n * 10n ** 18n),
+      },
+    ];
+
+    const summary = summarizeSimulationEvents(logs, SAFE, 1, {
+      nativeTransfers: [
+        { from: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", to: SAFE, value: "1000000000000000000" },
+      ],
+      nativeSymbol: "ETH",
+    });
+
+    expect(summary.totalEvents).toBe(2);
+    expect(summary.transfersOut).toBe(1);
+    expect(summary.transfersIn).toBe(1);
+    expect(summary.transferPreviews).toHaveLength(2);
+  });
 });
