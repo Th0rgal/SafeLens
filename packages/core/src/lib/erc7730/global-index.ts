@@ -13,24 +13,31 @@ import { bundledDescriptors } from "./descriptors/index";
 let globalIndex: DescriptorIndex | null = null;
 
 /**
+ * Parse raw descriptors and build an index, skipping invalid entries.
+ */
+function parseAndBuildIndex(rawDescriptors: unknown[]): DescriptorIndex {
+  const descriptors = rawDescriptors
+    .map((json) => {
+      const result = parseDescriptor(json);
+      if (!result.success) {
+        console.warn("Failed to parse descriptor:", result.error);
+        return null;
+      }
+      return result.descriptor;
+    })
+    .filter((descriptor): descriptor is NonNullable<typeof descriptor> => {
+      return descriptor !== null;
+    });
+
+  return buildIndex(descriptors);
+}
+
+/**
  * Get or create the global ERC-7730 descriptor index.
  */
 export function getGlobalIndex(): DescriptorIndex {
   if (!globalIndex) {
-    // Parse all bundled descriptors
-    const descriptors = bundledDescriptors
-      .map((json) => {
-        const result = parseDescriptor(json);
-        if (!result.success) {
-          console.warn("Failed to parse descriptor:", result.error);
-          return null;
-        }
-        return result.descriptor;
-      })
-      .filter((d) => d !== null);
-
-    // Build the index
-    globalIndex = buildIndex(descriptors);
+    globalIndex = parseAndBuildIndex(bundledDescriptors);
   }
 
   return globalIndex;
@@ -41,18 +48,7 @@ export function getGlobalIndex(): DescriptorIndex {
  * Parses each descriptor and rebuilds the global index.
  */
 export function setGlobalDescriptors(rawDescriptors: unknown[]): void {
-  const descriptors = rawDescriptors
-    .map((json) => {
-      const result = parseDescriptor(json);
-      if (!result.success) {
-        console.warn("Failed to parse descriptor:", result.error);
-        return null;
-      }
-      return result.descriptor;
-    })
-    .filter((d) => d !== null);
-
-  globalIndex = buildIndex(descriptors);
+  globalIndex = parseAndBuildIndex(rawDescriptors);
 }
 
 /**
