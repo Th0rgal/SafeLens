@@ -4,7 +4,7 @@
 
 Replace hand-coded, per-protocol interpreters with a **generic ERC-7730 interpreter**
 that reads standardized descriptor files to produce human-readable transaction overviews
-for any supported protocol — without writing new code per protocol.
+for any supported protocol, without writing new code per protocol.
 
 Hand-coded interpreters (CowSwap TWAP, Safe policy) remain for cases that require
 deeper heuristics (multiSend unwrapping, struct decoding, severity). They run first;
@@ -25,23 +25,23 @@ OpenSea, Swell, Uniswap, Tether, WETH, ParaSwap, Permit2.
 
 ## Phase 2: Generic ERC-7730 Interpreter
 
-### 2.1 — ERC-7730 Descriptor Parser
+### 2.1: ERC-7730 Descriptor Parser
 
 Create a parser in `packages/core/src/lib/erc7730/` that loads and validates
 ERC-7730 JSON descriptors.
 
 **Must support:**
-- `context.contract.deployments` — array of `{ chainId, address }` pairs
-- `context.eip712.deployments` — same shape for EIP-712 message descriptors
-- `metadata.owner` — protocol name (maps to `Interpretation.protocol`)
-- `metadata.token` — optional `{ name, ticker, decimals }` for token contracts
-- `metadata.constants` — reusable values referenced via `$.metadata.constants.X`
-- `metadata.enums` — value-to-label mappings (e.g. Aave interest rate modes)
-- `display.formats` — keyed by function signature or 4-byte selector
-- `display.formats[sig].intent` — human-readable action (maps to `summary`)
-- `display.formats[sig].fields` — array of field display specs
-- `display.definitions` — reusable field formatters referenced via `$ref`
-- `includes` — file inheritance (relative path to a base descriptor)
+- `context.contract.deployments`: array of `{ chainId, address }` pairs
+- `context.eip712.deployments`: same shape for EIP-712 message descriptors
+- `metadata.owner`: protocol name (maps to `Interpretation.protocol`)
+- `metadata.token`: optional `{ name, ticker, decimals }` for token contracts
+- `metadata.constants`: reusable values referenced via `$.metadata.constants.X`
+- `metadata.enums`: value-to-label mappings (e.g. Aave interest rate modes)
+- `display.formats`: keyed by function signature or 4-byte selector
+- `display.formats[sig].intent`: human-readable action (maps to `summary`)
+- `display.formats[sig].fields`: array of field display specs
+- `display.definitions`: reusable field formatters referenced via `$ref`
+- `includes`: file inheritance (relative path to a base descriptor)
 
 **Out of scope (for now):**
 - `screens` (Ledger device-specific layout hints)
@@ -49,11 +49,11 @@ ERC-7730 JSON descriptors.
 - `eip712.schemas` (SafeLens doesn't verify EIP-712 messages yet)
 
 **Deliverables:**
-- `packages/core/src/lib/erc7730/types.ts` — TypeScript types for the descriptor schema
-- `packages/core/src/lib/erc7730/parser.ts` — parse + validate a JSON descriptor
-- `packages/core/src/lib/erc7730/resolve.ts` — resolve `$ref`, `includes`, `$.metadata.constants.X` references
+- `packages/core/src/lib/erc7730/types.ts`: TypeScript types for the descriptor schema
+- `packages/core/src/lib/erc7730/parser.ts`: parse + validate a JSON descriptor
+- `packages/core/src/lib/erc7730/resolve.ts`: resolve `$ref`, `includes`, `$.metadata.constants.X` references
 
-### 2.2 — ERC-7730 Descriptor Index
+### 2.2: ERC-7730 Descriptor Index
 
 Build a lookup index from `(chainId, contractAddress, 4-byte selector)` to the
 matching descriptor + format entry.
@@ -61,37 +61,37 @@ matching descriptor + format entry.
 **Must support:**
 - Case-insensitive address matching
 - Multiple descriptors per contract (different files may cover different functions)
-- Function signature keys (`"supply(address,uint256,address,uint16)"`) — compute
+- Function signature keys (`"supply(address,uint256,address,uint16)"`): compute
   the 4-byte selector at index build time
 - Direct 4-byte selector keys (Uniswap uses `"0xb858183f"` format)
 
 **Deliverables:**
-- `packages/core/src/lib/erc7730/index.ts` — builds and exposes the lookup index
+- `packages/core/src/lib/erc7730/index.ts`: builds and exposes the lookup index
 - Bundled descriptors: ship a curated set of ERC-7730 JSON files in the package
   (the 17 protocols from Phase 1, approximately 30-40 descriptor files)
 
-### 2.3 — Generic Interpreter
+### 2.3: Generic Interpreter
 
 Add a new interpreter that matches transactions against the ERC-7730 index and
 returns a structured interpretation.
 
 **Must support field formats:**
-- `raw` — display value as-is
-- `addressName` — resolve via SafeLens address book / contract registry
-- `tokenAmount` — format with decimals from `metadata.token` or a dynamic `tokenPath`
-- `amount` — format native currency (ETH value)
-- `date` — format unix timestamp
-- `unit` — numeric with unit string (e.g. "0.3%" for Uniswap fee tier)
-- `enum` — map numeric value to human-readable label via `metadata.enums`
+- `raw`: display value as-is
+- `addressName`: resolve via SafeLens address book / contract registry
+- `tokenAmount`: format with decimals from `metadata.token` or a dynamic `tokenPath`
+- `amount`: format native currency (ETH value)
+- `date`: format unix timestamp
+- `unit`: numeric with unit string (e.g. "0.3%" for Uniswap fee tier)
+- `enum`: map numeric value to human-readable label via `metadata.enums`
 
 **Field path resolution:**
-- `#.fieldName` — calldata parameter from `dataDecoded.parameters`
-- `@.value` — transaction ETH value
-- `@.from` / `@.to` — transaction sender/recipient
-- `$.metadata.constants.X` — metadata constant
-- `path.[0:20]` — byte slicing (Uniswap packed paths)
-- `path.[-20:]` — last N bytes
-- `path.[0]` / `path.[-1]` — array indexing
+- `#.fieldName`: calldata parameter from `dataDecoded.parameters`
+- `@.value`: transaction ETH value
+- `@.from` / `@.to`: transaction sender/recipient
+- `$.metadata.constants.X`: metadata constant
+- `path.[0:20]`: byte slicing (Uniswap packed paths)
+- `path.[-20:]`: last N bytes
+- `path.[0]` / `path.[-1]`: array indexing
 
 **Interpretation output:**
 ```typescript
@@ -118,11 +118,11 @@ interface ERC7730Details {
 ```
 
 **Deliverables:**
-- `packages/core/src/lib/interpret/erc7730.ts` — the generic interpreter
+- `packages/core/src/lib/interpret/erc7730.ts`: the generic interpreter
 - New union variant in `packages/core/src/lib/interpret/types.ts`
 - Registered in `packages/core/src/lib/interpret/index.ts` (after hand-coded interpreters)
 
-### 2.4 — ERC-7730 Card Component
+### 2.4: ERC-7730 Card Component
 
 A single generic card component that renders any ERC-7730 interpretation by
 iterating over the `fields` array. Each field is displayed as a label + formatted
@@ -137,7 +137,7 @@ value pair, with format-aware rendering:
 - `apps/desktop/src/components/interpretations/erc7730-card.tsx`
 - Registered in `apps/desktop/src/components/interpretations/registry.tsx`
 
-### 2.5 — Descriptor Management UI
+### 2.5: Descriptor Management UI
 
 Add a new tab in the desktop sidebar: **Protocols**.
 
@@ -156,7 +156,7 @@ settings config. They are merged with the built-in descriptors at runtime.
 - Lazy-loaded in `App.tsx`
 - Tauri store integration for persistence
 
-### 2.6 — Tests
+### 2.6: Tests
 
 **Unit tests (packages/core):**
 

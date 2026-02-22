@@ -1,3 +1,5 @@
+import type { TrustLevel } from "@safelens/core";
+
 /**
  * CLI output formatting utilities with ANSI colors
  * No external dependencies - uses built-in Node.js ANSI escape codes
@@ -65,10 +67,26 @@ export function badge(text: string, variant: "info" | "warning" | "critical" | "
   }
 }
 
-export function trustBadge(level: "self-verified" | "api-sourced"): string {
-  return level === "self-verified"
-    ? colors.green("✓")
-    : colors.yellow("⚠");
+export function trustBadge(level: TrustLevel): string {
+  switch (level) {
+    case "consensus-verified":
+    case "consensus-verified-beacon":
+    case "consensus-verified-opstack":
+    case "consensus-verified-linea":
+      return colors.green("🛡");
+    case "proof-verified":
+      return colors.blue("🔒");
+    case "self-verified":
+      return colors.green("✓");
+    case "rpc-sourced":
+      return colors.yellow("⚡");
+    case "api-sourced":
+      return colors.yellow("⚠");
+    case "user-provided":
+      return colors.gray("👤");
+  }
+  const exhaustive: never = level;
+  return exhaustive;
 }
 
 export function severityBadge(severity: "info" | "warning" | "critical"): string {
@@ -289,7 +307,7 @@ export function divider(char: string = "─"): string {
  */
 export function legend(): string {
   return colors.dim(
-    `Legend: ${colors.green("✓")} = self-verified  ${colors.yellow("⚠")} = api-sourced`
+    `Legend: ${colors.blue("🔒")} = proof-verified  ${colors.green("✓")} = self-verified  ${colors.yellow("⚡")} = rpc-sourced  ${colors.yellow("⚠")} = api-sourced  ${colors.gray("👤")} = user-provided`
   );
 }
 
@@ -322,7 +340,7 @@ export function formatAddressForTable(address: string, availableWidth: number): 
 }
 
 /**
- * Format a URL for display — always shows the full URL.
+ * Format a URL for display, always shows the full URL.
  * The table renderer handles wrapping onto multiple lines.
  */
 export function formatUrl(url: string): string {

@@ -1,5 +1,11 @@
-import { SafeTransaction, SafeTransactionList, SafeInfo, safeTransactionSchema, safeTransactionListSchema, safeInfoSchema } from "../types";
+import { z } from "zod";
+import { SafeTransaction, SafeTransactionList, safeTransactionSchema, safeTransactionListSchema } from "../types";
 import { getSafeApiUrl } from "./url-parser";
+
+// Minimal schema for the Safe info endpoint — only the fields we need.
+// Validates nonce at the trust boundary to prevent a malicious API from
+// injecting arbitrary values that would affect pending-transaction filtering.
+const safeInfoNonceSchema = z.object({ nonce: z.number().int().nonnegative() });
 
 /**
  * Fetch a Safe transaction by its safe tx hash
@@ -51,8 +57,8 @@ export async function fetchSafeNonce(
   }
 
   const data = await response.json();
-  const validated = safeInfoSchema.parse(data);
-  return validated.nonce;
+  const { nonce } = safeInfoNonceSchema.parse(data);
+  return nonce;
 }
 
 /**

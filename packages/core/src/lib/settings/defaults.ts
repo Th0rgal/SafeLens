@@ -6,6 +6,9 @@ import type { SettingsConfig, ChainConfig, AddressRegistryEntry } from "./types"
 export const CLEAR_SIGNING_REGISTRY_COMMIT = "eeaceef158f27730157d97e649d4b5671f293426";
 export const CLEAR_SIGNING_REGISTRY_URL =
   `https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/${CLEAR_SIGNING_REGISTRY_COMMIT}`;
+export const COW_COMPOSABLE_COW_COMMIT = "471ca59aa95da1bbf3b03e002de96449bc78e6f0";
+export const COW_COMPOSABLE_COW_NETWORKS_URL =
+  `https://github.com/cowprotocol/composable-cow/blob/${COW_COMPOSABLE_COW_COMMIT}/networks.json`;
 
 const KNOWN_CHAIN_NAMES: Record<number, string> = {
   1: "Ethereum",
@@ -109,7 +112,28 @@ function buildBuiltinProtocolEntries(descriptors: ERC7730Descriptor[]): AddressR
     }
   }
 
-  return Array.from(entries.values())
+  const aliasEntries: AddressRegistryEntry[] = [
+    {
+      address: "0xfdaFc9d1902f4e0b84f65F49f244b32b31013b74",
+      name: "CoW ComposableCoW",
+      kind: "contract",
+      group: "Builtin Protocols",
+      chainIds: [1],
+      note: `Source: CoW Protocol composable-cow deployments @ ${COW_COMPOSABLE_COW_COMMIT}`,
+      sourceUrl: COW_COMPOSABLE_COW_NETWORKS_URL,
+    },
+    {
+      address: "0x52eD56Da04309Aca4c3FECC595298d80C2f16BAc",
+      name: "CoW CurrentBlockTimestampFactory",
+      kind: "contract",
+      group: "Builtin Protocols",
+      chainIds: [1],
+      note: `Source: CoW Protocol composable-cow deployments @ ${COW_COMPOSABLE_COW_COMMIT}`,
+      sourceUrl: COW_COMPOSABLE_COW_NETWORKS_URL,
+    },
+  ];
+
+  const descriptorBackedEntries = Array.from(entries.values())
     .map((entry) => ({
       address: entry.address,
       name: entry.name,
@@ -119,6 +143,15 @@ function buildBuiltinProtocolEntries(descriptors: ERC7730Descriptor[]): AddressR
       note: `Source: Ledger ERC-7730 clear-signing registry (${Array.from(entry.owners).sort().join(", ")}) @ ${CLEAR_SIGNING_REGISTRY_COMMIT}`,
       sourceUrl: CLEAR_SIGNING_REGISTRY_URL,
     }))
+    .filter(
+      (entry) => !aliasEntries.some(
+        (alias) =>
+          alias.address.toLowerCase() === entry.address.toLowerCase()
+          && alias.name === entry.name
+      )
+    );
+
+  return [...descriptorBackedEntries, ...aliasEntries]
     .sort((a, b) =>
       a.name.localeCompare(b.name) || a.address.toLowerCase().localeCompare(b.address.toLowerCase())
     );

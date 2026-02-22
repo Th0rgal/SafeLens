@@ -20,7 +20,7 @@ function parseTupleTypes(typeStr: string): string[] {
     ? typeStr.slice(1, -1)
     : typeStr;
   if (!inner) return [];
-  // Simple split — doesn't handle nested tuples, but sufficient for common cases
+  // Simple split, doesn't handle nested tuples, but sufficient for common cases
   const types: string[] = [];
   let depth = 0;
   let current = "";
@@ -54,7 +54,7 @@ function ParamValue({ type, value }: { type: string; value: unknown }) {
     return <code className="break-all text-xs text-fg">{value}</code>;
   }
 
-  // Default — full string representation
+  // Default: full string representation
   return <span className="font-mono text-xs text-fg">{String(value)}</span>;
 }
 

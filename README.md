@@ -21,12 +21,22 @@
 SafeLens generates and verifies evidence packages for Gnosis Safe multisig transactions. Paste a Safe transaction URL into the [generator](https://safelens.lfg.rs/), download the `evidence.json`, then verify signatures and hashes offline using the desktop app or CLI.
 
 - **Generate** an `evidence.json` package from any Safe transaction URL
-- **Verify** signatures, hashes, and decoded calldata locally with zero network access
+- **Verify** signatures, hashes, and enriched proofs locally with zero network access
 - **Clear signing** via built-in and ERC-7730 interpreters for human-readable transaction details
+- **Consensus checks** via embedded Helios verifier for beacon-mode consensus proofs
 
 ## Trust model
 
 The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capability, it cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
+
+## Verification coverage
+
+- `self-verified`: Safe tx hash recomputation and supported signature recovery.
+- `proof-verified`: on-chain Safe policy proof verification (`eth_getProof` artifacts).
+- `consensus-verified-beacon`: beacon consensus proofs verified by desktop via Helios.
+- `consensus-verified-opstack` / `consensus-verified-linea`: deterministic envelope checks with explicit non-equivalence to beacon light-client finality.
+
+The generator/CLI can attach optional `onchainPolicyProof`, `simulation`, and `consensusProof` sections. Desktop/CLI verify consume these sections when present.
 
 ## Quick start
 
@@ -122,6 +132,11 @@ Settings are JSON (address book and contract registry).
 bun --cwd packages/cli dev settings init   # initialize settings
 bun --cwd packages/cli dev sources         # show verification sources
 ```
+
+Generator environment flags:
+
+- `NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS=1` enables experimental Linea consensus envelope generation in `apps/generator`.
+- Default behavior leaves this disabled, emitting explicit partial-support reasons in package export metadata.
 
 ### Cleanup
 

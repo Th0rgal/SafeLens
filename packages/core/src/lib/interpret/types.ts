@@ -104,6 +104,46 @@ export interface SafePolicyChangeDetails {
   }>;
 }
 
+/** Token transfer details (ERC-20 and native transfers). */
+export interface TokenTransferDetails {
+  /** The type of token action detected. */
+  actionType: "transfer" | "approve" | "transferFrom" | "nativeTransfer";
+  /** The token contract address (zero address for native tokens). */
+  token: TokenInfo;
+  /** Sender address (for transfer / transferFrom). */
+  from?: string;
+  /** Recipient address (for transfer / transferFrom / nativeTransfer). */
+  to?: string;
+  /** Spender address (for approve). */
+  spender?: string;
+  /** Raw amount (wei string). */
+  amount: string;
+  /** Human-readable formatted amount. */
+  amountFormatted: string;
+  /** Whether this is an unlimited approval (max uint256). */
+  isUnlimitedApproval?: boolean;
+  /** Whether this is a native token transfer (ETH, xDAI, etc.). */
+  isNative?: boolean;
+}
+
+/** CoW Protocol setPreSignature details. */
+export interface CowSwapPreSignDetails {
+  /** The full orderUid (hex string). */
+  orderUid: string;
+  /** The 32-byte order digest extracted from the orderUid. */
+  orderDigest: string;
+  /** The owner address extracted from the orderUid. */
+  owner: string;
+  /** The validTo timestamp extracted from the orderUid (unix seconds). */
+  validTo: number;
+  /** Human-readable expiry date. */
+  validToFormatted: string;
+  /** Whether the order is being signed (true) or cancelled (false). */
+  signed: boolean;
+  /** The settlement contract address. */
+  settlementContract: string;
+}
+
 /** ERC-7730 generic interpretation details. */
 export interface ERC7730Details {
   fields: Array<{
@@ -117,13 +157,21 @@ export interface ERC7730Details {
 //
 // Each variant has a unique `id` string that TypeScript uses to narrow
 // the `details` type automatically. The UI uses `id` to pick the right
-// card component — no string-matching on protocol/action needed.
+// card component, no string-matching on protocol/action needed.
 //
 // To add a new protocol, add a new variant here. TypeScript will then
 // error in every place that needs to handle it (interpreter registry,
 // UI component registry).
 
 export type Interpretation =
+  | {
+      id: "token-transfer";
+      protocol: "ERC-20" | "Native";
+      action: "Transfer" | "Approve" | "TransferFrom";
+      severity: Severity;
+      summary: string;
+      details: TokenTransferDetails;
+    }
   | {
       id: "cowswap-twap";
       protocol: "CoW Swap";
@@ -139,6 +187,14 @@ export type Interpretation =
       severity: "critical";
       summary: string;
       details: SafePolicyChangeDetails;
+    }
+  | {
+      id: "cowswap-presign";
+      protocol: "CoW Protocol";
+      action: "Pre-Sign Order" | "Cancel Pre-Sign";
+      severity: "info";
+      summary: string;
+      details: CowSwapPreSignDetails;
     }
   | {
       id: "erc7730";

@@ -3,21 +3,32 @@ import {
   type EvidencePackage,
   type EvidenceVerificationReport,
   type SettingsConfig,
-  parseSafeUrl,
+  type TrustLevel,
+  parseSafeUrlFlexible,
   fetchSafeTransaction,
+  fetchPendingTransactions,
   createEvidencePackage,
+  enrichWithOnchainProof,
+  enrichWithConsensusProof,
+  enrichWithSimulation,
+  finalizeEvidenceExport,
   exportEvidencePackage,
   parseEvidencePackage,
   verifyEvidencePackage,
+  UnsupportedConsensusModeError,
   loadSettingsConfig,
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
   buildVerificationSources,
+  createVerificationSourceContext,
   getChainName,
+  getNetworkCapability,
   interpretTransaction,
   computeSafeTxHashDetailed,
   resolveAddress,
   setGlobalDescriptors,
+  summarizeSimulationEvents,
+  buildCoreExecutionSafetyFields,
 } from "@safelens/core";
 import { createNodeSettingsStore, resolveSettingsPath } from "./storage";
 import fs from "node:fs/promises";
@@ -48,15 +59,19 @@ function printHelp() {
   console.log(`SafeLens CLI
 
 Usage:
-  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings]
+  safelens analyze <safe-url> [--out evidence.json] [--pretty] [--format text|json] [--settings <path>] [--no-settings] [--rpc-url <url>]
   safelens verify [--file evidence.json] [--json <string>] [--settings <path>] [--no-settings] [--format text|json]
   safelens sources
   safelens settings init [--path <file>]
   safelens settings show [--path <file>]
 
+Options:
+  --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
+  --enable-experimental-linea-consensus  Enable experimental Linea consensus envelope fetch in analyze
+
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
-  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --format json
+  safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --rpc-url https://eth.llamarpc.com
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --no-settings
   safelens verify --file evidence.json
   safelens sources
@@ -95,14 +110,41 @@ function createVerifyPayload(
     warnings: report.targetWarnings,
     signatures: report.signatures,
     sources: report.sources,
+    hashDetails: report.hashDetails,
+    hashMatch: report.hashMatch,
+    policyProof: report.policyProof,
+    simulationVerification: report.simulationVerification,
   };
+}
+
+function formatTrustLevel(trust: TrustLevel): string {
+  switch (trust) {
+    case "consensus-verified":
+      return colors.green("🛡 consensus-verified");
+    case "consensus-verified-beacon":
+      return colors.green("🛡 consensus-verified-beacon");
+    case "consensus-verified-opstack":
+      return colors.green("🛡 consensus-verified-opstack");
+    case "consensus-verified-linea":
+      return colors.green("🛡 consensus-verified-linea");
+    case "proof-verified":
+      return colors.blue("🔒 proof-verified");
+    case "self-verified":
+      return colors.green("✓ self-verified");
+    case "rpc-sourced":
+      return colors.yellow("⚡ rpc-sourced");
+    case "api-sourced":
+      return colors.yellow("⚠ api-sourced");
+    case "user-provided":
+      return colors.gray("👤 user-provided");
+  }
+  const exhaustive: never = trust;
+  return exhaustive;
 }
 
 function printSourceFactsFromList(sources: ReturnType<typeof buildVerificationSources>) {
   for (const source of sources) {
-    const trustLevel = source.trust === "self-verified"
-      ? colors.green("✓ self-verified")
-      : colors.yellow("⚠ api-sourced");
+    const trustLevel = formatTrustLevel(source.trust);
 
     const status = source.status === "enabled"
       ? colors.green("enabled")
@@ -135,17 +177,22 @@ function formatAddressWithName(
   return `\x1b[38;5;214m${address}\x1b[0m`; // Orange color (256-color mode)
 }
 
+function compactAddress(address: string): string {
+  if (!address.startsWith("0x") || address.length < 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
 function printWarningsSection(warnings: Array<{ level: string; message: string }>) {
   if (warnings.length === 0) return "";
 
   const warningLines: string[] = [];
 
   for (const warning of warnings) {
-    const levelBadge = warning.level === "critical"
-      ? colors.bgRed(" CRITICAL ")
-      : warning.level === "medium"
-        ? colors.bgYellow(" MEDIUM ")
-        : colors.bgBlue(" LOW ");
+    const levelBadge = warning.level === "danger"
+      ? colors.bgRed(" DANGER ")
+      : warning.level === "warning"
+        ? colors.bgYellow(" WARNING ")
+        : colors.bgBlue(" INFO ");
 
     warningLines.push(bullet(`${levelBadge} ${warning.message}`));
   }
@@ -198,9 +245,18 @@ function printVerificationText(
   console.log("");
   console.log(box(
     (() => {
+      const hashBadge = report.hashMatch
+        ? trustBadge("self-verified")
+        : colors.red(colors.bold("MISMATCH"));
       const rows: Array<[string, string]> = [
-        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${trustBadge("self-verified")}`],
+        ["Safe TX Hash", `${formatAddress(evidence.safeTxHash)} ${hashBadge}`],
       ];
+
+      if (!report.hashMatch && hashDetails) {
+        rows.push(
+          ["Recomputed", `${formatAddress(hashDetails.safeTxHash)} ${colors.red("← expected")}`]
+        );
+      }
 
       if (hashDetails) {
         rows.push(
@@ -220,16 +276,21 @@ function printVerificationText(
     "🔐 Hash Verification"
   ));
 
-  // ── Transaction Details ─────────────────────────────────────────────
+  // ── Execution Safety (Core) ────────────────────────────────────────
   console.log("");
+  const coreExecutionRows: Array<[string, string]> = buildCoreExecutionSafetyFields(evidence).map((field) => {
+    if (field.id === "target") {
+      return [
+        field.label,
+        `${formatAddressWithName(field.value, settings, evidence.chainId)} ${trustBadge("self-verified")}`,
+      ];
+    }
+    const value = field.monospace ? code(field.value) : field.value;
+    return [field.label, `${value} ${trustBadge("self-verified")}`];
+  });
   console.log(box(
-    table([
-      ["Target Contract", `${formatAddressWithName(evidence.transaction.to, settings, evidence.chainId)} ${trustBadge("self-verified")}`],
-      ["Value", `${code(evidence.transaction.value)} wei ${trustBadge("self-verified")}`],
-      ["Operation", `${code(evidence.transaction.operation === 0 ? "CALL" : "DELEGATECALL")} ${trustBadge("self-verified")}`],
-      ["Nonce", `${code(String(evidence.transaction.nonce))} ${trustBadge("self-verified")}`],
-    ], 18),
-    "Transaction Details"
+    table(coreExecutionRows, 18),
+    "Execution Safety"
   ));
 
   // ── Warnings ────────────────────────────────────────────────────────
@@ -239,8 +300,103 @@ function printVerificationText(
     console.log(warningsOutput);
   }
 
+  // ── Policy Proof ───────────────────────────────────────────────────
+  if (report.policyProof) {
+    const pp = report.policyProof;
+    const proofRows: Array<[string, string]> = [];
+
+    for (const check of pp.checks) {
+      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
+      proofRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
+    }
+
+    const proofTitle = pp.valid
+      ? "🔒 On-Chain Policy Proof " + trustBadge("proof-verified")
+      : "🔒 On-Chain Policy Proof " + colors.red("(INVALID)");
+
+    console.log("");
+    console.log(box(table(proofRows, 22), proofTitle));
+  }
+
+  // ── Simulation ────────────────────────────────────────────────────
+  if (report.simulationVerification) {
+    const sv = report.simulationVerification;
+    const simRows: Array<[string, string]> = [];
+    const checksPassed = sv.checks.filter((check) => check.passed).length;
+
+    simRows.push([
+      "Simulation status",
+      sv.valid
+        ? sv.executionReverted
+          ? "Executed but reverted"
+          : "Executed successfully"
+        : "Verification failed",
+    ]);
+    simRows.push(["Simulation checks passed", `${checksPassed}/${sv.checks.length}`]);
+
+    if (evidence.simulation) {
+      simRows.push(["Gas used", code(evidence.simulation.gasUsed)]);
+      simRows.push(["Block", code(String(evidence.simulation.blockNumber))]);
+      if (evidence.simulation.blockTimestamp) {
+        simRows.push(["Block timestamp", evidence.simulation.blockTimestamp]);
+      }
+
+      const summary = summarizeSimulationEvents(
+        evidence.simulation.logs ?? [],
+        evidence.safeAddress,
+        evidence.chainId,
+        { maxTransferPreviews: 5 }
+      );
+      if (summary.totalEvents > 0) {
+        simRows.push(["Token events", String(summary.totalEvents)]);
+        if (summary.transfersOut > 0 || summary.transfersIn > 0) {
+          simRows.push(["Token transfers", `${summary.transfersOut} out, ${summary.transfersIn} in`]);
+        }
+        summary.transferPreviews.forEach((event, index) => {
+          const directionLabel =
+            event.direction === "send"
+              ? "Sent"
+              : event.direction === "receive"
+                ? "Received"
+                : "Transfer";
+          const targetLabel = event.counterpartyRole;
+          const tokenLabel = event.tokenSymbol ? "" : ` (${compactAddress(event.token)})`;
+          simRows.push([
+            `${directionLabel} ${index + 1}`,
+            `${event.amountFormatted}${tokenLabel} ${targetLabel} ${compactAddress(event.counterparty)}`,
+          ]);
+        });
+        if (summary.approvals > 0) {
+          simRows.push(["Token approvals", String(summary.approvals)]);
+        }
+      }
+    }
+
+    if (sv.errors.length > 0) {
+      simRows.push(["Verifier error", sv.errors[0]!]);
+    }
+
+    for (const check of sv.checks) {
+      const icon = check.passed ? colors.green("PASS") : colors.red("FAIL");
+      simRows.push([check.label, `${icon}${check.detail ? "  " + colors.dim(check.detail) : ""}`]);
+    }
+
+    const simTrust = evidence.simulation?.trust ?? "rpc-sourced";
+    const simTitle = !sv.valid
+      ? "⚡ Transaction Simulation " + colors.red("(ISSUES FOUND)")
+      : sv.executionReverted
+        ? "⚡ Transaction Simulation " + colors.bgRed(" REVERTED ") + " " + trustBadge(simTrust)
+        : "⚡ Transaction Simulation " + trustBadge(simTrust);
+
+    console.log("");
+    console.log(box(table(simRows, 22), simTitle));
+  }
+
   // ── Signatures ──────────────────────────────────────────────────────
-  const signaturesTrustLevel = summary.unsupported > 0 ? "api-sourced" : "self-verified";
+  const signaturesTrustLevel =
+    summary.total === 0 || summary.invalid > 0 || summary.unsupported > 0
+      ? "api-sourced"
+      : "self-verified";
 
   console.log("");
   const signaturesRows: Array<[string, string]> = [
@@ -274,9 +430,106 @@ async function runAnalyze(args: string[]) {
   const pretty = hasFlag(args, "--pretty") || !hasFlag(args, "--compact");
   const format = getOutputFormat(args, "text");
 
-  const parsed = parseSafeUrl(url);
-  const tx = await fetchSafeTransaction(parsed.chainId, parsed.safeTxHash);
-  const evidence = createEvidencePackage(tx, parsed.chainId, url);
+  const rpcUrl = getFlag(args, "--rpc-url");
+  const enableExperimentalLineaConsensus = hasFlag(args, "--enable-experimental-linea-consensus");
+
+  const parsed = parseSafeUrlFlexible(url);
+
+  if (parsed.type === "queue") {
+    // Queue URL: list pending transactions instead of analyzing one
+    const pending = await fetchPendingTransactions(parsed.data.chainId, parsed.data.safeAddress);
+    if (pending.length === 0) {
+      console.log("No pending transactions for this Safe.");
+      return;
+    }
+    console.log(`Found ${pending.length} pending transaction(s) for ${parsed.data.safeAddress}:\n`);
+    for (const ptx of pending) {
+      console.log(`  nonce ${ptx.nonce}  ${ptx.safeTxHash}  → ${ptx.to} (${ptx.isExecuted ? "executed" : "pending"})`);
+    }
+    console.log("\nTo analyze a specific transaction, use the full transaction URL with the &id= parameter.");
+    return;
+  }
+
+  const tx = await fetchSafeTransaction(parsed.data.chainId, parsed.data.safeTxHash);
+  let evidence = createEvidencePackage(tx, parsed.data.chainId, url);
+  const consensusMode = getNetworkCapability(parsed.data.chainId)?.consensusMode;
+  const shouldAttemptConsensus = Boolean(consensusMode);
+  let consensusProofAttempted = false;
+  let consensusProofFailed = false;
+  let consensusProofUnsupportedMode = false;
+  let consensusProofDisabledByFeatureFlag = false;
+  let onchainPolicyProofAttempted = false;
+  let onchainPolicyProofFailed = false;
+  let simulationAttempted = false;
+  let simulationFailed = false;
+
+  if (shouldAttemptConsensus) {
+    consensusProofAttempted = true;
+    try {
+      const consensusOptions: {
+        rpcUrl?: string;
+        enableExperimentalLineaConsensus?: boolean;
+      } = {};
+      if ((consensusMode === "opstack" || consensusMode === "linea") && rpcUrl) {
+        consensusOptions.rpcUrl = rpcUrl;
+      }
+      if (enableExperimentalLineaConsensus) {
+        consensusOptions.enableExperimentalLineaConsensus = true;
+      }
+      evidence = await enrichWithConsensusProof(evidence, consensusOptions);
+    } catch (err) {
+      consensusProofFailed = true;
+      if (err instanceof UnsupportedConsensusModeError) {
+        consensusProofUnsupportedMode = err.reason === "not-implemented";
+        consensusProofDisabledByFeatureFlag = err.reason === "disabled-by-feature-flag";
+      }
+      console.error(
+        `Warning: Failed to fetch consensus proof: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without consensus proof.\n");
+    }
+  }
+
+  // Fetch on-chain policy proof if RPC URL is provided
+  if (rpcUrl) {
+    onchainPolicyProofAttempted = true;
+    try {
+      evidence = await enrichWithOnchainProof(evidence, {
+        rpcUrl,
+        blockNumber: evidence.consensusProof?.blockNumber,
+      });
+    } catch (err) {
+      onchainPolicyProofFailed = true;
+      console.error(
+        `Warning: Failed to fetch on-chain policy proof: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without policy proof.\n");
+    }
+
+    simulationAttempted = true;
+    try {
+      evidence = await enrichWithSimulation(evidence, { rpcUrl });
+    } catch (err) {
+      simulationFailed = true;
+      console.error(
+        `Warning: Failed to simulate transaction: ${err instanceof Error ? err.message : err}`
+      );
+      console.error("Continuing without simulation.\n");
+    }
+  }
+
+  evidence = finalizeEvidenceExport(evidence, {
+    rpcProvided: Boolean(rpcUrl),
+    consensusProofAttempted,
+    consensusProofFailed,
+    consensusProofUnsupportedMode,
+    consensusProofDisabledByFeatureFlag,
+    onchainPolicyProofAttempted,
+    onchainPolicyProofFailed,
+    simulationAttempted,
+    simulationFailed,
+  });
+
   const settings = await loadSettingsForVerify(args);
   const report = await verifyEvidencePackage(evidence, { settings });
   const json = pretty ? exportEvidencePackage(evidence) : JSON.stringify(evidence);
@@ -361,20 +614,26 @@ async function runSources() {
   console.log("");
   console.log("Verification sources reference:");
   printSourceFactsFromList(
-    buildVerificationSources({
+    buildVerificationSources(createVerificationSourceContext({
       hasSettings: true,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
-    })
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+    }))
   );
   console.log("");
   console.log("Verification sources without local settings:");
   printSourceFactsFromList(
-    buildVerificationSources({
+    buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
       hasUnsupportedSignatures: false,
       hasDecodedData: true,
-    })
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+    }))
   );
 }
 

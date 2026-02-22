@@ -1,5 +1,5 @@
 /**
- * Blur diagnostics — tracks when backdrop-filter visually drops and correlates
+ * Blur diagnostics - tracks when backdrop-filter visually drops and correlates
  * with window/compositor events. Enable via VITE_DEBUG_BLUR=1 or by calling
  * window.__enableBlurDebug() from the dev console.
  *
