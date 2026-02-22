@@ -12,6 +12,7 @@ export type DecodedCalldataVerificationStatus =
   | "mismatch"
   | "api-only";
 export type SimulationVerificationReason =
+  | "missing-simulation-witness"
   | "simulation-replay-not-run"
   | "simulation-witness-proof-failed";
 
@@ -306,13 +307,17 @@ export function buildVerificationSources(
           title: "Transaction simulation",
           trust: context.simulationTrust ?? "rpc-sourced",
           summary:
-            context.simulationVerificationReason === "simulation-witness-proof-failed"
+            context.simulationVerificationReason === "missing-simulation-witness"
+              ? "No simulation witness was included; simulation remains RPC-sourced."
+              : context.simulationVerificationReason === "simulation-witness-proof-failed"
               ? "Simulation witness checks failed; simulation remains RPC-sourced."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Simulation witness checks passed, but local replay was not run."
                 : "Transaction simulated via execTransaction with state overrides.",
           detail:
-            context.simulationVerificationReason === "simulation-witness-proof-failed"
+            context.simulationVerificationReason === "missing-simulation-witness"
+              ? "Simulation output was packaged without a witness artifact. Treat simulation outcome as RPC-trusted until witness generation and local replay verification are both available."
+              : context.simulationVerificationReason === "simulation-witness-proof-failed"
               ? "Simulation output was compared against witness metadata, but witness proof validation failed. Treat simulation outcome as RPC-trusted until witness and replay verification both pass."
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Witness anchoring checks passed, but this verifier path does not execute a full local EVM replay yet. Trust remains RPC-sourced until replay verification is available and passes."

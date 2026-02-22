@@ -210,6 +210,24 @@ describe("buildVerificationSources", () => {
     expect(simSource?.summary).toContain("local replay was not run");
   });
 
+  it("explains missing witness when simulation has no witness artifact", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: false,
+      hasSimulation: true,
+      hasSimulationWitness: false,
+      simulationTrust: "rpc-sourced",
+      simulationVerificationReason: "missing-simulation-witness",
+      hasConsensusProof: false,
+    }));
+
+    const simSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION);
+    expect(simSource?.trust).toBe("rpc-sourced");
+    expect(simSource?.summary).toContain("No simulation witness was included");
+  });
+
   it("explains witness-proof-failed when witness checks fail", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
