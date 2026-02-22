@@ -8,6 +8,7 @@ import {
   getExportContractReasonLabel,
   onchainPolicyProofSchema,
   simulationSchema,
+  simulationWitnessSchema,
   trustClassificationSchema,
   type EvidencePackage,
   type OnchainPolicyProof,
@@ -508,6 +509,53 @@ describe("simulation schema", () => {
         "0x1111111111111111111111111111111111111111"
       );
       expect(result.data.logs[0].topics).toHaveLength(1);
+    }
+  });
+});
+
+describe("simulation witness schema", () => {
+  it("preserves replay world-state fields for local replay verification", () => {
+    const witness = {
+      chainId: 1,
+      safeAddress: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
+      blockNumber: 19000000,
+      stateRoot:
+        "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+      safeAccountProof: MOCK_POLICY_PROOF.accountProof,
+      overriddenSlots: [
+        {
+          key: "0x0000000000000000000000000000000000000000000000000000000000000004",
+          value:
+            "0x0000000000000000000000000000000000000000000000000000000000000002",
+        },
+      ],
+      simulationDigest:
+        "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      replayAccounts: [
+        {
+          address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
+          balance: "1",
+          nonce: 0,
+          code: "0x",
+          storage: {
+            "0x0000000000000000000000000000000000000000000000000000000000000004":
+              "0x0000000000000000000000000000000000000000000000000000000000000002",
+          },
+        },
+      ],
+      replayCaller: "0x1111111111111111111111111111111111111111",
+      replayGasLimit: 3000000,
+    };
+
+    const result = simulationWitnessSchema.safeParse(witness);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.replayAccounts).toHaveLength(1);
+      expect(result.data.replayAccounts?.[0]?.storage).toHaveProperty(
+        "0x0000000000000000000000000000000000000000000000000000000000000004"
+      );
+      expect(result.data.replayCaller).toBe(witness.replayCaller);
+      expect(result.data.replayGasLimit).toBe(3000000);
     }
   });
 });

@@ -247,6 +247,17 @@ export const simulationWitnessSchema = z.object({
     })
   ),
   simulationDigest: hashSchema,
+  replayAccounts: z.array(
+    z.object({
+      address: addressSchema,
+      balance: z.string(),
+      nonce: z.number().int().nonnegative(),
+      code: hexDataSchema,
+      storage: z.record(storageSlotKeySchema, storageValueSchema).default({}),
+    })
+  ).optional(),
+  replayCaller: addressSchema.optional(),
+  replayGasLimit: z.number().int().positive().optional(),
 });
 
 export type SimulationWitness = z.infer<typeof simulationWitnessSchema>;
