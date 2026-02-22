@@ -1,20 +1,17 @@
-import { getNetworkCapability, type EvidencePackage } from "@safelens/core";
+import {
+  type ExportContractReason,
+  EXPORT_CONTRACT_REASON_LABELS,
+  getNetworkCapability,
+  type EvidencePackage,
+} from "@safelens/core";
 
-const SIMULATION_REASON_LABELS = {
-  "missing-rpc-url":
-    "No RPC URL was provided during package generation.",
-  "simulation-fetch-failed":
-    "Simulation could not be fetched during package generation.",
-  "missing-simulation": "No simulation result was included in this package.",
-} as const;
-
-export type SimulationUnavailableReasonCode = keyof typeof SIMULATION_REASON_LABELS;
-
-const SIMULATION_REASON_CODES: SimulationUnavailableReasonCode[] = [
+const SIMULATION_REASON_CODES: ExportContractReason[] = [
   "missing-rpc-url",
   "simulation-fetch-failed",
   "missing-simulation",
 ];
+
+export type SimulationUnavailableReasonCode = ExportContractReason;
 
 export function getSimulationUnavailableReasonCode(
   evidence: Pick<EvidencePackage, "exportContract">
@@ -31,7 +28,7 @@ export function getSimulationUnavailableReason(
 ): string {
   const reasonCode = getSimulationUnavailableReasonCode(evidence);
   if (reasonCode) {
-    return SIMULATION_REASON_LABELS[reasonCode];
+    return EXPORT_CONTRACT_REASON_LABELS[reasonCode];
   }
 
   const capability = getNetworkCapability(evidence.chainId);

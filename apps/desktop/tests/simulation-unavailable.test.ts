@@ -16,7 +16,7 @@ describe("simulation unavailable reason helpers", () => {
 
     expect(getSimulationUnavailableReasonCode(evidence)).toBe("missing-rpc-url");
     expect(getSimulationUnavailableReason(evidence)).toBe(
-      "No RPC URL was provided during package generation."
+      "No RPC URL was provided, so proof/simulation enrichment was skipped."
     );
   });
 
@@ -32,7 +32,7 @@ describe("simulation unavailable reason helpers", () => {
       "simulation-fetch-failed"
     );
     expect(getSimulationUnavailableReason(evidence)).toBe(
-      "Simulation could not be fetched during package generation."
+      "Simulation fetch failed."
     );
   });
 

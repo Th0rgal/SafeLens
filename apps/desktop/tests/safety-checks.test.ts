@@ -385,7 +385,7 @@ describe("classifySimulationStatus", () => {
 
     expect(status.status).toBe("warning");
     expect(status.reasonCode).toBe("missing-simulation");
-    expect(status.detail).toContain("included in this package");
+    expect(status.detail).toBe("Simulation result was not included.");
   });
 
   it("returns error when simulation verification fails", () => {
