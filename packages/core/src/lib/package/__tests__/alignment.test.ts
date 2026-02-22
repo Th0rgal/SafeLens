@@ -4,14 +4,18 @@ import {
   createEvidencePackage,
   enrichWithConsensusProof,
   enrichWithOnchainProof,
+  enrichWithSimulation,
   PROOF_ALIGNMENT_ERROR_CODE,
 } from "../creator";
 import { COWSWAP_TWAP_TX, CHAIN_ID, TX_URL } from "../../safe/__tests__/fixtures/cowswap-twap-tx";
 
-const { fetchOnchainPolicyProofMock, fetchConsensusProofMock } = vi.hoisted(
+type BeaconConsensusProof = Extract<ConsensusProof, { checkpoint: string }>;
+
+const { fetchOnchainPolicyProofMock, fetchConsensusProofMock, fetchSimulationMock } = vi.hoisted(
   () => ({
     fetchOnchainPolicyProofMock: vi.fn(),
     fetchConsensusProofMock: vi.fn(),
+    fetchSimulationMock: vi.fn(),
   })
 );
 
@@ -21,6 +25,10 @@ vi.mock("../../proof", () => ({
 
 vi.mock("../../consensus", () => ({
   fetchConsensusProof: fetchConsensusProofMock,
+}));
+
+vi.mock("../../simulation", () => ({
+  fetchSimulation: fetchSimulationMock,
 }));
 
 function makeOnchainPolicyProof(
@@ -55,8 +63,11 @@ function makeOnchainPolicyProof(
   };
 }
 
-function makeConsensusProof(overrides: Partial<ConsensusProof> = {}): ConsensusProof {
+function makeConsensusProof(
+  overrides: Partial<BeaconConsensusProof> = {}
+): BeaconConsensusProof {
   return {
+    consensusMode: "beacon",
     checkpoint:
       "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     bootstrap: "{}",
@@ -75,6 +86,7 @@ describe("proof alignment in package enrichment", () => {
   beforeEach(() => {
     fetchOnchainPolicyProofMock.mockReset();
     fetchConsensusProofMock.mockReset();
+    fetchSimulationMock.mockReset();
   });
 
   it("rejects consensus enrichment when existing onchain proof is misaligned", async () => {
@@ -115,5 +127,67 @@ describe("proof alignment in package enrichment", () => {
       consensusStateRoot:
         "0xa38574512fb60ec85617785cd52c30f918902b355bab53242fbdf3b40b7a1e7e",
     });
+  });
+
+  it("pins onchain proof fetch to consensus block by default", async () => {
+    fetchOnchainPolicyProofMock.mockResolvedValue(
+      makeOnchainPolicyProof({ blockNumber: 21000042 })
+    );
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof({ blockNumber: 21000042 }),
+    };
+
+    await enrichWithOnchainProof(evidence, { rpcUrl: "https://rpc.example" });
+
+    expect(fetchOnchainPolicyProofMock).toHaveBeenCalledWith(
+      evidence.safeAddress,
+      evidence.chainId,
+      expect.objectContaining({
+        rpcUrl: "https://rpc.example",
+        blockNumber: 21000042,
+      })
+    );
+  });
+
+  it("keeps version 1.2 when adding onchain proof after consensus proof", async () => {
+    fetchOnchainPolicyProofMock.mockResolvedValue(makeOnchainPolicyProof());
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const enriched = await enrichWithOnchainProof(evidence, {
+      rpcUrl: "https://rpc.example",
+    });
+
+    expect(enriched.version).toBe("1.2");
+  });
+
+  it("keeps version 1.2 when adding simulation after consensus proof", async () => {
+    fetchSimulationMock.mockResolvedValue({
+      success: true,
+      returnData: "0x",
+      gasUsed: "1",
+      logs: [],
+      blockNumber: 21000000,
+      trust: "rpc-sourced",
+    });
+
+    const evidence = {
+      ...createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL),
+      version: "1.2" as const,
+      consensusProof: makeConsensusProof(),
+    };
+
+    const enriched = await enrichWithSimulation(evidence, {
+      rpcUrl: "https://rpc.example",
+    });
+
+    expect(enriched.version).toBe("1.2");
   });
 });

@@ -13,6 +13,7 @@ import {
   verifyMptProof,
   verifyAccountProof,
   verifyStorageProof,
+  normalizeStorageSlotKey,
 } from "../mpt";
 import type { Hex } from "viem";
 import {
@@ -410,6 +411,23 @@ describe("verifyMptProof — empty proof security", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain("non-zero");
+  });
+});
+
+describe("normalizeStorageSlotKey", () => {
+  it("normalizes compact quantity slots to 32-byte keys", () => {
+    expect(normalizeStorageSlotKey("0x0")).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    expect(normalizeStorageSlotKey("0x4")).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000004"
+    );
+  });
+
+  it("preserves already-padded 32-byte keys", () => {
+    const padded =
+      "0x00000000000000000000000000000000000000000000000000000000000000ff" as Hex;
+    expect(normalizeStorageSlotKey(padded)).toBe(padded);
   });
 });
 

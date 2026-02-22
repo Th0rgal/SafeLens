@@ -392,3 +392,77 @@ export function decodeSimulationEvents(
 
   return events;
 }
+
+// ── Native transfer decoder ──────────────────────────────────────────
+
+/**
+ * Shape of a native ETH/gas-token transfer from simulation trace data.
+ * This matches the Tenderly-style nativeTransfers array format.
+ */
+export interface NativeTransfer {
+  from: string;
+  to: string;
+  value: string;
+}
+
+/**
+ * Decode native (ETH) transfers into the same DecodedEvent format used
+ * by log-based event decoding. This allows native transfers to be shown
+ * alongside ERC-20 transfers in a unified simulation summary.
+ */
+export function decodeNativeTransfers(
+  transfers: NativeTransfer[],
+  safeAddress: string,
+  nativeSymbol: string,
+): DecodedEvent[] {
+  return transfers.map((t) => {
+    const from = t.from.toLowerCase();
+    const to = t.to.toLowerCase();
+    const amountRaw = t.value;
+    // Native token: always 18 decimals
+    const amountFormatted = formatAmount(amountRaw, 18, nativeSymbol);
+    return {
+      kind: "transfer" as const,
+      token: "0x0000000000000000000000000000000000000000",
+      tokenSymbol: nativeSymbol,
+      tokenDecimals: 18,
+      amountFormatted,
+      amountRaw,
+      from,
+      to,
+      direction: getDirection(from, to, safeAddress),
+    };
+  });
+}
+
+// ── Approval helper ──────────────────────────────────────────────────
+
+/**
+ * Structured approval remaining after simulation.
+ * Used by UI to display a clear warning about active allowances.
+ */
+export interface RemainingApproval {
+  amountFormatted: string;
+  isUnlimited: boolean;
+  spender: string;
+  token: string;
+  tokenSymbol: string | null;
+}
+
+/**
+ * Extract approval events and return structured remaining-approval data.
+ * Filters to only approvals with non-zero amounts (net remaining allowances).
+ */
+export function computeRemainingApprovals(
+  events: DecodedEvent[],
+): RemainingApproval[] {
+  return events
+    .filter((e) => e.kind === "approval" && e.amountRaw !== "0")
+    .map((e) => ({
+      amountFormatted: e.amountFormatted,
+      isUnlimited: e.amountFormatted.toLowerCase().includes("unlimited"),
+      spender: e.to,
+      token: e.token,
+      tokenSymbol: e.tokenSymbol,
+    }));
+}

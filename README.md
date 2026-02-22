@@ -123,6 +123,62 @@ bun --cwd packages/cli dev settings init   # initialize settings
 bun --cwd packages/cli dev sources         # show verification sources
 ```
 
+Generator rollout flags:
+
+- `NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS=1` enables experimental Linea consensus envelope generation.
+- Default is disabled so Linea remains an explicit partial-support path until full verifier rollout is complete.
+- OP Stack/Linea desktop verification now completes as a supported consensus mode path (`valid: true`) when envelope integrity, root linkage, block linkage, and freshness checks pass; packages with all three artifacts can be exported as `fully-verifiable` without `*-consensus-verifier-pending` reasons.
+- When disabled, generated partial packages include explicit reason `consensus-mode-disabled-by-feature-flag`.
+- Verification reports surface the same reason in consensus trust summaries, instead of collapsing to a generic missing-proof message.
+- Desktop `ExecutionSafetyPanel` now reuses that summary for the collapsed consensus row when no proof is present.
+- OP Stack/Linea packages now preserve explicit `*-consensus-verifier-pending` trust reasons before desktop verification runs, avoiding generic "missing consensus result" messaging.
+- Beacon light-client fetch remains beacon-only; OP Stack/Linea are tracked as separate execution-envelope consensus modes.
+- OP Stack/Linea envelope generation now enforces `blockTag: finalized` to keep export-time consensus claims aligned with verifier finality requirements.
+- CLI `analyze` now attempts consensus enrichment where supported and always stamps `exportContract` with explicit machine-readable partial/failure reasons.
+- Export contracts now treat OP Stack/Linea consensus without an RPC URL as `missing-consensus-proof` (configuration gap), not `consensus-proof-fetch-failed` (runtime failure).
+- Verification reports now preserve `invalid-proof-payload` as an explicit consensus trust reason, instead of collapsing malformed envelope failures into a generic invalid-result message.
+- Verification reports now also map Beacon payload parse/verification failure codes (for example `invalid-checkpoint-hash`, `invalid-bootstrap-json`, `missing-execution-payload`) to explicit `invalid-proof-payload` trust semantics instead of generic invalid-result fallback.
+- Verification reports now preserve `invalid-expected-state-root` as an explicit consensus trust reason when policy root formatting is invalid.
+- Verification reports now preserve `envelope-network-mismatch` as an explicit consensus trust reason (instead of collapsing it into generic `invalid-proof-payload`), keeping chain-metadata integrity failures auditable.
+- Verification reports now preserve export-contract `unsupported-consensus-mode` as an explicit consensus trust reason when consensus proof is intentionally omitted, instead of collapsing to generic missing-proof output.
+- Verification reports now also preserve export-contract `consensus-proof-fetch-failed` as an explicit warning reason when consensus proof generation failed at export time, instead of collapsing to generic missing-proof output.
+- Desktop non-beacon verification now enforces package `network` metadata consistency with envelope `chainId` (`opstack`: `10->optimism`, `8453->base`; `linea`: `59144->linea`) and emits deterministic `envelope-network-mismatch` on metadata divergence (separate from rollout-scope `unsupported-network`).
+- OP Mainnet envelope metadata now uses canonical `network: "optimism"`; desktop verifier still accepts legacy `network: "oeth"` for backward compatibility.
+- Added explicit OP Stack `base` regression coverage in core generation and desktop verification tests to lock `chainId 8453 <-> network "base"` behavior.
+- Simulation results now include optional `blockTimestamp`; desktop `ExecutionSafetyPanel` freshness copy shows block time and age against local time when present.
+- Desktop network support badges are now package-aware: if a package omits simulation or consensus artifacts, `ExecutionSafetyPanel` shows `Partial` with explicit helper text instead of a capability-only `Full` label.
+- Desktop network support badges now also map consensus export reasons (`consensus-mode-disabled-by-feature-flag`, `unsupported-consensus-mode`, `*-consensus-verifier-pending`) to explicit partial-support helper text instead of generic missing-proof wording.
+- `ExecutionSafetyPanel` now maps known consensus verifier `error_code` values to concise, actionable trust text (with raw verifier text fallback for unknown codes) to keep warning/error messaging deterministic and user-focused.
+- `ExecutionSafetyPanel` expanded view now surfaces machine-readable reason codes for warning/error rows, preserving deterministic trust semantics alongside concise user-facing text.
+- Missing-consensus warning rows now also expose deterministic export reason codes/details (for example `consensus-mode-disabled-by-feature-flag` and `consensus-proof-fetch-failed`) instead of falling back to generic copy.
+- If a consensus proof is present but verifier output is not yet available, `ExecutionSafetyPanel` now maps `opstack-consensus-verifier-pending`/`linea-consensus-verifier-pending` export reasons to explicit warning detail + reason code instead of generic "still running" copy.
+- Core trust evaluation now treats `*-consensus-verifier-pending` export reasons as a pre-verification fallback only; once a real consensus verification result is provided and passes root/block linkage, trust upgrades to mode-specific `consensus-verified-opstack`/`consensus-verified-linea`.
+- Consensus mode/block/participants/state-root details now render inside `ExecutionSafetyPanel` expanded view; the separate standalone consensus card was removed to keep consensus signaling in one top-level safety component.
+- Consensus detail rows now avoid "Verified ..." wording for non-beacon results with `valid=false`; these render as "Envelope block/state root" until cryptographic verification is actually successful.
+- Consensus detail rows now include an explicit non-equivalence assurance note for `opstack`/`linea` modes, clarifying these checks are not Beacon light-client finality.
+- Core verification-source summaries/details now repeat the same non-equivalence boundary when OP Stack/Linea consensus is marked verified, preventing Beacon-equivalent interpretation in trust provenance output.
+- Desktop non-beacon verifier now emits explicit envelope-linkage error codes (`envelope-state-root-mismatch`, `envelope-block-number-mismatch`) when package consensus metadata does not match the envelope, and UI/core trust mapping treats them as deterministic integrity failures.
+- Core consensus trust evaluation now centralizes `consensusVerification.error_code -> consensusTrustDecisionReason` mapping in one helper, reducing drift risk as OP Stack/Linea verifier codes expand.
+- Core consensus trust tests now include a table-driven regression that maps every current desktop verifier machine `error_code` to an explicit trust-decision reason, preventing silent fallback drift as `#19/#20` codes evolve.
+- Desktop consensus warning/error severity now derives from that same core trust-reason mapping contract, so new verifier codes cannot silently diverge across core report trust and `ExecutionSafetyPanel`.
+- Desktop simulation-unavailable reason selection is now centralized in `simulation-unavailable` helpers with deterministic precedence (`missing-rpc-url` -> `simulation-fetch-failed` -> `missing-simulation`) and targeted regressions, so `ExecutionSafetyPanel` reason text cannot drift from export-contract semantics.
+- Package export-contract regressions now pin both `opstack` and `linea` envelope modes to deterministic partial reasons (`*-consensus-verifier-pending` with artifact present, `missing-consensus-proof` when RPC is omitted) to keep non-beacon trust signaling symmetric.
+- Linea stale-envelope handling is now regression-locked in both core trust mapping and desktop `ExecutionSafetyPanel` warning copy (`stale-consensus-envelope`) to keep `#20` stale semantics deterministic end-to-end.
+- Execution-envelope consensus fetch now validates RPC header fields (`hash`, `parentHash`, `stateRoot`) as strict 32-byte hex before packaging, with direct core regressions to keep malformed upstream payload handling deterministic for OP Stack/Linea.
+- Execution-envelope consensus fetch now also validates upstream `eth_chainId` before packaging and fails on mismatch/malformed values, preventing misconfigured RPC endpoints from producing cross-network envelopes.
+- Execution-envelope consensus fetch now enforces chain capability mode alignment (`opstack` vs `linea`) before any RPC calls and rejects beacon-only chains, preventing invalid cross-mode envelope packaging from direct API misuse.
+- Consensus routing tests now model the execution-envelope two-step RPC contract (`eth_chainId` handshake before `eth_getBlockByNumber`) and assert call order, preventing stale single-call fixtures from masking cross-network envelope regressions.
+- Core consensus routing tests now explicitly pin `holesky` and `hoodi` to the Beacon fetch path (not execution-envelope fetchers) to keep `#18` support deterministic.
+- Package export-contract regressions now also pin OP Stack Base (`chainId 8453`) to the same deterministic non-beacon partial reasons used by OP Mainnet/Linea (`opstack-consensus-verifier-pending` with artifacts present, `missing-consensus-proof` when RPC is omitted).
+- Desktop Rust verifier regressions now explicitly lock malformed non-beacon envelope `parentHash` and `stateRoot` payload handling to field-specific `invalid-proof-payload` failures, preventing silent drift in OP Stack/Linea envelope integrity checks.
+- Desktop network-support regressions now explicitly pin `holesky` and `hoodi` package-complete cases to `Full` support badges (helper text `null`) to lock `#18` UI acceptance semantics.
+- Policy verification details now render as concise rows in `ExecutionSafetyPanel` expanded view (`checks passed`, first verifier error), and the standalone raw `On-Chain Policy Proof` card was removed.
+- Simulation details now render as concise rows in `ExecutionSafetyPanel` expanded view (status, checks passed, token event summary, approvals, first verifier error), and the separate `Transaction Simulation` card was removed.
+- `ExecutionSafetyPanel` verdict copy now avoids ambiguous "safe/verified" phrasing (`Manual review required` / `No critical issues found`), includes a per-package checks summary counter, and labels missing desktop consensus output as `Unavailable in this session` instead of `Running`.
+- `ExecutionSafetyPanel` collapsed view now surfaces a prioritized `Attention needed` summary (errors/warnings first, explicit reason codes, deduped against network-support helper text), while detailed helper text remains in expanded view to reduce repeated partial-support copy.
+- Core now exports a strict `ConsensusVerifierErrorCode` contract + type guard; desktop consensus-detail mapping only accepts that explicit code set (plus one documented feature-flag fallback), reducing broad string handling drift at the app/core boundary.
+- Core now also exports `findLegacyPendingConsensusExportReason(...)`; desktop support/safety UI uses this shared helper instead of duplicating `*-consensus-verifier-pending` checks, keeping legacy-reason handling centralized and typed.
+
 ### Cleanup
 
 ```bash

@@ -3,6 +3,9 @@ import {
   evidencePackageSchema,
   evidenceExportContractSchema,
   consensusProofSchema,
+  findLegacyPendingConsensusExportReason,
+  getLegacyPendingConsensusExportReasonForMode,
+  getExportContractReasonLabel,
   onchainPolicyProofSchema,
   simulationSchema,
   trustClassificationSchema,
@@ -181,6 +184,9 @@ describe("trust classification schema", () => {
   it("accepts all valid trust levels", () => {
     const levels = [
       "consensus-verified",
+      "consensus-verified-beacon",
+      "consensus-verified-opstack",
+      "consensus-verified-linea",
       "proof-verified",
       "self-verified",
       "rpc-sourced",
@@ -220,7 +226,11 @@ describe("export contract schema", () => {
       mode: "partial",
       status: "partial",
       isFullyVerifiable: false,
-      reasons: ["missing-rpc-url", "missing-onchain-policy-proof"],
+      reasons: [
+        "missing-rpc-url",
+        "missing-onchain-policy-proof",
+        "unsupported-consensus-mode",
+      ],
       artifacts: {
         consensusProof: true,
         onchainPolicyProof: false,
@@ -229,9 +239,167 @@ describe("export contract schema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("accepts mode-specific pending verifier reasons", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "partial",
+      status: "partial",
+      isFullyVerifiable: false,
+      reasons: [
+        "opstack-consensus-verifier-pending",
+        "linea-consensus-verifier-pending",
+      ],
+      artifacts: {
+        consensusProof: true,
+        onchainPolicyProof: true,
+        simulation: true,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts feature-flag-disabled consensus reason", () => {
+    const result = evidenceExportContractSchema.safeParse({
+      mode: "partial",
+      status: "partial",
+      isFullyVerifiable: false,
+      reasons: ["consensus-mode-disabled-by-feature-flag"],
+      artifacts: {
+        consensusProof: false,
+        onchainPolicyProof: true,
+        simulation: true,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("finds only legacy pending consensus export reasons", () => {
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "missing-simulation",
+        "opstack-consensus-verifier-pending",
+      ])
+    ).toBe("opstack-consensus-verifier-pending");
+
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "linea-consensus-verifier-pending",
+        "missing-consensus-proof",
+      ])
+    ).toBe("linea-consensus-verifier-pending");
+
+    expect(
+      findLegacyPendingConsensusExportReason([
+        "missing-consensus-proof",
+        "simulation-fetch-failed",
+      ])
+    ).toBeNull();
+    expect(findLegacyPendingConsensusExportReason([])).toBeNull();
+    expect(findLegacyPendingConsensusExportReason(undefined)).toBeNull();
+  });
+
+  it("maps consensus mode to legacy pending export reason", () => {
+    expect(
+      getLegacyPendingConsensusExportReasonForMode("opstack")
+    ).toBe("opstack-consensus-verifier-pending");
+    expect(
+      getLegacyPendingConsensusExportReasonForMode("linea")
+    ).toBe("linea-consensus-verifier-pending");
+    expect(getLegacyPendingConsensusExportReasonForMode("beacon")).toBeNull();
+    expect(getLegacyPendingConsensusExportReasonForMode(undefined)).toBeNull();
+  });
+
+  it("returns a non-empty label for every export reason", () => {
+    const reasons = [
+      "missing-consensus-proof",
+      "unsupported-consensus-mode",
+      "consensus-mode-disabled-by-feature-flag",
+      "opstack-consensus-verifier-pending",
+      "linea-consensus-verifier-pending",
+      "missing-onchain-policy-proof",
+      "missing-rpc-url",
+      "consensus-proof-fetch-failed",
+      "policy-proof-fetch-failed",
+      "simulation-fetch-failed",
+      "missing-simulation",
+    ] as const;
+
+    for (const reason of reasons) {
+      expect(getExportContractReasonLabel(reason).trim().length).toBeGreaterThan(0);
+    }
+  });
 });
 
 describe("consensus proof network schema", () => {
+  it("accepts known consensus modes", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "beacon",
+      checkpoint:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      bootstrap: "{}",
+      updates: [],
+      finalityUpdate: "{}",
+      network: "mainnet",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+      finalizedSlot: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts non-beacon consensus envelope for opstack", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "opstack",
+      network: "base",
+      proofPayload: "{\"version\":\"0.1\"}",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts non-beacon consensus envelope for linea", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "linea",
+      network: "linea",
+      proofPayload: "{\"version\":\"0.1\"}",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unsupported consensus modes", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "unknown",
+      checkpoint:
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      bootstrap: "{}",
+      updates: [],
+      finalityUpdate: "{}",
+      network: "mainnet",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+      finalizedSlot: 1,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-beacon consensus envelope without proof payload", () => {
+    const result = consensusProofSchema.safeParse({
+      consensusMode: "opstack",
+      network: "base",
+      stateRoot:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      blockNumber: 1,
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects unsupported consensus networks", () => {
     const result = consensusProofSchema.safeParse({
       checkpoint:
@@ -239,7 +407,7 @@ describe("consensus proof network schema", () => {
       bootstrap: "{}",
       updates: [],
       finalityUpdate: "{}",
-      network: "holesky",
+      network: "polygon",
       stateRoot:
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       blockNumber: 1,
@@ -253,6 +421,24 @@ describe("onchain policy proof schema", () => {
   it("validates a complete policy proof", () => {
     const result = onchainPolicyProofSchema.safeParse(MOCK_POLICY_PROOF);
     expect(result.success).toBe(true);
+  });
+
+  it("accepts compact storage slot keys and values from eth_getProof", () => {
+    const compact = {
+      ...MOCK_POLICY_PROOF,
+      accountProof: {
+        ...MOCK_POLICY_PROOF.accountProof,
+        storageProof: [
+          {
+            ...MOCK_POLICY_PROOF.accountProof.storageProof[0],
+            key: "0x4",
+            value: "0x2",
+          },
+        ],
+      },
+    };
+
+    expect(onchainPolicyProofSchema.safeParse(compact).success).toBe(true);
   });
 
   it("rejects policy proof missing required fields", () => {
@@ -296,6 +482,15 @@ describe("simulation schema", () => {
 
   it("accepts simulation with null returnData", () => {
     const sim = { ...MOCK_SIMULATION, returnData: null };
+    const result = simulationSchema.safeParse(sim);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts simulation with RFC3339 block timestamp", () => {
+    const sim = {
+      ...MOCK_SIMULATION,
+      blockTimestamp: "2026-02-20T13:55:00.000Z",
+    };
     const result = simulationSchema.safeParse(sim);
     expect(result.success).toBe(true);
   });

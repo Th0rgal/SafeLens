@@ -15,6 +15,7 @@ import type { OnchainPolicyProof } from "../types";
 import {
   verifyAccountProof,
   verifyStorageProof,
+  normalizeStorageSlotKey,
   type AccountProofInput,
   type StorageProofInput,
 } from "./mpt";
@@ -79,8 +80,14 @@ function findStorageProof(
   proofs: StorageProofInput[],
   key: Hex
 ): StorageProofInput | undefined {
-  const normalizedKey = key.toLowerCase();
-  return proofs.find((p) => p.key.toLowerCase() === normalizedKey);
+  const normalizedKey = normalizeStorageSlotKey(key);
+  return proofs.find((proof) => {
+    try {
+      return normalizeStorageSlotKey(proof.key) === normalizedKey;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**

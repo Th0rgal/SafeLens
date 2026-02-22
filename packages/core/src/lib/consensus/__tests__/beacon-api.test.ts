@@ -25,8 +25,8 @@ describe("beacon-api network config", () => {
   });
 
   it("rejects unsupported chain IDs for consensus proof fetching", async () => {
-    await expect(fetchConsensusProof(17000)).rejects.toThrow(
-      "No beacon chain config for chain ID 17000"
+    await expect(fetchConsensusProof(137)).rejects.toThrow(
+      "No beacon chain config for chain ID 137"
     );
   });
 
@@ -87,6 +87,7 @@ describe("beacon-api network config", () => {
     const proof = await fetchConsensusProof(100);
 
     expect(proof.network).toBe("gnosis");
+    expect(proof.consensusMode).toBe("beacon");
     expect(proof.finalizedSlot).toBe(12345);
     expect(proof.blockNumber).toBe(21000000);
     expect(proof.stateRoot).toBe(

@@ -44,6 +44,26 @@ export interface ProofVerificationResult {
   errors: string[];
 }
 
+/**
+ * Normalize an eth_getProof storage key to a 32-byte slot word.
+ *
+ * RPC providers may return compact quantity keys (e.g. `0x0`) for simple
+ * storage slots, but trie paths are computed from the canonical 32-byte value.
+ */
+export function normalizeStorageSlotKey(rawKey: Hex): Hex {
+  const hex = rawKey.toLowerCase();
+  if (!hex.startsWith("0x") || hex.length < 3) {
+    throw new Error("Invalid storage slot key: expected 0x-prefixed hex");
+  }
+
+  const digits = hex.slice(2);
+  if (!/^[0-9a-f]+$/i.test(digits) || digits.length > 64) {
+    throw new Error("Invalid storage slot key: expected <=32 bytes of hex");
+  }
+
+  return `0x${digits.padStart(64, "0")}` as Hex;
+}
+
 // ── Nibble helpers ─────────────────────────────────────────────────
 
 function bytesToNibbles(bytes: Uint8Array): number[] {
@@ -322,7 +342,8 @@ export function verifyMptProof(
     return { valid: false, errors: [msg] };
   }
 
-  const keyHash = keccak256(rawKey);
+  const canonicalKey = normalizeStorageSlotKey(rawKey);
+  const keyHash = keccak256(canonicalKey);
   const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
   return walkMptProof(rootHash, pathNibbles, proof, storageMatcher(expectedValue));
 }

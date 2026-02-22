@@ -9,30 +9,68 @@ import {
   getChainName,
   verifyEvidencePackage,
   applyConsensusVerificationToReport,
+  buildCoreExecutionSafetyFields,
   decodeSimulationEvents,
+  decodeNativeTransfers,
+  computeRemainingApprovals,
 } from "@safelens/core";
-import type { DecodedEvent } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
 import { CallArray } from "@/components/call-array";
 import { AddressDisplay } from "@/components/address-display";
-import { HashVerificationDetails } from "@/components/hash-verification-details";
+import { HashValueDisplay, IntermediateHashesDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
-import { ShieldCheck, AlertTriangle, HelpCircle, UserRound, Upload, ChevronRight, ArrowUpRight, ArrowDownLeft, Repeat, KeyRound, ChevronDown } from "lucide-react";
-import type { EvidencePackage, SignatureCheckResult, TransactionWarning, TrustLevel, SafeTxHashDetails, PolicyProofVerificationResult, SimulationVerificationResult, ConsensusVerificationResult } from "@safelens/core";
+import {
+  buildSafetyAttentionItems,
+  classifyPolicyStatus,
+  classifyConsensusStatus,
+  classifySimulationStatus,
+  type SafetyCheck,
+  type SafetyStatus,
+} from "@/lib/safety-checks";
+import { buildSimulationFreshnessDetail, formatRelativeTime } from "@/lib/simulation-freshness";
+import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
+import { buildConsensusDetailRows } from "@/lib/consensus-details";
+import { buildPolicyDetailRows } from "@/lib/policy-details";
+import { buildSimulationDetailRows } from "@/lib/simulation-details";
+import {
+  getSimulationUnavailableReason,
+} from "@/lib/simulation-unavailable";
+import { ShieldCheck, AlertTriangle, HelpCircle, Upload, ChevronRight } from "lucide-react";
+import type {
+  EvidencePackage,
+  SignatureCheckResult,
+  TransactionWarning,
+  SafeTxHashDetails,
+  PolicyProofVerificationResult,
+  SimulationVerificationResult,
+  ConsensusVerificationResult,
+  WarningLevel,
+} from "@safelens/core";
 import { invoke } from "@tauri-apps/api/core";
 
 type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
   ? T extends object
-    ? T & { expectedStateRoot: string }
+    ? T & {
+        expectedStateRoot: string;
+        packageChainId: number;
+        packagePackagedAt: string;
+      }
     : never
   : never;
 
-const WARNING_STYLES: Record<string, { border: string; bg: string; text: string; Icon: typeof AlertTriangle }> = {
+type WarningStyle = {
+  border: string;
+  bg: string;
+  text: string;
+  Icon: typeof AlertTriangle;
+};
+
+const WARNING_STYLES = {
   info: { border: "border-blue-500/20", bg: "bg-blue-500/10", text: "text-blue-400", Icon: HelpCircle },
   warning: { border: "border-amber-500/20", bg: "bg-amber-500/10", text: "text-amber-400", Icon: AlertTriangle },
   danger: { border: "border-red-500/20", bg: "bg-red-500/10", text: "text-red-400", Icon: AlertTriangle },
-};
+} satisfies Record<WarningLevel, WarningStyle>;
 
 function WarningBanner({ warning, className }: { warning: TransactionWarning; className?: string }) {
   const style = WARNING_STYLES[warning.level];
@@ -60,10 +98,8 @@ export default function VerifyScreen() {
   const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
   const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
   const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
-  const [consensusSourceTrust, setConsensusSourceTrust] = useState<TrustLevel>("rpc-sourced");
-  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>(
-    "Consensus proof included but not yet verified (requires desktop app)."
-  );
+  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>("");
+  const [showSafetyDetails, setShowSafetyDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
@@ -80,8 +116,8 @@ export default function VerifyScreen() {
       setPolicyProof(undefined);
       setSimulationVerification(undefined);
       setConsensusVerification(undefined);
-      setConsensusSourceTrust("rpc-sourced");
-      setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+      setConsensusSourceSummary("");
+      setShowSafetyDetails(false);
       return;
     }
 
@@ -93,8 +129,15 @@ export default function VerifyScreen() {
     setPolicyProof(undefined);
     setSimulationVerification(undefined);
     setConsensusVerification(undefined);
-    setConsensusSourceTrust("rpc-sourced");
-    setConsensusSourceSummary("Consensus proof included but not yet verified (requires desktop app).");
+    // Only set "included but not yet verified" when a proof actually exists.
+    // Otherwise classifyConsensusStatus sees this as a fallback and misleadingly
+    // reports "included" for packages that have no consensus proof at all.
+    setConsensusSourceSummary(
+      currentEvidence?.consensusProof
+        ? "Consensus proof included but not yet verified (requires desktop app)."
+        : "",
+    );
+    setShowSafetyDetails(false);
 
     let cancelled = false;
 
@@ -116,7 +159,6 @@ export default function VerifyScreen() {
         setSimulationVerification(report.simulationVerification);
         const initialConsensusSource = report.sources.find((source) => source.id === "consensus-proof");
         if (initialConsensusSource) {
-          setConsensusSourceTrust(initialConsensusSource.trust);
           setConsensusSourceSummary(initialConsensusSource.summary);
         }
 
@@ -146,7 +188,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(missingRootResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -156,6 +197,8 @@ export default function VerifyScreen() {
           const consensusInput: ConsensusProofVerifyInput = {
             ...currentEvidence.consensusProof,
             expectedStateRoot,
+            packageChainId: currentEvidence.chainId,
+            packagePackagedAt: currentEvidence.packagedAt,
           };
 
           try {
@@ -175,7 +218,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(consensusResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -202,7 +244,6 @@ export default function VerifyScreen() {
               const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
               setConsensusVerification(failedResult);
               if (consensusSource) {
-                setConsensusSourceTrust(consensusSource.trust);
                 setConsensusSourceSummary(consensusSource.summary);
               }
             }
@@ -259,13 +300,15 @@ export default function VerifyScreen() {
     setTimeout(() => setCopiedField(null), 2000);
   }, []);
 
-  const signatureResults = Object.values(sigResults);
-  const signaturesTrustLevel: TrustLevel =
-    signatureResults.length === 0
-      ? "api-sourced"
-      : signatureResults.some((r) => r.status === "invalid" || r.status === "unsupported")
-        ? "api-sourced"
-        : "self-verified";
+  const networkSupport = evidence ? buildNetworkSupportStatus(evidence) : null;
+  const safetyChecks = useMemo(() => {
+    if (!evidence) return [];
+    return [
+      classifyPolicyStatus(evidence, policyProof),
+      classifyConsensusStatus(evidence, consensusVerification, consensusSourceSummary),
+      classifySimulationStatus(evidence, simulationVerification),
+    ];
+  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification]);
 
   return (
     <div className="space-y-6">
@@ -362,233 +405,124 @@ export default function VerifyScreen() {
             <CardHeader>
               <CardTitle>Transaction Overview</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <CardContent className="space-y-3">
+              {/* Chain + Safe Address */}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Chain <TrustBadge level="self-verified" />
+                  <div className="mb-1 text-xs font-medium text-muted">Chain</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">{getChainName(evidence.chainId)}</span>
+                    {networkSupport && (
+                      <span
+                        title={networkSupport.helperText ?? "Fully supported: consensus verification and simulation are available."}
+                        className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium ${
+                          networkSupport.isFullySupported
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                            : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                        }`}
+                      >
+                        {networkSupport.badgeText}
+                      </span>
+                    )}
                   </div>
-                  <div className="font-mono text-sm">{getChainName(evidence.chainId)}</div>
                 </div>
-
                 <div>
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Safe Address <TrustBadge level="self-verified" />
-                  </div>
+                  <div className="mb-1 text-xs font-medium text-muted">Safe Address</div>
                   <AddressDisplay address={evidence.safeAddress} chainId={evidence.chainId} />
                 </div>
+              </div>
 
-                {proposer && (
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                      <UserRound className="h-3.5 w-3.5" />
-                      Proposed by
-                    </div>
-                    <AddressDisplay address={proposer} chainId={evidence.chainId} />
-                  </div>
-                )}
-
-                <div className="md:col-span-2">
-                  <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                    Safe TX Hash <TrustBadge level="self-verified" />
-                  </div>
-                  <HashVerificationDetails
-                    safeTxHash={evidence.safeTxHash}
-                    details={hashDetails}
-                  />
-                  {!hashMatch && (
-                    <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                      <span>
-                        Hash mismatch: the stored safeTxHash does not match the recomputed hash.
-                        The transaction data may have been tampered with.
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {evidence.ethereumTxHash && (
-                  <div className="md:col-span-2">
-                    <div className="mb-1 flex items-center gap-2 text-sm font-medium text-muted">
-                      Ethereum TX Hash <TrustBadge level="api-sourced" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs">{evidence.ethereumTxHash}</code>
-                      <button
-                        onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
-                        className="text-xs text-accent hover:text-accent-hover"
-                      >
-                        {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
-                      </button>
-                    </div>
+              {/* Safe TX Hash */}
+              <div>
+                <div className="mb-1 text-xs font-medium text-muted">Safe TX Hash</div>
+                <HashValueDisplay hash={hashDetails?.safeTxHash ?? evidence.safeTxHash} />
+                {!hashMatch && (
+                  <div className="mt-2 flex items-center gap-2 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      Hash mismatch: the stored safeTxHash does not match the recomputed hash.
+                      The transaction data may have been tampered with.
+                    </span>
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CardTitle>Signatures</CardTitle>
-                <TrustBadge level={signaturesTrustLevel} />
-              </div>
-              <CardDescription>
-                {evidence.confirmations.length} of {evidence.confirmationsRequired} required signatures
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {evidence.confirmations.map((conf, i) => {
-                  const sigResult = sigResults[conf.owner];
-                  return (
-                    <div key={i} className="rounded-md border border-border/15 glass-subtle p-3">
-                      <div className="mb-1 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-muted">Owner {i + 1}</span>
+              {/* Signatures (collapsible) */}
+              <details className="group/sigs pb-1 open:pb-0">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted hover:text-fg transition-colors [&::-webkit-details-marker]:hidden">
+                  <ChevronRight className="h-3 w-3 transition-transform group-open/sigs:rotate-90" />
+                  Signatures
+                </summary>
+                <div className="mt-1.5 space-y-1">
+                  {evidence.confirmations.map((conf, i) => {
+                    const sigResult = sigResults[conf.owner];
+                    const isProposer = proposer === conf.owner;
+                    return (
+                      <details key={i} className="group/sig">
+                        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-surface-2/30 transition-colors [&::-webkit-details-marker]:hidden">
                           {sigResult ? (
                             sigResult.status === "valid" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-emerald-400" title="Signature verified locally">
-                                <ShieldCheck className="h-3 w-3" />
-                                Verified
-                              </span>
+                              <ShieldCheck className="h-3 w-3 shrink-0 text-emerald-400" />
                             ) : sigResult.status === "invalid" ? (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-400" title={`Recovered: ${sigResult.recoveredSigner}`}>
-                                <AlertTriangle className="h-3 w-3" />
-                                Invalid
-                              </span>
+                              <AlertTriangle className="h-3 w-3 shrink-0 text-red-400" />
                             ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-amber-400" title={sigResult.reason}>
-                                <HelpCircle className="h-3 w-3" />
-                                {sigResult.reason}
-                              </span>
+                              <HelpCircle className="h-3 w-3 shrink-0 text-amber-400" />
                             )
                           ) : (
-                            <span className="text-xs text-muted">Verifying…</span>
+                            <span className="h-3 w-3 shrink-0 rounded-full border border-muted/30" />
                           )}
-                        </div>
-                        <span className="text-xs text-muted">{new Date(conf.submissionDate).toLocaleString()}</span>
-                      </div>
-                      <AddressDisplay address={conf.owner} chainId={evidence.chainId} />
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-xs text-accent hover:text-accent-hover">
-                          Show signature
+                          <AddressDisplay address={conf.owner} chainId={evidence.chainId} />
+                          {isProposer && <span className="text-muted">(proposer)</span>}
+                          {sigResult && sigResult.status === "invalid" && (
+                            <span className="text-red-400">Invalid</span>
+                          )}
+                          {sigResult && sigResult.status === "unsupported" && (
+                            <span className="text-amber-400">{sigResult.reason}</span>
+                          )}
+                          <span className="ml-auto shrink-0 text-muted">{new Date(conf.submissionDate).toLocaleDateString()}</span>
+                          <ChevronRight className="h-3 w-3 shrink-0 text-muted/50 transition-transform group-open/sig:rotate-90" />
                         </summary>
-                        <code className="mt-1 block break-all text-xs text-muted">
+                        <code className="mt-1 mb-1 ml-7 block break-all text-xs text-muted">
                           {conf.signature}
                         </code>
                       </details>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              </details>
+
+              {/* Ethereum TX Hash (if available) */}
+              {evidence.ethereumTxHash && (
+                <div>
+                  <div className="mb-1 text-xs font-medium text-muted">Ethereum TX Hash</div>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs">{evidence.ethereumTxHash}</code>
+                    <button
+                      onClick={() => copyToClipboard(evidence.ethereumTxHash!, "ethTxHash")}
+                      className="text-xs text-accent hover:text-accent-hover"
+                    >
+                      {copiedField === "ethTxHash" ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Intermediate hashes for hardware wallet verification */}
+              {hashDetails && <IntermediateHashesDetails details={hashDetails} />}
             </CardContent>
           </Card>
 
-          {policyProof && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>On-Chain Policy Proof</CardTitle>
-                  <TrustBadge level={policyProof.valid ? "proof-verified" : "rpc-sourced"} />
-                </div>
-                <CardDescription>
-                  {policyProof.valid
-                    ? "All policy fields cryptographically verified against state root"
-                    : `Proof verification failed: ${policyProof.errors.length} error(s)`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {policyProof.checks.map((check) => (
-                    <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                      <span className="text-sm font-medium">{check.label}</span>
-                      <div className="flex items-center gap-2">
-                        {check.passed ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                            <ShieldCheck className="h-3 w-3" />
-                            Pass
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                            <AlertTriangle className="h-3 w-3" />
-                            Fail
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {policyProof.errors.length > 0 && (
-                  <div className="mt-3 space-y-1">
-                    {policyProof.errors.map((err, i) => (
-                      <div key={i} className="text-xs text-red-400">{err}</div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {simulationVerification && (
-            <SimulationCard
-              evidence={evidence}
-              simulationVerification={simulationVerification}
-            />
-          )}
-
-          {(consensusVerification || evidence?.consensusProof) && (
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>Consensus Verification</CardTitle>
-                  <TrustBadge level={consensusSourceTrust} />
-                </div>
-                <CardDescription>
-                  {!consensusVerification
-                    ? "Verifying consensus proof via BLS sync committee signatures..."
-                    : consensusVerification.valid
-                      ? `State root verified against Ethereum consensus (${consensusVerification.sync_committee_participants}/512 validators)`
-                      : consensusVerification.error ?? consensusSourceSummary}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {consensusVerification ? (
-                  <div className="space-y-1.5">
-                    {consensusVerification.checks.map((check) => (
-                      <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                        <span className="text-sm font-medium">{check.label}</span>
-                        <div className="flex items-center gap-2">
-                          {check.detail && (
-                            <span className="text-xs text-muted">{check.detail}</span>
-                          )}
-                          {check.passed ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                              <ShieldCheck className="h-3 w-3" />
-                              Pass
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                              <AlertTriangle className="h-3 w-3" />
-                              Fail
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {consensusVerification.verified_state_root && (
-                      <div className="mt-2 rounded-md border border-border/15 glass-subtle px-3 py-2">
-                        <div className="text-xs text-muted">Verified State Root</div>
-                        <div className="font-mono text-xs break-all">{consensusVerification.verified_state_root}</div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted animate-pulse">Running BLS verification...</div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <ExecutionSafetyPanel
+            evidence={evidence}
+            checks={safetyChecks}
+            hashMatch={hashMatch}
+            networkSupport={networkSupport}
+            consensusVerification={consensusVerification}
+            policyProof={policyProof}
+            simulationVerification={simulationVerification}
+            showDetails={showSafetyDetails}
+            onToggleDetails={() => setShowSafetyDetails((value) => !value)}
+          />
 
           <Card>
             <CardHeader>
@@ -651,216 +585,637 @@ export default function VerifyScreen() {
   );
 }
 
-// ── Token event icons ─────────────────────────────────────────────────
+type VerificationStatus = SafetyStatus | "skipped";
 
-const EVENT_ICON: Record<string, { Icon: typeof ArrowUpRight; color: string; label: string }> = {
-  transfer: { Icon: ArrowUpRight, color: "text-blue-400", label: "Transfer" },
-  approval: { Icon: KeyRound, color: "text-amber-400", label: "Approval" },
-  "nft-transfer": { Icon: ArrowUpRight, color: "text-purple-400", label: "NFT Transfer" },
-  "erc1155-transfer": { Icon: ArrowUpRight, color: "text-purple-400", label: "ERC-1155" },
-  wrap: { Icon: Repeat, color: "text-cyan-400", label: "Wrap" },
-  unwrap: { Icon: Repeat, color: "text-cyan-400", label: "Unwrap" },
+const SAFETY_STATUS_STYLE: Record<VerificationStatus, { text: string; badge: string; icon: typeof ShieldCheck }> = {
+  check: {
+    text: "text-emerald-300",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    icon: ShieldCheck,
+  },
+  warning: {
+    text: "text-amber-300",
+    badge: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    icon: AlertTriangle,
+  },
+  error: {
+    text: "text-red-300",
+    badge: "border-red-500/30 bg-red-500/10 text-red-300",
+    icon: AlertTriangle,
+  },
+  skipped: {
+    text: "text-muted",
+    badge: "border-border/30 bg-white/5 text-muted",
+    icon: HelpCircle,
+  },
 };
 
-const DIRECTION_STYLE: Record<string, { bg: string; border: string; label: string; Icon: typeof ArrowUpRight }> = {
-  send: { bg: "bg-red-500/8", border: "border-red-500/20", label: "Send", Icon: ArrowUpRight },
-  receive: { bg: "bg-emerald-500/8", border: "border-emerald-500/20", label: "Receive", Icon: ArrowDownLeft },
-  internal: { bg: "bg-surface-2/40", border: "border-border/15", label: "Internal", Icon: Repeat },
-};
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-// ── SimulationCard ───────────────────────────────────────────────────
+function SafePolicySection({ evidence }: { evidence: EvidencePackage }) {
+  const policy = evidence.onchainPolicyProof?.decodedPolicy;
+  const signers = new Set(evidence.confirmations.map((c) => c.owner.toLowerCase()));
 
-function SimulationCard({
-  evidence,
-  simulationVerification,
-}: {
-  evidence: EvidencePackage;
-  simulationVerification: SimulationVerificationResult;
-}) {
-  const [showChecks, setShowChecks] = useState(false);
-
-  const decodedEvents = useMemo(() => {
-    if (!evidence.simulation?.logs) return [];
-    return decodeSimulationEvents(
-      evidence.simulation.logs,
-      evidence.safeAddress,
-      evidence.chainId,
+  if (!policy) {
+    return (
+      <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+        No on-chain policy proof available. Signer data is API-sourced.
+      </div>
     );
-  }, [evidence.simulation?.logs, evidence.safeAddress, evidence.chainId]);
+  }
 
-  // Separate events by direction for summary
-  const sends = decodedEvents.filter((e) => e.direction === "send" && e.kind === "transfer");
-  const receives = decodedEvents.filter((e) => e.direction === "receive" && e.kind === "transfer");
-  const approvals = decodedEvents.filter((e) => e.kind === "approval");
+  const signedCount = policy.owners.filter((o) => signers.has(o.toLowerCase())).length;
+  const hasModules = policy.modules.length > 0;
+  const hasGuard = policy.guard !== ZERO_ADDRESS;
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <CardTitle>Transaction Simulation</CardTitle>
-          <TrustBadge level={evidence?.simulation?.trust ?? "rpc-sourced"} />
+    <div className="space-y-1.5">
+      <div className="text-xs font-medium text-muted">Safe Policy</div>
+      <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 space-y-2">
+        {/* Threshold */}
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted">Threshold</span>
+          <span className="font-medium">{policy.threshold} of {policy.owners.length}</span>
         </div>
-        <CardDescription>
-          {!simulationVerification.valid
-            ? `Simulation has ${simulationVerification.errors.length} issue(s)`
-            : simulationVerification.executionReverted
-              ? "Structurally valid, but the transaction REVERTED"
-              : decodedEvents.length > 0
-                ? `${decodedEvents.length} token event${decodedEvents.length !== 1 ? "s" : ""} detected`
-                : "Simulation passed — no token events detected"}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {/* Primary view: decoded token movements */}
-        {decodedEvents.length > 0 && (
-          <div className="space-y-2 mb-4">
-            {decodedEvents.map((event, i) => (
-              <TokenEventRow key={i} event={event} chainId={evidence.chainId} />
-            ))}
-          </div>
-        )}
 
-        {/* Net summary for swaps: show what goes out and what comes in */}
-        {sends.length > 0 && receives.length > 0 && (
-          <div className="mb-4 rounded-md border border-border/15 glass-subtle p-3">
-            <div className="text-xs font-medium text-muted mb-2">Net Effect</div>
-            <div className="flex items-center gap-3 flex-wrap">
-              {sends.map((s, i) => (
-                <span key={`s-${i}`} className="inline-flex items-center gap-1 text-sm text-red-400">
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                  {s.amountFormatted}
-                </span>
-              ))}
-              <span className="text-muted text-xs">→</span>
-              {receives.map((r, i) => (
-                <span key={`r-${i}`} className="inline-flex items-center gap-1 text-sm text-emerald-400">
-                  <ArrowDownLeft className="h-3.5 w-3.5" />
-                  {r.amountFormatted}
-                </span>
+        {/* Owners */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted">Owners</span>
+            <span className="text-muted">{signedCount} signed</span>
+          </div>
+          <div className="space-y-1">
+            {policy.owners.map((owner) => {
+              const hasSigned = signers.has(owner.toLowerCase());
+              return (
+                <div key={owner} className="flex items-center gap-2 text-xs">
+                  {hasSigned ? (
+                    <ShieldCheck className="h-3 w-3 shrink-0 text-emerald-400" />
+                  ) : (
+                    <span className="h-3 w-3 shrink-0 rounded-full border border-muted/30" />
+                  )}
+                  <AddressDisplay address={owner} chainId={evidence.chainId} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Modules warning */}
+        {hasModules && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
+            <div className="font-medium text-amber-200">Modules enabled — can bypass signatures</div>
+            <div className="mt-1 space-y-0.5">
+              {policy.modules.map((mod) => (
+                <div key={mod}>
+                  <AddressDisplay address={mod} chainId={evidence.chainId} />
+                </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Approval warnings */}
-        {approvals.length > 0 && (
-          <div className="mb-4 space-y-1.5">
-            {approvals.map((a, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-                <KeyRound className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span className="text-xs text-amber-300">
-                  Approves <span className="font-medium text-amber-400">{a.amountFormatted}</span>
-                  {" "}to <code className="font-mono text-[10px]">{a.to.slice(0, 10)}…</code>
-                </span>
+        {/* Guard */}
+        {hasGuard && (
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted">Guard</span>
+            <AddressDisplay address={policy.guard} chainId={evidence.chainId} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ExecutionSafetyPanel({
+  evidence,
+  checks,
+  hashMatch,
+  networkSupport,
+  consensusVerification,
+  policyProof,
+  simulationVerification,
+  showDetails,
+  onToggleDetails,
+}: {
+  evidence: EvidencePackage;
+  checks: SafetyCheck[];
+  hashMatch: boolean;
+  networkSupport: NetworkSupportStatus | null;
+  consensusVerification: ConsensusVerificationResult | undefined;
+  policyProof: PolicyProofVerificationResult | undefined;
+  simulationVerification: SimulationVerificationResult | undefined;
+  showDetails: boolean;
+  onToggleDetails: () => void;
+}) {
+  const { config: settingsConfig } = useSettingsConfig();
+  const nativeTokenSymbol = settingsConfig?.chains?.[String(evidence.chainId)]?.nativeTokenSymbol;
+  const [badgeOpen, setBadgeOpen] = useState(false);
+  const badgeWrapperRef = useRef<HTMLDivElement>(null);
+  const badgePopupRef = useRef<HTMLDivElement>(null);
+  const [badgePopupStyle, setBadgePopupStyle] = useState<React.CSSProperties>({});
+
+  // ── Badge popover positioning + dismiss ──────────────────────────
+  useEffect(() => {
+    if (!badgeOpen || !badgePopupRef.current || !badgeWrapperRef.current) return;
+    const trigger = badgeWrapperRef.current;
+    const popup = badgePopupRef.current;
+    const triggerRect = trigger.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const pad = 8;
+
+    let top: number;
+    if (triggerRect.bottom + popupRect.height + pad <= window.innerHeight) {
+      top = triggerRect.height + 8;
+    } else {
+      top = -(popupRect.height + 8);
+    }
+
+    let left = 0;
+    const popupRight = triggerRect.left + popupRect.width;
+    if (popupRight > window.innerWidth - pad) {
+      left = -(popupRight - window.innerWidth + pad);
+    }
+    if (triggerRect.left + left < pad) {
+      left = -(triggerRect.left - pad);
+    }
+
+    setBadgePopupStyle({ top, left });
+  }, [badgeOpen]);
+
+  useEffect(() => {
+    if (!badgeOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (badgeWrapperRef.current && !badgeWrapperRef.current.contains(e.target as Node)) {
+        setBadgeOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [badgeOpen]);
+
+  useEffect(() => {
+    if (!badgeOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBadgeOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [badgeOpen]);
+
+  // ── Hash mismatch = hard gate ─────────────────────────────────────
+  if (!hashMatch) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>On-chain Verification</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-red-200">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Do not sign
+            </div>
+            <div className="mt-1 text-xs text-red-300">
+              Safe transaction hash mismatch detected. The transaction fields may have been tampered with. This package cannot be trusted.
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // ── Verification status ───────────────────────────────────────────
+  const hasError = checks.some((check) => check.status === "error");
+  const hasWarning = checks.some((check) => check.status === "warning");
+
+  const freshnessDescription = (() => {
+    const sim = evidence.simulation;
+    if (!sim) return "Simulation not available for this package.";
+    const blockPart = `block ${sim.blockNumber}`;
+    if (sim.blockTimestamp) {
+      const relative = formatRelativeTime(sim.blockTimestamp);
+      return relative
+        ? `Verified at ${blockPart}, ${relative}.`
+        : `Verified at ${blockPart}.`;
+    }
+    return `Verified at ${blockPart}.`;
+  })();
+
+  const DATA_ABSENT_REASON_CODES = new Set([
+    "missing-onchain-policy-proof",
+    "missing-rpc-url",
+    "missing-consensus-or-policy-proof",
+    "missing-consensus-proof",
+    "consensus-proof-fetch-failed",
+  ]);
+
+  const nonPassingChecks = checks.filter((c) => c.status !== "check");
+  const allDataAbsent = nonPassingChecks.length > 0 && nonPassingChecks.every(
+    (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
+  );
+
+  const verification = hasError
+    ? { label: "Verification Failed", description: "One or more safety checks failed. Do not sign.", status: "error" as const }
+    : hasWarning && allDataAbsent
+      ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
+      : hasWarning
+        ? { label: "Partially Verified", description: "Some checks are partial or unavailable.", status: "warning" as const }
+        : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
+
+  const verificationStyle = SAFETY_STATUS_STYLE[verification.status];
+  const VerificationIcon = verificationStyle.icon;
+
+  // ── Top attention item (most severe issue, shown below badge) ─────
+  const attentionItems = buildSafetyAttentionItems(checks, networkSupport, 3);
+  const topAttention = attentionItems.length > 0 && verification.status !== "check"
+    ? attentionItems[0]
+    : null;
+
+  // ── Simulation effects ────────────────────────────────────────────
+  const decodedEvents = useMemo(() => {
+    if (!evidence.simulation?.logs) return [];
+    const logEvents = decodeSimulationEvents(
+      evidence.simulation.logs,
+      evidence.safeAddress,
+      evidence.chainId,
+    );
+    const nativeEvents = evidence.simulation.nativeTransfers?.length
+      ? decodeNativeTransfers(
+          evidence.simulation.nativeTransfers,
+          evidence.safeAddress,
+          nativeTokenSymbol ?? "ETH",
+        )
+      : [];
+    return [...nativeEvents, ...logEvents];
+  }, [evidence.simulation, evidence.safeAddress, evidence.chainId, nativeTokenSymbol]);
+
+  const transferEvents = useMemo(
+    () => decodedEvents.filter((e) => e.kind !== "approval"),
+    [decodedEvents],
+  );
+  const remainingApprovals = useMemo(
+    () => computeRemainingApprovals(decodedEvents),
+    [decodedEvents],
+  );
+
+  const simulationAvailable = Boolean(evidence.simulation);
+  const simulationPassed =
+    simulationAvailable &&
+    simulationVerification?.valid === true &&
+    !simulationVerification.executionReverted;
+
+  // ── Expandable detail data ────────────────────────────────────────
+  const simulationFreshness = buildSimulationFreshnessDetail(evidence.simulation, evidence.packagedAt);
+  const passedChecks = checks.filter((c) => c.status === "check").length;
+  const warningChecks = checks.filter((c) => c.status === "warning").length;
+  const errorChecks = checks.filter((c) => c.status === "error").length;
+  const consensusDetails = buildConsensusDetailRows(evidence, consensusVerification);
+  const policyDetails = buildPolicyDetailRows(policyProof);
+  const simulationDetails = buildSimulationDetailRows(
+    { chainId: evidence.chainId, safeAddress: evidence.safeAddress, simulation: evidence.simulation },
+    simulationVerification,
+    getSimulationUnavailableReason(evidence),
+    nativeTokenSymbol,
+  );
+  const coreExecutionDetails = buildCoreExecutionSafetyFields(evidence);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>On-chain Verification</CardTitle>
+          <div ref={badgeWrapperRef} className="relative inline-flex">
+            <button
+              type="button"
+              onClick={() => setBadgeOpen((v) => !v)}
+              className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors hover:brightness-125 ${verificationStyle.badge}`}
+            >
+              <VerificationIcon className="h-3 w-3" />
+              {verification.label}
+            </button>
+            {badgeOpen && (
+              <div
+                ref={badgePopupRef}
+                style={badgePopupStyle}
+                className="absolute z-50 w-72 space-y-2 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg"
+              >
+                {verification.status === "check" ? (
+                  <div className="text-muted">
+                    This evidence includes a simulation from an RPC node, verified locally
+                    against finalized chain state using an embedded Helios lightclient.
+                    On-chain conditions may change before execution, the actual outcome
+                    could differ from what was simulated.
+                  </div>
+                ) : (
+                  checks.filter((c) => c.status !== "check").map((check) => {
+                    const s = SAFETY_STATUS_STYLE[check.status];
+                    const SIcon = s.icon;
+                    return (
+                      <div key={check.id}>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium text-fg">{check.label}</span>
+                          <span className={`inline-flex items-center gap-1 ${s.text}`}>
+                            <SIcon className="h-3 w-3" />
+                            {check.status === "warning" ? "Warning" : "Error"}
+                          </span>
+                        </div>
+                        <div className={`mt-0.5 ${s.text}`}>{check.detail}</div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
-            ))}
+            )}
+          </div>
+        </div>
+        <CardDescription>{verification.description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Top attention hint (collapsed view) */}
+        {!showDetails && topAttention && topAttention.reasonCode !== "missing-onchain-policy-proof" && (
+          <div className={`rounded-md border px-3 py-2 text-xs ${
+            verification.status === "error"
+              ? "border-red-500/30 bg-red-500/10 text-red-300"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+          }`}>
+            {topAttention.detail}
           </div>
         )}
 
-        {/* Collapsible structural checks */}
-        <button
-          onClick={() => setShowChecks((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
-        >
-          <ChevronDown className={`h-3 w-3 transition-transform ${showChecks ? "rotate-180" : ""}`} />
-          {showChecks ? "Hide" : "Show"} structural checks ({simulationVerification.checks.length})
-        </button>
+        {/* ── Safe Policy (always visible) ─────────────────────────── */}
+        <SafePolicySection evidence={evidence} />
 
-        {showChecks && (
-          <div className="mt-2 space-y-1.5">
-            {simulationVerification.checks.map((check) => (
-              <div key={check.id} className="flex items-center justify-between rounded-md border border-border/15 glass-subtle px-3 py-2">
-                <span className="text-sm font-medium">{check.label}</span>
-                <div className="flex items-center gap-2">
-                  {check.detail && (
-                    <span className="text-xs text-muted">{check.detail}</span>
-                  )}
-                  {check.passed ? (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
-                      <ShieldCheck className="h-3 w-3" />
-                      Pass
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-red-400">
-                      <AlertTriangle className="h-3 w-3" />
-                      Fail
-                    </span>
-                  )}
+        {/* ── Simulation effects (always visible) ──────────────────── */}
+        <div className="text-xs font-medium text-muted">Simulation</div>
+        {simulationPassed ? (
+          <>
+            {transferEvents.length > 0 && (
+              <div className="space-y-1.5">
+                {transferEvents.map((event, i) => {
+                  const colorClass =
+                    event.direction === "send"
+                      ? "text-red-400"
+                      : event.direction === "receive"
+                        ? "text-emerald-400"
+                        : "text-muted";
+                  const bgClass =
+                    event.direction === "send"
+                      ? "bg-red-500/5"
+                      : event.direction === "receive"
+                        ? "bg-emerald-500/5"
+                        : "bg-surface-2/30";
+                  const arrow =
+                    event.direction === "send" ? "↗" : event.direction === "receive" ? "↙" : "↔";
+                  const verb =
+                    event.direction === "send" ? "Send" : event.direction === "receive" ? "Receive" : "Transfer";
+                  const counterparty =
+                    event.direction === "send" ? event.to : event.direction === "receive" ? event.from : event.to;
+                  const preposition =
+                    event.direction === "send" ? "to" : event.direction === "receive" ? "from" : "at";
+
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
+                      <span className={`font-medium ${colorClass}`}>
+                        {arrow} {verb}
+                      </span>
+                      <span className="font-medium">{event.amountFormatted}</span>
+                      <span className="text-muted">{preposition}</span>
+                      <AddressDisplay address={counterparty} chainId={evidence.chainId} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {transferEvents.length === 0 && (
+              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                {evidence.simulation?.traceAvailable === false
+                  ? "No token movements detected. Event details may be limited, RPC does not support debug_traceCall."
+                  : "No token movements detected."}
+              </div>
+            )}
+            {/* Remaining approvals warning */}
+            {remainingApprovals.length > 0 && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                <div className="text-xs font-medium text-amber-200">
+                  Remaining token approvals
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  {remainingApprovals.map((approval, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
+                      <span className={approval.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
+                        {approval.amountFormatted}
+                      </span>
+                      <span className="text-amber-400/70">to</span>
+                      <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1.5 text-[11px] text-amber-400/70">
+                  These allowances remain active after execution. Verify that the approved spenders are trusted.
                 </div>
               </div>
-            ))}
-            {simulationVerification.errors.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {simulationVerification.errors.map((err, i) => (
-                  <div key={i} className="text-xs text-red-400">{err}</div>
+            )}
+          </>
+        ) : simulationAvailable && simulationVerification?.executionReverted ? (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Simulation ran but the transaction reverted. Token effects could not be determined.
+          </div>
+        ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            Simulation verification failed. Token effects cannot be trusted.
+          </div>
+        ) : (
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+            Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
+          </div>
+        )}
+
+        <button
+          onClick={onToggleDetails}
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
+        >
+          <ChevronRight className={`h-3 w-3 transition-transform ${showDetails ? "rotate-90" : ""}`} />
+          {showDetails ? "Hide details" : "Show details"}
+        </button>
+
+        {/* ── Expandable details ───────────────────────────────────── */}
+        {showDetails && (
+          <div className="space-y-3 border-t border-border/10 pt-3">
+            {/* ── Chain state + consensus details ──────────────────── */}
+            {(() => {
+              const check = checks.find((c) => c.id === "chain-state-finalized");
+              if (!check) return null;
+              const style = SAFETY_STATUS_STYLE[check.status];
+              const Icon = style.icon;
+              return (
+                <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{check.label}</span>
+                    <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+                      <Icon className="h-3 w-3" />
+                      {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
+                    </span>
+                  </div>
+                  <div className={`mt-1 text-xs ${style.text}`}>{check.detail}</div>
+                  {check.status !== "check" && check.reasonCode && (
+                    <div className="mt-1 text-[11px] text-muted">
+                      Reason code: <code>{check.reasonCode}</code>
+                    </div>
+                  )}
+                  <div className="mt-2 text-[11px] text-muted">{simulationFreshness}</div>
+                  {consensusDetails.length > 0 && (
+                    <div className="mt-2 space-y-1.5 border-t border-border/10 pt-2">
+                      {consensusDetails.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-muted">{item.label}</span>
+                          <span className={item.monospace ? "max-w-[70%] break-all font-mono text-[11px]" : ""}>
+                            {item.value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Simulation outcome + simulation details ──────────── */}
+            {(() => {
+              const check = checks.find((c) => c.id === "simulation-outcome");
+              if (!check) return null;
+              const style = SAFETY_STATUS_STYLE[check.status];
+              const Icon = style.icon;
+              return (
+                <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{check.label}</span>
+                    <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+                      <Icon className="h-3 w-3" />
+                      {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
+                    </span>
+                  </div>
+                  <div className={`mt-1 text-xs ${style.text}`}>{check.detail}</div>
+                  {check.status !== "check" && check.reasonCode && (
+                    <div className="mt-1 text-[11px] text-muted">
+                      Reason code: <code>{check.reasonCode}</code>
+                    </div>
+                  )}
+                  {simulationDetails.length > 0 && (
+                    <div className="mt-2 space-y-1.5 border-t border-border/10 pt-2">
+                      {simulationDetails.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-muted">{item.label}</span>
+                          <span className="max-w-[70%] text-right">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* ── Policy + policy details ──────────────────────────── */}
+            {(() => {
+              const check = checks.find((c) => c.id === "policy-authentic");
+              if (!check) return null;
+              const style = SAFETY_STATUS_STYLE[check.status];
+              const Icon = style.icon;
+              return (
+                <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{check.label}</span>
+                    <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+                      <Icon className="h-3 w-3" />
+                      {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
+                    </span>
+                  </div>
+                  <div className={`mt-1 text-xs ${style.text}`}>{check.detail}</div>
+                  {check.status !== "check" && check.reasonCode && (
+                    <div className="mt-1 text-[11px] text-muted">
+                      Reason code: <code>{check.reasonCode}</code>
+                    </div>
+                  )}
+                  {policyDetails.length > 0 && (
+                    <div className="mt-2 space-y-1.5 border-t border-border/10 pt-2">
+                      {policyDetails.map((item) => (
+                        <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="text-muted">{item.label}</span>
+                          <span className="max-w-[70%] text-right">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Core execution details */}
+            <div className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+              <div className="text-xs font-medium text-muted">Core execution details</div>
+              <div className="mt-2 space-y-1.5">
+                {coreExecutionDetails.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                    <span className="text-muted">{item.label}</span>
+                    <span
+                      className={
+                        item.monospace
+                          ? "max-w-[70%] break-all font-mono text-[11px] text-right"
+                          : "max-w-[70%] text-right"
+                      }
+                    >
+                      {item.value}
+                    </span>
+                  </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Check summary & coverage */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                Checks: {passedChecks} passed, {warningChecks} warning
+                {warningChecks === 1 ? "" : "s"}, {errorChecks} error{errorChecks === 1 ? "" : "s"}.
+              </div>
+              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                Coverage:{" "}
+                {networkSupport ? (
+                  <span
+                    className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
+                      networkSupport.isFullySupported
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                    }`}
+                  >
+                    {networkSupport.badgeText}
+                  </span>
+                ) : (
+                  "Unknown"
+                )}
+              </div>
+            </div>
+
+            {/* Network support */}
+            {networkSupport && networkSupport.helperText && (
+              <div className="flex flex-wrap items-start gap-2 text-xs">
+                <span className="text-muted">Network support:</span>
+                <span
+                  className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
+                    networkSupport.isFullySupported
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  {networkSupport.badgeText}
+                </span>
+                <span className="basis-full text-amber-300 sm:basis-auto">
+                  {networkSupport.helperText}
+                </span>
               </div>
             )}
           </div>
         )}
       </CardContent>
     </Card>
-  );
-}
-
-// ── TokenEventRow ─────────────────────────────────────────────────────
-
-function TokenEventRow({ event, chainId }: { event: DecodedEvent; chainId: number }) {
-  const evStyle = EVENT_ICON[event.kind] ?? EVENT_ICON.transfer;
-  const dirStyle = DIRECTION_STYLE[event.direction] ?? DIRECTION_STYLE.internal;
-  const DirIcon = dirStyle.Icon;
-
-  return (
-    <div className={`flex items-center gap-3 rounded-md border ${dirStyle.border} ${dirStyle.bg} px-3 py-2.5`}>
-      {/* Direction icon */}
-      <div className={`shrink-0 rounded-full p-1.5 ${
-        event.direction === "send" ? "bg-red-500/15" :
-        event.direction === "receive" ? "bg-emerald-500/15" :
-        "bg-surface-2/60"
-      }`}>
-        <DirIcon className={`h-4 w-4 ${
-          event.direction === "send" ? "text-red-400" :
-          event.direction === "receive" ? "text-emerald-400" :
-          "text-muted"
-        }`} />
-      </div>
-
-      {/* Amount + token */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-semibold ${
-            event.direction === "send" ? "text-red-400" :
-            event.direction === "receive" ? "text-emerald-400" :
-            "text-fg"
-          }`}>
-            {event.direction === "send" ? "−" : event.direction === "receive" ? "+" : ""}
-            {event.amountFormatted}
-          </span>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${evStyle.color} bg-surface-2/50`}>
-            {evStyle.label}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-          {event.kind !== "approval" ? (
-            <>
-              <span>From</span>
-              <AddressDisplay address={event.from} chainId={chainId} className="text-[10px]" />
-              <span>→</span>
-              <AddressDisplay address={event.to} chainId={chainId} className="text-[10px]" />
-            </>
-          ) : (
-            <>
-              <span>Spender</span>
-              <AddressDisplay address={event.to} chainId={chainId} className="text-[10px]" />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Token contract */}
-      {!event.tokenSymbol && (
-        <AddressDisplay address={event.token} chainId={chainId} className="text-[10px]" />
-      )}
-    </div>
   );
 }

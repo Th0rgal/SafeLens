@@ -17,7 +17,7 @@
  */
 
 import type { Interpretation, Interpreter } from "./types";
-import { interpretERC20Transfer } from "./erc20-transfer";
+import { interpretERC20Transfer } from "./token-transfer";
 import { interpretCowSwapTwap } from "./cowswap-twap";
 import { interpretCowSwapPreSign } from "./cowswap-presign";
 import { interpretSafePolicy } from "./safe-policy";
