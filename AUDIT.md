@@ -163,11 +163,16 @@ Evidence packages may contain sensitive pre-execution transaction details. Airga
 
 | Issue | Severity | Location |
 |---|---|---|
-| `fail_result()` drops accumulated checks in non-beacon envelope verifier | Medium | `consensus.rs:1258` |
 | `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:368` |
-| Future-dated envelope timestamps bypass staleness check (clamped to 0) | Low | `consensus.rs:885` |
-| Unnormalized state root comparison may cause false rejection in envelope verifier | Low | `consensus.rs` |
 | No Rust toolchain in CI for desktop build verification | Process | CI config |
+
+### Resolved In Current Branch
+
+| Issue | Resolution |
+|---|---|
+| `fail_result()` dropped accumulated checks in non-beacon envelope verifier | Fixed by returning `fail_result_with_context(...)` for post-envelope validation failures (invalid expected policy root, missing/invalid `packagePackagedAt`). Existing checks and verified envelope context are now preserved. |
+| Future-dated envelope timestamp freshness ambiguity | Explicitly rejected when skew exceeds `NON_BEACON_MAX_FUTURE_SKEW_SECS`; covered by regression tests in `consensus.rs`. |
+| State-root normalization mismatch risk in envelope verification | Roots are normalized through `parse_b256` + canonical hex formatting before comparison. |
 
 ## External Dependencies
 

@@ -805,12 +805,15 @@ fn verify_execution_envelope(
     let expected_state_root = match parse_b256(&input.expected_state_root) {
         Ok(root) => format!("{:#x}", root),
         Err(error) => {
-            return fail_result(
+            return fail_result_with_context(
                 ERR_INVALID_EXPECTED_STATE_ROOT,
                 format!(
                     "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
                     error
                 ),
+                checks,
+                envelope_state_root,
+                envelope_block_number,
             )
         }
     };
@@ -845,15 +848,28 @@ fn verify_execution_envelope(
     let packaged_at_raw =
         match input.package_packaged_at.as_deref() {
             Some(packaged_at) => packaged_at,
-            None => return fail_result(
-                ERR_INVALID_PROOF_PAYLOAD,
-                "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
-                    .into(),
-            ),
+            None => {
+                return fail_result_with_context(
+                    ERR_INVALID_PROOF_PAYLOAD,
+                    "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
+                        .into(),
+                    checks,
+                    envelope_state_root,
+                    envelope_block_number,
+                )
+            }
         };
     let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
         Ok(timestamp) => timestamp,
-        Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+        Err(error) => {
+            return fail_result_with_context(
+                ERR_INVALID_PROOF_PAYLOAD,
+                error,
+                checks,
+                envelope_state_root,
+                envelope_block_number,
+            )
+        }
     };
 
     let raw_age = packaged_at - envelope_block_timestamp;
@@ -1903,6 +1919,46 @@ mod tests {
             Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
         );
         assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn preserves_non_beacon_checks_when_expected_state_root_is_invalid() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root: "0x1234".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_EXPECTED_STATE_ROOT)
+        );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-block-number" && check.passed));
     }
 
     #[test]
