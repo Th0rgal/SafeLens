@@ -383,9 +383,9 @@ export function buildSafetyAttentionItems(
         id: `check-${check.id}`,
         detail: `${check.label}: ${detailText}`,
         reasonCode: check.reasonCode,
-        dedupeKey: `${check.label.trim().toLowerCase()}:${detailText
-          .trim()
-          .toLowerCase()}`,
+        // Include check id to avoid merging conceptually-different checks
+        // that happen to share the same display text.
+        dedupeKey: `${check.id}:${detailText.trim().toLowerCase()}`,
       };
     });
 
