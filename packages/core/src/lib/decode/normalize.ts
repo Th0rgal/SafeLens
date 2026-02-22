@@ -9,7 +9,7 @@ export function normalizeCallSteps(
   dataDecoded: unknown,
   txTo: string,
   txValue: string,
-  txOperation: number,
+  txOperation: 0 | 1,
   txData: string | null
 ): CallStep[] {
   if (!dataDecoded || typeof dataDecoded !== "object") return [];
@@ -45,7 +45,7 @@ export function normalizeCallSteps(
       index: i,
       to: tx.to ?? txTo,
       value: tx.value ?? "0",
-      operation: tx.operation ?? 0,
+      operation: (tx.operation ?? 0) as 0 | 1,
       method: tx.dataDecoded?.method ?? null,
       params: passParams(
         tx.dataDecoded?.parameters as DecodedParam[] | undefined

@@ -10,7 +10,7 @@ export interface DecodedCall {
 }
 
 export interface DecodedInnerTransaction {
-  operation: number;
+  operation: 0 | 1;
   to: string;
   value: string;
   data: string;
@@ -21,7 +21,7 @@ export interface CallStep {
   index: number;
   to: string;
   value: string;
-  operation: number;
+  operation: 0 | 1;
   method: string | null;
   params: DecodedParam[];
   rawData: string;
