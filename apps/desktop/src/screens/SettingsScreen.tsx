@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, CheckCircle2, AlertTriangle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,10 +8,153 @@ import {
   settingsConfigSchema,
   type SettingsConfig,
   type ChainConfig,
+  getNetworkCapability,
 } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+
+type ChainSupportStatus = "full" | "partial" | "none";
+
+function getChainSupportStatus(chainIdRaw: string): ChainSupportStatus {
+  const parsed = Number.parseInt(chainIdRaw, 10);
+  if (!Number.isFinite(parsed)) return "none";
+  const capability = getNetworkCapability(parsed);
+  if (capability?.consensusMode === "beacon") return "full";
+  if (capability?.consensusMode === "opstack" || capability?.consensusMode === "linea") return "partial";
+  return "none";
+}
+
+function ChainSupportInfoButton({ support }: { support: ChainSupportStatus }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  const iconClass =
+    support === "full"
+      ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20"
+      : support === "partial"
+        ? "border-amber-500/30 bg-amber-500/15 text-amber-300 hover:bg-amber-500/20"
+        : "border-border/20 bg-surface-2/40 text-muted hover:bg-surface-2/60";
+
+  const title =
+    support === "full"
+      ? "Full Helios Support"
+      : support === "partial"
+        ? "Partial Consensus Support"
+        : "No Helios Support";
+
+  const description =
+    support === "full"
+      ? "This chain has built-in support for on-chain transaction simulation and Safe policy verification, fully verified locally."
+      : support === "partial"
+        ? "This chain has built-in partial support. Simulation and policy checks run locally, but consensus envelope data can be spoofed by a malicious RPC, so it is not equivalent to full light-client verification."
+        : "No consensus verification path is hardcoded for this chain, so Helios-backed on-chain consensus verification is unavailable.";
+
+  return (
+    <div ref={wrapperRef} className="relative mt-1 shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${iconClass}`}
+        title={title}
+      >
+        {support === "full" ? (
+          <CheckCircle2 className="h-3.5 w-3.5" />
+        ) : support === "partial" ? (
+          <AlertTriangle className="h-3.5 w-3.5" />
+        ) : (
+          <Circle className="h-3.5 w-3.5" />
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-9 top-0 z-50 w-80 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg">
+          <div className="font-medium text-fg">{title}</div>
+          <div className="mt-1 text-muted">{description}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RemoveChainButton({
+  locked,
+  onRemove,
+}: {
+  locked: boolean;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative h-9 w-9 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          if (locked) setOpen((v) => !v);
+          else onRemove();
+        }}
+        className={`h-9 w-9 ${
+          locked
+            ? "text-muted/40 hover:bg-surface-2/40 hover:text-muted/60"
+            : ""
+        }`}
+        title={locked ? "Built-in Helios chain (cannot remove)" : "Remove chain"}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+      {open && locked && (
+        <div className="absolute right-10 top-0 z-50 w-80 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg">
+          <div className="font-medium text-fg">Cannot Remove Built-in Chain</div>
+          <div className="mt-1 text-muted">
+            This chain has built-in Helios support in SafeLens, so it cannot be removed from settings.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
@@ -149,31 +292,46 @@ export default function SettingsScreen() {
           <CardContent className="space-y-2">
             {chainEntries.map(([chainId, chain], index) => (
               <div key={index} className="flex items-start gap-2">
-                <div className="grid flex-1 grid-cols-3 gap-2">
-                  <Input
-                    value={chainId}
-                    onChange={(e) => renameChain(index, e.target.value)}
-                    className="text-xs"
-                  />
-                  <Input
-                    value={chain.name}
-                    onChange={(e) => updateChain(index, { name: e.target.value })}
-                    placeholder="Name"
-                    className="text-xs"
-                  />
-                  <Input
-                    value={chain.nativeTokenSymbol ?? ""}
-                    onChange={(e) => updateChain(index, { nativeTokenSymbol: e.target.value || undefined })}
-                    placeholder="Native token symbol"
-                    className="text-xs"
-                  />
+                {(() => {
+                  const support = getChainSupportStatus(chainId);
+                  const removeLocked = support === "full";
+                  return (
+                    <>
+                      <ChainSupportInfoButton support={support} />
+
+                      <div className="grid flex-1 grid-cols-3 gap-2">
+                        <Input
+                          value={chainId}
+                          onChange={(e) => renameChain(index, e.target.value)}
+                          className="text-xs"
+                        />
+                        <Input
+                          value={chain.name}
+                          onChange={(e) => updateChain(index, { name: e.target.value })}
+                          placeholder="Name"
+                          className="text-xs"
+                        />
+                        <Input
+                          value={chain.nativeTokenSymbol ?? ""}
+                          onChange={(e) => updateChain(index, { nativeTokenSymbol: e.target.value || undefined })}
+                          placeholder="Native token symbol"
+                          className="text-xs"
+                        />
+                      </div>
+
+                      <RemoveChainButton
+                        locked={removeLocked}
+                        onRemove={() => removeChain(index)}
+                      />
+                    </>
+                  );
+                })()}
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
             ))}
             <div className="flex items-start gap-2 border-t border-border/15 pt-2">
+              <div className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/20 bg-surface-2/40 text-muted">
+                <Circle className="h-3.5 w-3.5" />
+              </div>
               <div className="grid flex-1 grid-cols-3 gap-2">
                 <Input value={newChainId} onChange={(e) => setNewChainId(e.target.value)} placeholder="Chain ID" className="text-xs" />
                 <Input value={newChainName} onChange={(e) => setNewChainName(e.target.value)} placeholder="Name" className="text-xs" />

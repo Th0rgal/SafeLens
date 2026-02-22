@@ -1,5 +1,5 @@
 /**
- * Fixture: Safe policy change — changeThreshold(2)
+ * Fixture: Safe policy change: changeThreshold(2)
  *
  * A real transaction from Gnosis Chain where a 1-of-1 Safe
  * changes its signing threshold to 2.

@@ -11,7 +11,7 @@ export type SignatureCheckResult =
  *
  * Safe signatures use one of two schemes:
  *   - v ∈ {27, 28}: raw EIP-712 hash signed directly (legacy / typical)
- *   - v ∈ {31, 32}: eth_sign style — the hash is wrapped with "\x19Ethereum Signed Message:\n32"
+ *   - v ∈ {31, 32}: eth_sign style, the hash is wrapped with "\x19Ethereum Signed Message:\n32"
  *     before recovery, and v is adjusted by subtracting 4
  *
  * Contract signatures (v = 0) and pre-approved hashes (v = 1) are not verified here.
@@ -48,7 +48,7 @@ export async function verifySignature(
         signature: { r, s, v: adjustedV },
       });
     } else if (v === 0 || v === 1) {
-      // v=0: contract signature, v=1: pre-approved hash — can't verify locally
+      // v=0: contract signature, v=1: pre-approved hash, can't verify locally
       return { status: "unsupported", reason: v === 0 ? "Contract signature" : "Pre-approved hash" };
     } else {
       return { status: "unsupported", reason: `Unknown signature type (v=${v})` };
@@ -56,7 +56,13 @@ export async function verifySignature(
 
     const valid = recoveredSigner.toLowerCase() === owner.toLowerCase();
     return { status: valid ? "valid" : "invalid", recoveredSigner };
-  } catch {
-    return { status: "unsupported", reason: "Recovery failed" };
+  } catch (err) {
+    // ECDSA recovery can fail for malformed signatures (invalid curve points,
+    // out-of-range s values, etc). This is not an internal error — it means the
+    // signature data is cryptographically invalid. We surface the underlying
+    // reason so auditors/users can distinguish "can't verify this type" from
+    // "verification threw an error".
+    const detail = err instanceof Error ? err.message : "Unknown recovery error";
+    return { status: "unsupported", reason: `Recovery failed: ${detail}` };
   }
 }

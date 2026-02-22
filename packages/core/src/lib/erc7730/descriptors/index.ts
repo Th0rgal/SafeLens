@@ -7,7 +7,7 @@
  * This file is auto-generated. Do not edit manually.
  */
 
-// 1inch — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/1inch
+// 1inch  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/1inch
 import oneInchCalldataAggregationRouterV3 from "./1inch/calldata-AggregationRouterV3.json";
 import oneInchCalldataAggregationRouterV4Eth from "./1inch/calldata-AggregationRouterV4-eth.json";
 import oneInchCalldataAggregationRouterV4 from "./1inch/calldata-AggregationRouterV4.json";
@@ -18,21 +18,21 @@ import oneInchCalldataNativeOrderFactory from "./1inch/calldata-NativeOrderFacto
 import oneInchEip7121inchLimitOrder from "./1inch/eip712-1inch-limit-order.json";
 import oneInchEip712AggregationRouterV6 from "./1inch/eip712-AggregationRouterV6.json";
 
-// aave — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/aave
+// aave  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/aave
 import aaveCalldataWrappedTokenGatewayV3 from "./aave/calldata-WrappedTokenGatewayV3.json";
 import aaveCalldataLpv2 from "./aave/calldata-lpv2.json";
 import aaveCalldataLpv3 from "./aave/calldata-lpv3.json";
 
-// circle — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/circle
+// circle  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/circle
 import circleEip712TransferWithAuthorization from "./circle/eip712-TransferWithAuthorization.json";
 
-// consensus-specs — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/consensus-specs
+// consensus-specs  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/consensus-specs
 import consensusSpecsCalldataDepositContract from "./consensus-specs/calldata-DepositContract.json";
 
-// ethena — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/ethena
+// ethena  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/ethena
 import ethenaCalldataEthena from "./ethena/calldata-ethena.json";
 
-// kiln — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/kiln
+// kiln  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/kiln
 import kilnCalldataVaultEURCMorphoGauntletCore from "./kiln/calldata-Vault-EURC-Morpho-Gauntlet-Core.json";
 import kilnCalldataVaultRLUSDEulerYield from "./kiln/calldata-Vault-RLUSD-Euler-Yield.json";
 import kilnCalldataVaultUSDCAAVEArbitrum from "./kiln/calldata-Vault-USDC-AAVE-Arbitrum.json";
@@ -65,20 +65,20 @@ import kilnCalldataKilnBatchDepositV2 from "./kiln/calldata-kiln-batch-deposit-v
 import kilnCalldataKilnBatchExit from "./kiln/calldata-kiln-batch-exit.json";
 import kilnCalldataKilnFeeSplitterFactory from "./kiln/calldata-kiln-fee-splitter-factory.json";
 
-// lens — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lens
+// lens  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lens
 import lensEip712LensLenshub from "./lens/eip712-lens-lenshub.json";
 import lensEip712LensTokenHandleRegistry from "./lens/eip712-lens-token-handle-registry.json";
 
-// lido — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lido
+// lido  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lido
 import lidoCalldataWithdrawalQueueERC721 from "./lido/calldata-WithdrawalQueueERC721.json";
 import lidoCalldataStETH from "./lido/calldata-stETH.json";
 import lidoCalldataWstETHReferralStaker from "./lido/calldata-wstETH-referral-staker.json";
 import lidoCalldataWstETH from "./lido/calldata-wstETH.json";
 
-// lifi — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lifi
+// lifi  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/lifi
 import lifiCalldataLIFIDiamond from "./lifi/calldata-LIFIDiamond.json";
 
-// morpho — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/morpho
+// morpho  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/morpho
 import morphoCalldata9summits9SETHc from "./morpho/calldata-9summits-9SETHc.json";
 import morphoCalldata9summits9SETHcore from "./morpho/calldata-9summits-9SETHcore.json";
 import morphoCalldata9summits9SUSDC11Core from "./morpho/calldata-9summits-9SUSDC11Core.json";
@@ -186,16 +186,16 @@ import morphoCalldataSteakhouseFinancialSteakUSDT from "./morpho/calldata-steakh
 import morphoCalldataSteakhouseFinancialSteakUSDTlite from "./morpho/calldata-steakhouse_financial-steakUSDTlite.json";
 import morphoCalldataSteakhouseFinancialSteakWBTC from "./morpho/calldata-steakhouse_financial-steakWBTC.json";
 
-// makerdao — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/makerdao
+// makerdao  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/makerdao
 import makerdaoEip712PermitDAI from "./makerdao/eip712-permit-DAI.json";
 
-// opensea — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/opensea
+// opensea  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/opensea
 import openseaEip712Opensea from "./opensea/eip712-opensea.json";
 
-// swell — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/swell
+// swell  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/swell
 import swellCalldataSwell from "./swell/calldata-swell.json";
 
-// uniswap — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/uniswap
+// uniswap  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/uniswap
 import uniswapCalldataUniswapV3Router02 from "./uniswap/calldata-UniswapV3Router02.json";
 import uniswapEip712UniswapXDutchOrder from "./uniswap/eip712-UniswapX-DutchOrder.json";
 import uniswapEip712UniswapXExclusiveDutchOrder from "./uniswap/eip712-UniswapX-ExclusiveDutchOrder.json";
@@ -203,13 +203,13 @@ import uniswapEip712UniswapXLimitOrder from "./uniswap/eip712-UniswapX-LimitOrde
 import uniswapEip712UniswapV2DutchOrder from "./uniswap/eip712-uniswap-V2DutchOrder.json";
 import uniswapEip712UniswapPermit2 from "./uniswap/eip712-uniswap-permit2.json";
 
-// tether — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/tether
+// tether  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/tether
 import tetherCalldataUsdt from "./tether/calldata-usdt.json";
 
-// weth — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/weth
+// weth  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/weth
 import wethCalldataWeth from "./weth/calldata-weth.json";
 
-// paraswap — https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/paraswap
+// paraswap  - https://github.com/LedgerHQ/clear-signing-erc7730-registry/tree/eeaceef158f27730157d97e649d4b5671f293426/registry/paraswap
 import paraswapCalldataAugustusSwapperV5 from "./paraswap/calldata-AugustusSwapper-v5.json";
 import paraswapCalldataAugustusSwapperV62 from "./paraswap/calldata-AugustusSwapper-v6.2.json";
 import paraswapEip712VeloraDeltaV2 from "./paraswap/eip712-Velora-DeltaV2.json";

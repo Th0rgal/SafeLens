@@ -114,10 +114,22 @@ function ExpandableSignature({ sig }: { sig: string }) {
 
 const BUILT_IN_INTERPRETERS = [
   {
+    id: "token-transfer",
+    protocol: "ERC-20 / Native",
+    action: "Transfer",
+    description: "Decodes ERC-20 transfers, approvals, transferFrom calls, and native token transfers (ETH, xDAI, etc.) with human-readable amounts.",
+  },
+  {
     id: "cowswap-twap",
     protocol: "CoW Swap",
     action: "TWAP Order",
     description: "Decodes Time-Weighted Average Price orders created via CoW Protocol's Composable Order Framework.",
+  },
+  {
+    id: "cowswap-presign",
+    protocol: "CoW Protocol",
+    action: "Pre-Sign Order",
+    description: "Decodes on-chain pre-signatures for CoW Protocol swap orders via the Settlement contract.",
   },
   {
     id: "safe-policy",

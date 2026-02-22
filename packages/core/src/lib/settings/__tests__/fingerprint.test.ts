@@ -20,13 +20,13 @@ describe("computeConfigFingerprint", () => {
     expect(hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("is deterministic — same config always produces same hash", async () => {
+  it("is deterministic: same config always produces same hash", async () => {
     const a = await computeConfigFingerprint(baseConfig);
     const b = await computeConfigFingerprint(baseConfig);
     expect(a).toBe(b);
   });
 
-  it("is key-order independent — different key order produces same hash", async () => {
+  it("is key-order independent: different key order produces same hash", async () => {
     const config1: SettingsConfig = {
       version: "1.0",
       chains: { "1": { name: "Eth" } },

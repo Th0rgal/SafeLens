@@ -1,0 +1,2415 @@
+//! Consensus proof verification using Helios consensus-core.
+//!
+//! Verifies BLS sync committee signatures over beacon block headers
+//! to authenticate the EVM state root. This is a pure computation,
+//! no network access needed. All data comes from the evidence package.
+
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use alloy::primitives::{b256, fixed_bytes, B256};
+use helios_consensus_core::{
+    apply_bootstrap, apply_finality_update, apply_update,
+    consensus_spec::{ConsensusSpec, MainnetConsensusSpec},
+    types::{Bootstrap, FinalityUpdate, Fork, Forks, LightClientStore, Update},
+    verify_bootstrap, verify_finality_update, verify_update,
+};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
+use typenum::{U1, U128, U131072, U16, U2, U2048, U4096, U512, U64, U8, U8192};
+
+/// Input from the frontend: the consensus proof section of an evidence package.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsensusProofInput {
+    pub checkpoint: Option<String>,
+    pub bootstrap: Option<String>,
+    pub updates: Option<Vec<String>>,
+    pub finality_update: Option<String>,
+    #[serde(default = "default_consensus_mode")]
+    pub consensus_mode: String,
+    pub network: String,
+    pub proof_payload: Option<String>,
+    #[allow(dead_code)]
+    pub state_root: String,
+    pub expected_state_root: String,
+    #[allow(dead_code)]
+    pub block_number: u64,
+    pub package_chain_id: Option<u64>,
+    pub package_packaged_at: Option<String>,
+}
+
+fn default_consensus_mode() -> String {
+    "beacon".to_string()
+}
+
+/// Result returned to the frontend after verification.
+#[derive(Debug, Serialize)]
+pub struct ConsensusVerificationResult {
+    /// Whether the consensus proof is valid.
+    pub valid: bool,
+    /// The verified EVM state root (from the finalized execution payload).
+    pub verified_state_root: Option<String>,
+    /// The block number from the finalized execution payload.
+    pub verified_block_number: Option<u64>,
+    /// Whether the verified state root matches the claimed one.
+    pub state_root_matches: bool,
+    /// Number of sync committee participants (out of 512).
+    pub sync_committee_participants: u64,
+    /// Human-readable error if verification failed.
+    pub error: Option<String>,
+    /// Machine-readable error code for deterministic trust-boundary handling.
+    pub error_code: Option<String>,
+    /// Individual check results.
+    pub checks: Vec<ConsensusCheck>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ConsensusCheck {
+    pub id: String,
+    pub label: String,
+    pub passed: bool,
+    pub detail: Option<String>,
+}
+
+/// Network configuration for beacon chain consensus.
+struct NetworkConfig {
+    genesis_root: B256,
+    genesis_time: u64,
+    seconds_per_slot: u64,
+    forks: Forks,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ConsensusNetwork {
+    Mainnet,
+    Sepolia,
+    Holesky,
+    Hoodi,
+    Gnosis,
+}
+
+fn mainnet_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("4b363db94e286120d76eb905340fdd4e54bfe9f06bf33ff6cf5ad27f511bfe95"),
+        genesis_time: 1606824023,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("00000000"),
+            },
+            altair: Fork {
+                epoch: 74240,
+                fork_version: fixed_bytes!("01000000"),
+            },
+            bellatrix: Fork {
+                epoch: 144896,
+                fork_version: fixed_bytes!("02000000"),
+            },
+            capella: Fork {
+                epoch: 194048,
+                fork_version: fixed_bytes!("03000000"),
+            },
+            deneb: Fork {
+                epoch: 269568,
+                fork_version: fixed_bytes!("04000000"),
+            },
+            electra: Fork {
+                epoch: 364032,
+                fork_version: fixed_bytes!("05000000"),
+            },
+            fulu: Fork {
+                epoch: 411392,
+                fork_version: fixed_bytes!("06000000"),
+            },
+        },
+    }
+}
+
+fn sepolia_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("d8ea171f3c94aea21ebc42a1ed61052acf3f9209c00e4efbaaddac09ed9b8078"),
+        genesis_time: 1655733600,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("90000069"),
+            },
+            altair: Fork {
+                epoch: 50,
+                fork_version: fixed_bytes!("90000070"),
+            },
+            bellatrix: Fork {
+                epoch: 100,
+                fork_version: fixed_bytes!("90000071"),
+            },
+            capella: Fork {
+                epoch: 56832,
+                fork_version: fixed_bytes!("90000072"),
+            },
+            deneb: Fork {
+                epoch: 132608,
+                fork_version: fixed_bytes!("90000073"),
+            },
+            electra: Fork {
+                epoch: 222464,
+                fork_version: fixed_bytes!("90000074"),
+            },
+            fulu: Fork {
+                epoch: 272640,
+                fork_version: fixed_bytes!("90000075"),
+            },
+        },
+    }
+}
+
+fn gnosis_config() -> NetworkConfig {
+    // Source: https://github.com/gnosischain/configs/blob/main/mainnet/config.yaml
+    NetworkConfig {
+        genesis_root: b256!("f5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"),
+        genesis_time: 1638993340,
+        seconds_per_slot: 5,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("00000064"),
+            },
+            altair: Fork {
+                epoch: 512,
+                fork_version: fixed_bytes!("01000064"),
+            },
+            bellatrix: Fork {
+                epoch: 385536,
+                fork_version: fixed_bytes!("02000064"),
+            },
+            capella: Fork {
+                epoch: 648704,
+                fork_version: fixed_bytes!("03000064"),
+            },
+            deneb: Fork {
+                epoch: 889856,
+                fork_version: fixed_bytes!("04000064"),
+            },
+            electra: Fork {
+                epoch: 1337856,
+                fork_version: fixed_bytes!("05000064"),
+            },
+            fulu: Fork {
+                epoch: u64::MAX,
+                fork_version: fixed_bytes!("06000064"),
+            },
+        },
+    }
+}
+
+fn holesky_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"),
+        genesis_time: 1695902400,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("01017000"),
+            },
+            altair: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("02017000"),
+            },
+            bellatrix: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("03017000"),
+            },
+            capella: Fork {
+                epoch: 256,
+                fork_version: fixed_bytes!("04017000"),
+            },
+            deneb: Fork {
+                epoch: 29696,
+                fork_version: fixed_bytes!("05017000"),
+            },
+            electra: Fork {
+                epoch: 115968,
+                fork_version: fixed_bytes!("06017000"),
+            },
+            fulu: Fork {
+                epoch: 165120,
+                fork_version: fixed_bytes!("07017000"),
+            },
+        },
+    }
+}
+
+fn hoodi_config() -> NetworkConfig {
+    NetworkConfig {
+        genesis_root: b256!("212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"),
+        genesis_time: 1742213400,
+        seconds_per_slot: 12,
+        forks: Forks {
+            genesis: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("10000910"),
+            },
+            altair: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("20000910"),
+            },
+            bellatrix: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("30000910"),
+            },
+            capella: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("40000910"),
+            },
+            deneb: Fork {
+                epoch: 0,
+                fork_version: fixed_bytes!("50000910"),
+            },
+            electra: Fork {
+                epoch: 2048,
+                fork_version: fixed_bytes!("60000910"),
+            },
+            fulu: Fork {
+                epoch: 50688,
+                fork_version: fixed_bytes!("70000910"),
+            },
+        },
+    }
+}
+
+fn parse_network(network: &str) -> Result<ConsensusNetwork, String> {
+    match network {
+        "mainnet" => Ok(ConsensusNetwork::Mainnet),
+        "sepolia" => Ok(ConsensusNetwork::Sepolia),
+        "holesky" => Ok(ConsensusNetwork::Holesky),
+        "hoodi" => Ok(ConsensusNetwork::Hoodi),
+        "gnosis" | "xdai" => Ok(ConsensusNetwork::Gnosis),
+        _ => Err(format!(
+            "Unsupported network for consensus verification: {}. Only mainnet, sepolia, holesky, hoodi, and gnosis are currently supported.",
+            network
+        )),
+    }
+}
+
+const ERR_UNSUPPORTED_NETWORK: &str = "unsupported-network";
+const ERR_ENVELOPE_NETWORK_MISMATCH: &str = "envelope-network-mismatch";
+const ERR_UNSUPPORTED_CONSENSUS_MODE: &str = "unsupported-consensus-mode";
+const ERR_INVALID_CHECKPOINT: &str = "invalid-checkpoint-hash";
+const ERR_INVALID_BOOTSTRAP: &str = "invalid-bootstrap-json";
+const ERR_BOOTSTRAP_VERIFICATION_FAILED: &str = "bootstrap-verification-failed";
+const ERR_INVALID_UPDATE: &str = "invalid-update-json";
+const ERR_UPDATE_VERIFICATION_FAILED: &str = "update-verification-failed";
+const ERR_INVALID_FINALITY_UPDATE: &str = "invalid-finality-update-json";
+const ERR_FINALITY_VERIFICATION_FAILED: &str = "finality-verification-failed";
+const ERR_MISSING_EXECUTION_PAYLOAD: &str = "missing-execution-payload";
+const ERR_INVALID_EXPECTED_STATE_ROOT: &str = "invalid-expected-state-root";
+const ERR_STATE_ROOT_MISMATCH: &str = "state-root-mismatch";
+const ERR_ENVELOPE_STATE_ROOT_MISMATCH: &str = "envelope-state-root-mismatch";
+const ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH: &str = "envelope-block-number-mismatch";
+const ERR_INVALID_PROOF_PAYLOAD: &str = "invalid-proof-payload";
+const ERR_STALE_CONSENSUS_ENVELOPE: &str = "stale-consensus-envelope";
+const ERR_NON_FINALIZED_CONSENSUS_ENVELOPE: &str = "non-finalized-consensus-envelope";
+const NON_BEACON_MAX_BLOCK_AGE_SECS: i64 = 24 * 60 * 60;
+const NON_BEACON_MAX_FUTURE_SKEW_SECS: i64 = 60;
+
+#[derive(Clone, Copy)]
+enum ExecutionConsensusMode {
+    OpStack,
+    Linea,
+}
+
+impl ExecutionConsensusMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::OpStack => "opstack",
+            Self::Linea => "linea",
+        }
+    }
+
+    fn display_name(self) -> &'static str {
+        match self {
+            Self::OpStack => "OP Stack",
+            Self::Linea => "Linea",
+        }
+    }
+
+    fn supports_chain_id(self, chain_id: u64) -> bool {
+        match self {
+            // Initial OP Stack rollout scope in #19.
+            Self::OpStack => matches!(chain_id, 10 | 8453),
+            // Initial Linea rollout scope in #20.
+            Self::Linea => chain_id == 59144,
+        }
+    }
+
+    fn expected_networks(self, chain_id: u64) -> Option<&'static [&'static str]> {
+        match (self, chain_id) {
+            // Keep backward compatibility for previously generated envelopes
+            // that used Safe URL chain prefix ("oeth") instead of
+            // canonical OP Mainnet network metadata ("optimism").
+            (Self::OpStack, 10) => Some(&["optimism", "oeth"]),
+            (Self::OpStack, 8453) => Some(&["base"]),
+            (Self::Linea, 59144) => Some(&["linea"]),
+            _ => None,
+        }
+    }
+}
+
+fn parse_execution_consensus_mode(mode: &str) -> Result<ExecutionConsensusMode, String> {
+    match mode {
+        "opstack" => Ok(ExecutionConsensusMode::OpStack),
+        "linea" => Ok(ExecutionConsensusMode::Linea),
+        _ => Err(format!(
+            "Unsupported consensus mode '{}'. Desktop verifier supports 'beacon', 'opstack', and 'linea'.",
+            mode
+        )),
+    }
+}
+
+fn get_network_config(network: ConsensusNetwork) -> NetworkConfig {
+    match network {
+        ConsensusNetwork::Mainnet => mainnet_config(),
+        ConsensusNetwork::Sepolia => sepolia_config(),
+        ConsensusNetwork::Holesky => holesky_config(),
+        ConsensusNetwork::Hoodi => hoodi_config(),
+        ConsensusNetwork::Gnosis => gnosis_config(),
+    }
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct GnosisConsensusSpec;
+
+impl ConsensusSpec for GnosisConsensusSpec {
+    type MaxProposerSlashings = U16;
+    type MaxAttesterSlashings = U2;
+    type MaxAttesterSlashingsElectra = U1;
+    type MaxAttestations = U128;
+    type MaxAttestationsElectra = U8;
+    type MaxValidatorsPerSlot = U131072;
+    type MaxCommitteesPerSlot = U64;
+    type MaxDeposits = U16;
+    type MaxVoluntaryExits = U16;
+    type MaxBlsToExecutionChanged = U16;
+    type MaxBlobKzgCommitments = U4096;
+    type MaxWithdrawals = U16;
+    type MaxValidatorsPerCommittee = U2048;
+    type SlotsPerEpoch = U16;
+    type EpochsPerSyncCommitteePeriod = U512;
+    type SyncCommitteeSize = U512;
+    type MaxWithdrawalRequests = U16;
+    type MaxDepositRequests = U8192;
+    type MaxConsolidationRequests = U2;
+}
+
+/// Verify a consensus proof from an evidence package.
+///
+/// This performs the full BLS sync committee verification chain:
+/// 1. Verify the bootstrap against the checkpoint
+/// 2. Walk the sync committee update chain
+/// 3. Verify the finality update
+/// 4. Extract the EVM state root from the finalized execution payload
+/// 5. Compare it against the claimed state root
+pub fn verify_consensus_proof(input: ConsensusProofInput) -> ConsensusVerificationResult {
+    if input.consensus_mode != "beacon" {
+        let mode = match parse_execution_consensus_mode(&input.consensus_mode) {
+            Ok(mode) => mode,
+            Err(err) => return fail_result(ERR_UNSUPPORTED_CONSENSUS_MODE, err),
+        };
+        return verify_execution_envelope(input, mode);
+    }
+
+    let network = match parse_network(&input.network) {
+        Ok(network) => network,
+        Err(err) => return fail_result(ERR_UNSUPPORTED_NETWORK, err),
+    };
+
+    if matches!(network, ConsensusNetwork::Gnosis) {
+        return verify_consensus_proof_for_spec::<GnosisConsensusSpec>(input, network);
+    }
+    verify_consensus_proof_for_spec::<MainnetConsensusSpec>(input, network)
+}
+
+fn verify_execution_envelope(
+    input: ConsensusProofInput,
+    mode: ExecutionConsensusMode,
+) -> ConsensusVerificationResult {
+    let mut checks = Vec::new();
+
+    let payload_raw = match input.proof_payload.as_deref() {
+        Some(payload) => payload,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!(
+                    "Missing proofPayload for non-beacon consensus mode '{}'.",
+                    input.consensus_mode
+                ),
+            )
+        }
+    };
+
+    let payload: Value = match serde_json::from_str(payload_raw) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Failed to parse proofPayload JSON: {}", error),
+            )
+        }
+    };
+
+    let envelope_schema = match payload.get("schema").and_then(Value::as_str) {
+        Some(schema) => schema,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.schema is missing or not a string.".into(),
+            )
+        }
+    };
+    if envelope_schema != "execution-block-header-v1" {
+        return fail_result(
+            ERR_INVALID_PROOF_PAYLOAD,
+            format!(
+                "Unsupported proofPayload.schema '{}'; expected 'execution-block-header-v1'.",
+                envelope_schema
+            ),
+        );
+    }
+    checks.push(ConsensusCheck {
+        id: "envelope-schema".into(),
+        label: "Envelope schema is supported".into(),
+        passed: true,
+        detail: Some(envelope_schema.to_string()),
+    });
+
+    let payload_mode = match payload.get("consensusMode").and_then(Value::as_str) {
+        Some(mode) => mode,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.consensusMode is missing or not a string.".into(),
+            )
+        }
+    };
+    if payload_mode != mode.as_str() {
+        return fail_result(
+            ERR_INVALID_PROOF_PAYLOAD,
+            format!(
+                "proofPayload.consensusMode '{}' does not match package consensusMode '{}'.",
+                payload_mode,
+                mode.as_str()
+            ),
+        );
+    }
+    checks.push(ConsensusCheck {
+        id: "envelope-mode".into(),
+        label: "Envelope consensus mode matches package metadata".into(),
+        passed: true,
+        detail: Some(format!("Mode: {}", mode.as_str())),
+    });
+
+    let envelope_chain_id = match payload.get("chainId").and_then(Value::as_u64) {
+        Some(chain_id) => chain_id,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.chainId is missing or invalid.".into(),
+            )
+        }
+    };
+    let package_chain_id = match input.package_chain_id {
+        Some(chain_id) => chain_id,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "packageChainId is required for non-beacon consensus envelope verification.".into(),
+            )
+        }
+    };
+    let chain_id_matches = envelope_chain_id == package_chain_id;
+    checks.push(ConsensusCheck {
+        id: "envelope-chain-id".into(),
+        label: "Envelope chainId matches package chainId".into(),
+        passed: chain_id_matches,
+        detail: Some(format!(
+            "Envelope: {}, package: {}",
+            envelope_chain_id, package_chain_id
+        )),
+    });
+    if !chain_id_matches {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some("Envelope chainId does not match package chainId.".into()),
+            error_code: Some(ERR_INVALID_PROOF_PAYLOAD.into()),
+            checks,
+        };
+    }
+    let chain_id_is_supported = mode.supports_chain_id(envelope_chain_id);
+    checks.push(ConsensusCheck {
+        id: "envelope-supported-network".into(),
+        label: "Envelope chainId is supported for this consensus mode".into(),
+        passed: chain_id_is_supported,
+        detail: Some(format!(
+            "mode={}, chainId={}",
+            mode.as_str(),
+            envelope_chain_id
+        )),
+    });
+    if !chain_id_is_supported {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some(format!(
+                "Unsupported chainId for {} consensus verification: {}.",
+                mode.display_name(),
+                envelope_chain_id
+            )),
+            error_code: Some(ERR_UNSUPPORTED_NETWORK.into()),
+            checks,
+        };
+    }
+
+    let expected_networks = mode.expected_networks(envelope_chain_id).unwrap_or(&[]);
+    let network_matches = expected_networks.is_empty()
+        || expected_networks
+            .iter()
+            .any(|network| input.network.eq_ignore_ascii_case(network));
+    let expected_network_detail = if expected_networks.is_empty() {
+        "(none)".to_string()
+    } else {
+        expected_networks.join(" or ")
+    };
+    checks.push(ConsensusCheck {
+        id: "envelope-network".into(),
+        label: "Package network metadata matches chainId for consensus mode".into(),
+        passed: network_matches,
+        detail: Some(format!(
+            "package network='{}', expected='{}'",
+            input.network, expected_network_detail
+        )),
+    });
+    if !network_matches {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some(format!(
+                "Package network '{}' does not match expected network '{}' for chainId {} in {} mode.",
+                input.network,
+                expected_network_detail,
+                envelope_chain_id,
+                mode.display_name()
+            )),
+            error_code: Some(ERR_ENVELOPE_NETWORK_MISMATCH.into()),
+            checks,
+        };
+    }
+
+    let envelope_block_tag = match payload.get("blockTag").and_then(Value::as_str) {
+        Some(block_tag) => block_tag,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.blockTag is missing or not a string.".into(),
+            )
+        }
+    };
+    let block_tag_is_finalized = envelope_block_tag == "finalized";
+    checks.push(ConsensusCheck {
+        id: "envelope-finality-tag".into(),
+        label: "Envelope blockTag is finalized".into(),
+        passed: block_tag_is_finalized,
+        detail: Some(format!("blockTag={}", envelope_block_tag)),
+    });
+    if !block_tag_is_finalized {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some(format!(
+                "Non-beacon consensus envelopes must use finalized blocks; got blockTag='{}'.",
+                envelope_block_tag
+            )),
+            error_code: Some(ERR_NON_FINALIZED_CONSENSUS_ENVELOPE.into()),
+            checks,
+        };
+    }
+
+    let block = match payload.get("block") {
+        Some(block) => block,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block is missing.".into(),
+            )
+        }
+    };
+
+    let envelope_state_root_raw = match block.get("stateRoot").and_then(Value::as_str) {
+        Some(state_root) => state_root,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.stateRoot is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_state_root = match parse_b256(envelope_state_root_raw) {
+        Ok(root) => format!("{:#x}", root),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.stateRoot: {}", error),
+            )
+        }
+    };
+
+    let envelope_block_hash_raw = match block.get("hash").and_then(Value::as_str) {
+        Some(hash) => hash,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.hash is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_block_hash = match parse_b256(envelope_block_hash_raw) {
+        Ok(hash) => format!("{:#x}", hash),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.hash: {}", error),
+            )
+        }
+    };
+
+    let envelope_parent_hash_raw = match block.get("parentHash").and_then(Value::as_str) {
+        Some(hash) => hash,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.parentHash is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_parent_hash = match parse_b256(envelope_parent_hash_raw) {
+        Ok(hash) => format!("{:#x}", hash),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!("Invalid proofPayload.block.parentHash: {}", error),
+            )
+        }
+    };
+    checks.push(ConsensusCheck {
+        id: "envelope-header-hashes".into(),
+        label: "Envelope block hash fields are valid 32-byte hex values".into(),
+        passed: true,
+        detail: Some(format!(
+            "hash={}, parentHash={}",
+            envelope_block_hash, envelope_parent_hash
+        )),
+    });
+
+    let envelope_number_hex = match block.get("number").and_then(Value::as_str) {
+        Some(number) => number,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.number is missing or invalid.".into(),
+            )
+        }
+    };
+    let envelope_block_number = match parse_hex_u64(envelope_number_hex) {
+        Ok(number) => number,
+        Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+    };
+    let envelope_block_timestamp_raw = match block.get("timestamp").and_then(Value::as_str) {
+        Some(timestamp) => timestamp,
+        None => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "proofPayload.block.timestamp is missing or invalid RFC3339 timestamp.".into(),
+            )
+        }
+    };
+    let envelope_block_timestamp =
+        match parse_rfc3339_timestamp(envelope_block_timestamp_raw, "proofPayload.block.timestamp")
+        {
+            Ok(timestamp) => timestamp,
+            Err(error) => return fail_result(ERR_INVALID_PROOF_PAYLOAD, error),
+        };
+
+    let package_state_root = match parse_b256(&input.state_root) {
+        Ok(root) => format!("{:#x}", root),
+        Err(error) => {
+            return fail_result(
+                ERR_INVALID_PROOF_PAYLOAD,
+                format!(
+                    "Invalid state root from package consensusProof.stateRoot: {}",
+                    error
+                ),
+            )
+        }
+    };
+
+    let package_root_matches = envelope_state_root.eq_ignore_ascii_case(&package_state_root);
+    checks.push(ConsensusCheck {
+        id: "envelope-state-root".into(),
+        label: "Envelope state root matches package consensusProof.stateRoot".into(),
+        passed: package_root_matches,
+        detail: Some(format!(
+            "Envelope: {}, package: {}",
+            envelope_state_root, package_state_root
+        )),
+    });
+    if !package_root_matches {
+        return fail_result_with_context(
+            ERR_ENVELOPE_STATE_ROOT_MISMATCH,
+            "Envelope state root does not match package consensusProof.stateRoot.".into(),
+            checks,
+            envelope_state_root,
+            envelope_block_number,
+        );
+    }
+
+    let package_block_matches = envelope_block_number == input.block_number;
+    checks.push(ConsensusCheck {
+        id: "envelope-block-number".into(),
+        label: "Envelope block number matches package consensusProof.blockNumber".into(),
+        passed: package_block_matches,
+        detail: Some(format!(
+            "Envelope: {}, package: {}",
+            envelope_block_number, input.block_number
+        )),
+    });
+    if !package_block_matches {
+        return fail_result_with_context(
+            ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH,
+            "Envelope block number does not match package consensusProof.blockNumber.".into(),
+            checks,
+            envelope_state_root,
+            envelope_block_number,
+        );
+    }
+
+    let expected_state_root = match parse_b256(&input.expected_state_root) {
+        Ok(root) => format!("{:#x}", root),
+        Err(error) => {
+            return fail_result_with_context(
+                ERR_INVALID_EXPECTED_STATE_ROOT,
+                format!(
+                    "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
+                    error
+                ),
+                checks,
+                envelope_state_root,
+                envelope_block_number,
+            )
+        }
+    };
+
+    let state_root_matches = envelope_state_root.eq_ignore_ascii_case(&expected_state_root);
+    checks.push(ConsensusCheck {
+        id: "state-root-match".into(),
+        label: "Envelope state root matches independent policy root".into(),
+        passed: state_root_matches,
+        detail: if state_root_matches {
+            Some("Envelope root matches onchainPolicyProof.stateRoot.".into())
+        } else {
+            Some(format!(
+                "Mismatch: envelope says {} but onchainPolicyProof.stateRoot is {}.",
+                envelope_state_root, expected_state_root
+            ))
+        },
+    });
+    if !state_root_matches {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some("Envelope state root does not match onchainPolicyProof.stateRoot.".into()),
+            error_code: Some(ERR_STATE_ROOT_MISMATCH.into()),
+            checks,
+        };
+    }
+
+    let packaged_at_raw =
+        match input.package_packaged_at.as_deref() {
+            Some(packaged_at) => packaged_at,
+            None => {
+                return fail_result_with_context(
+                    ERR_INVALID_PROOF_PAYLOAD,
+                    "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
+                        .into(),
+                    checks,
+                    envelope_state_root,
+                    envelope_block_number,
+                )
+            }
+        };
+    let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
+        Ok(timestamp) => timestamp,
+        Err(error) => {
+            return fail_result_with_context(
+                ERR_INVALID_PROOF_PAYLOAD,
+                error,
+                checks,
+                envelope_state_root,
+                envelope_block_number,
+            )
+        }
+    };
+
+    let raw_age = packaged_at - envelope_block_timestamp;
+    let future_dated = raw_age < -NON_BEACON_MAX_FUTURE_SKEW_SECS;
+    if future_dated {
+        checks.push(ConsensusCheck {
+            id: "envelope-freshness".into(),
+            label: "Envelope block timestamp is fresh at packaging time".into(),
+            passed: false,
+            detail: Some(format!(
+                "Envelope timestamp is {}s ahead of package timestamp (max allowed skew {}s).",
+                -raw_age, NON_BEACON_MAX_FUTURE_SKEW_SECS
+            )),
+        });
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: true,
+            sync_committee_participants: 0,
+            error: Some(
+                "Consensus envelope block timestamp is too far in the future relative to package timestamp.".into(),
+            ),
+            error_code: Some(ERR_INVALID_PROOF_PAYLOAD.into()),
+            checks,
+        };
+    }
+
+    let age_seconds = raw_age.max(0);
+    let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
+    checks.push(ConsensusCheck {
+        id: "envelope-freshness".into(),
+        label: "Envelope block timestamp is fresh at packaging time".into(),
+        passed: is_fresh,
+        detail: Some(format!(
+            "Age at packaging: {}s (max {}s).",
+            age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
+        )),
+    });
+    if !is_fresh {
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: Some(envelope_state_root),
+            verified_block_number: Some(envelope_block_number),
+            state_root_matches: true,
+            sync_committee_participants: 0,
+            error: Some(
+                "Consensus envelope block timestamp is stale relative to package timestamp.".into(),
+            ),
+            error_code: Some(ERR_STALE_CONSENSUS_ENVELOPE.into()),
+            checks,
+        };
+    }
+
+    checks.push(ConsensusCheck {
+        id: "mode-verification".into(),
+        label: "Execution consensus envelope verification completed".into(),
+        passed: true,
+        detail: Some(format!(
+            "{} envelope passed structural and root/block linkage checks.",
+            mode.display_name()
+        )),
+    });
+
+    ConsensusVerificationResult {
+        valid: true,
+        verified_state_root: Some(envelope_state_root),
+        verified_block_number: Some(envelope_block_number),
+        state_root_matches,
+        sync_committee_participants: 0,
+        error: None,
+        error_code: None,
+        checks,
+    }
+}
+
+fn parse_rfc3339_timestamp(value: &str, field_name: &str) -> Result<i64, String> {
+    OffsetDateTime::parse(value, &Rfc3339)
+        .map(|timestamp| timestamp.unix_timestamp())
+        .map_err(|error| format!("Invalid {}: {}", field_name, error))
+}
+
+fn verify_consensus_proof_for_spec<S: ConsensusSpec>(
+    input: ConsensusProofInput,
+    network: ConsensusNetwork,
+) -> ConsensusVerificationResult {
+    let mut checks = Vec::new();
+
+    // Parse the checkpoint
+    let checkpoint_raw = match input.checkpoint.as_deref() {
+        Some(checkpoint) => checkpoint,
+        None => {
+            return fail_result(
+                ERR_INVALID_CHECKPOINT,
+                "Missing checkpoint for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let checkpoint = match parse_b256(checkpoint_raw) {
+        Ok(c) => c,
+        Err(e) => {
+            return fail_result(
+                ERR_INVALID_CHECKPOINT,
+                format!("Invalid checkpoint hash: {}", e),
+            );
+        }
+    };
+
+    // Get network config
+    let config = get_network_config(network);
+
+    // Parse bootstrap
+    let bootstrap_raw = match input.bootstrap.as_deref() {
+        Some(bootstrap) => bootstrap,
+        None => {
+            return fail_result(
+                ERR_INVALID_BOOTSTRAP,
+                "Missing bootstrap for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let bootstrap: Bootstrap<S> = match serde_json::from_str(bootstrap_raw) {
+        Ok(b) => b,
+        Err(e) => {
+            return fail_result(
+                ERR_INVALID_BOOTSTRAP,
+                format!("Failed to parse bootstrap: {}", e),
+            );
+        }
+    };
+
+    // Verify bootstrap
+    match verify_bootstrap::<S>(&bootstrap, checkpoint, &config.forks) {
+        Ok(()) => {
+            checks.push(ConsensusCheck {
+                id: "bootstrap".into(),
+                label: "Bootstrap verification".into(),
+                passed: true,
+                detail: Some(
+                    "Bootstrap header hash matches checkpoint and sync committee proof is valid."
+                        .into(),
+                ),
+            });
+        }
+        Err(e) => {
+            checks.push(ConsensusCheck {
+                id: "bootstrap".into(),
+                label: "Bootstrap verification".into(),
+                passed: false,
+                detail: Some(format!("Bootstrap verification failed: {}", e)),
+            });
+            return ConsensusVerificationResult {
+                valid: false,
+                verified_state_root: None,
+                verified_block_number: None,
+                state_root_matches: false,
+                sync_committee_participants: 0,
+                error: Some(format!("Bootstrap verification failed: {}", e)),
+                error_code: Some(ERR_BOOTSTRAP_VERIFICATION_FAILED.into()),
+                checks,
+            };
+        }
+    }
+
+    // Apply bootstrap to initialize the light client store
+    let mut store = LightClientStore::default();
+    apply_bootstrap(&mut store, &bootstrap);
+
+    checks.push(ConsensusCheck {
+        id: "store-init".into(),
+        label: "Light client store initialized".into(),
+        passed: true,
+        detail: Some(format!(
+            "Store initialized at slot {}.",
+            store.finalized_header.beacon().slot
+        )),
+    });
+
+    // Compute expected current slot
+    let current_slot = expected_current_slot_for_network(
+        SystemTime::now(),
+        config.genesis_time,
+        config.seconds_per_slot,
+    );
+
+    // Parse and verify updates
+    let mut update_count = 0;
+    for (i, update_json) in input.updates.as_deref().unwrap_or(&[]).iter().enumerate() {
+        let update: Update<S> = match serde_json::from_str(update_json) {
+            Ok(u) => u,
+            Err(e) => {
+                let error = Some(format!("Failed to parse update {}: {}", i, e));
+                let error_code = Some(ERR_INVALID_UPDATE.into());
+                checks.push(ConsensusCheck {
+                    id: format!("update-{}", i),
+                    label: format!("Sync committee update #{}", i + 1),
+                    passed: false,
+                    detail: Some(format!("Parse error: {}", e)),
+                });
+                return ConsensusVerificationResult {
+                    valid: false,
+                    verified_state_root: None,
+                    verified_block_number: None,
+                    state_root_matches: false,
+                    sync_committee_participants: 0,
+                    error,
+                    error_code,
+                    checks,
+                };
+            }
+        };
+
+        match verify_update::<S>(
+            &update,
+            current_slot,
+            &store,
+            config.genesis_root,
+            &config.forks,
+        ) {
+            Ok(()) => {
+                apply_update(&mut store, &update);
+                update_count += 1;
+            }
+            Err(e) => {
+                let error = Some(format!("Update {} verification failed: {}", i, e));
+                let error_code = Some(ERR_UPDATE_VERIFICATION_FAILED.into());
+                checks.push(ConsensusCheck {
+                    id: format!("update-{}", i),
+                    label: format!("Sync committee update #{}", i + 1),
+                    passed: false,
+                    detail: Some(format!("Verification failed: {}", e)),
+                });
+                return ConsensusVerificationResult {
+                    valid: false,
+                    verified_state_root: None,
+                    verified_block_number: None,
+                    state_root_matches: false,
+                    sync_committee_participants: 0,
+                    error,
+                    error_code,
+                    checks,
+                };
+            }
+        }
+    }
+
+    if update_count > 0 {
+        checks.push(ConsensusCheck {
+            id: "updates".into(),
+            label: "Sync committee updates".into(),
+            passed: true,
+            detail: Some(format!(
+                "{} sync committee update(s) verified and applied.",
+                update_count
+            )),
+        });
+    }
+
+    // Parse and verify finality update
+    let finality_update_raw = match input.finality_update.as_deref() {
+        Some(finality_update) => finality_update,
+        None => {
+            return fail_result(
+                ERR_INVALID_FINALITY_UPDATE,
+                "Missing finality update for beacon consensus proof.".into(),
+            );
+        }
+    };
+    let finality_update: FinalityUpdate<S> = match serde_json::from_str(finality_update_raw) {
+        Ok(f) => f,
+        Err(e) => {
+            return fail_result(
+                ERR_INVALID_FINALITY_UPDATE,
+                format!("Failed to parse finality update: {}", e),
+            );
+        }
+    };
+
+    // Count sync committee participants
+    let participants =
+        helios_consensus_core::get_bits::<S>(&finality_update.sync_aggregate().sync_committee_bits);
+
+    match verify_finality_update::<S>(
+        &finality_update,
+        current_slot,
+        &store,
+        config.genesis_root,
+        &config.forks,
+    ) {
+        Ok(()) => {
+            checks.push(ConsensusCheck {
+                id: "finality".into(),
+                label: "Finality update verification".into(),
+                passed: true,
+                detail: Some(format!(
+                    "BLS sync committee signature valid. {}/512 validators participated.",
+                    participants
+                )),
+            });
+        }
+        Err(e) => {
+            checks.push(ConsensusCheck {
+                id: "finality".into(),
+                label: "Finality update verification".into(),
+                passed: false,
+                detail: Some(format!("Finality verification failed: {}", e)),
+            });
+            return ConsensusVerificationResult {
+                valid: false,
+                verified_state_root: None,
+                verified_block_number: None,
+                state_root_matches: false,
+                sync_committee_participants: participants,
+                error: Some(format!("Finality verification failed: {}", e)),
+                error_code: Some(ERR_FINALITY_VERIFICATION_FAILED.into()),
+                checks,
+            };
+        }
+    }
+
+    // Apply finality update to get the verified finalized header
+    apply_finality_update(&mut store, &finality_update);
+
+    // Extract the execution state root from the verified finalized header
+    let execution = match store.finalized_header.execution() {
+        Ok(exec) => exec,
+        Err(_) => {
+            return fail_result(
+                ERR_MISSING_EXECUTION_PAYLOAD,
+                "Finalized header does not contain an execution payload (pre-Capella).".into(),
+            );
+        }
+    };
+
+    let verified_state_root = format!("{:#x}", execution.state_root());
+    let verified_block_number = *execution.block_number();
+
+    // Compare against independently sourced expected state root
+    let expected_state_root = match parse_b256(&input.expected_state_root) {
+        Ok(root) => format!("{:#x}", root),
+        Err(e) => {
+            return fail_result(
+                ERR_INVALID_EXPECTED_STATE_ROOT,
+                format!(
+                    "Invalid expected state root from onchainPolicyProof.stateRoot: {}",
+                    e
+                ),
+            );
+        }
+    };
+    let state_root_matches = verified_state_root.eq_ignore_ascii_case(&expected_state_root);
+
+    checks.push(ConsensusCheck {
+        id: "state-root".into(),
+        label: "State root extraction".into(),
+        passed: true,
+        detail: Some(format!(
+            "Extracted state root {} from finalized block {}.",
+            verified_state_root, verified_block_number
+        )),
+    });
+
+    checks.push(ConsensusCheck {
+        id: "state-root-match".into(),
+        label: "State root matches independent policy root".into(),
+        passed: state_root_matches,
+        detail: if state_root_matches {
+            Some("The consensus-verified state root matches onchainPolicyProof.stateRoot.".into())
+        } else {
+            Some(format!(
+                "Mismatch: consensus says {} but onchainPolicyProof.stateRoot is {}.",
+                verified_state_root, expected_state_root
+            ))
+        },
+    });
+
+    let mismatch_error = if state_root_matches {
+        None
+    } else {
+        Some(format!(
+            "State root mismatch: Helios verified {} but onchainPolicyProof.stateRoot is {}.",
+            verified_state_root, expected_state_root
+        ))
+    };
+
+    ConsensusVerificationResult {
+        valid: state_root_matches,
+        verified_state_root: Some(verified_state_root),
+        verified_block_number: Some(verified_block_number),
+        state_root_matches,
+        sync_committee_participants: participants,
+        error: mismatch_error,
+        error_code: if state_root_matches {
+            None
+        } else {
+            Some(ERR_STATE_ROOT_MISMATCH.into())
+        },
+        checks,
+    }
+}
+
+fn fail_result(error_code: &str, error: String) -> ConsensusVerificationResult {
+    ConsensusVerificationResult {
+        valid: false,
+        verified_state_root: None,
+        verified_block_number: None,
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: Some(error),
+        error_code: Some(error_code.into()),
+        checks: vec![],
+    }
+}
+
+fn fail_result_with_context(
+    error_code: &str,
+    error: String,
+    checks: Vec<ConsensusCheck>,
+    verified_state_root: String,
+    verified_block_number: u64,
+) -> ConsensusVerificationResult {
+    ConsensusVerificationResult {
+        valid: false,
+        verified_state_root: Some(verified_state_root),
+        verified_block_number: Some(verified_block_number),
+        state_root_matches: false,
+        sync_committee_participants: 0,
+        error: Some(error),
+        error_code: Some(error_code.into()),
+        checks,
+    }
+}
+
+fn parse_b256(s: &str) -> Result<B256, String> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    let bytes = hex::decode(s).map_err(|e| format!("hex decode: {}", e))?;
+    if bytes.len() != 32 {
+        return Err(format!("expected 32 bytes, got {}", bytes.len()));
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(B256::from(arr))
+}
+
+fn parse_hex_u64(value: &str) -> Result<u64, String> {
+    let trimmed = value.strip_prefix("0x").unwrap_or(value);
+    if trimmed.is_empty() {
+        return Err("Invalid proofPayload.block.number: empty hex value.".into());
+    }
+    u64::from_str_radix(trimmed, 16)
+        .map_err(|error| format!("Invalid proofPayload.block.number hex value: {}", error))
+}
+
+fn expected_current_slot_for_network(
+    now: SystemTime,
+    genesis_time: u64,
+    seconds_per_slot: u64,
+) -> u64 {
+    let now = now.duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let since_genesis = now.saturating_sub(genesis_time);
+    since_genesis / seconds_per_slot
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
+        verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
+        ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_NETWORK_MISMATCH,
+        ERR_ENVELOPE_STATE_ROOT_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
+        ERR_NON_FINALIZED_CONSENSUS_ENVELOPE, ERR_STALE_CONSENSUS_ENVELOPE,
+        ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE, ERR_UNSUPPORTED_NETWORK,
+    };
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn parse_b256_accepts_prefixed_hex() {
+        let parsed =
+            parse_b256("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+                .expect("valid b256");
+        assert_eq!(
+            format!("{:#x}", parsed),
+            "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+    }
+
+    #[test]
+    fn parse_b256_rejects_invalid_length() {
+        let err = parse_b256("0x1234").expect_err("invalid length must fail");
+        assert!(err.contains("expected 32 bytes"));
+    }
+
+    #[test]
+    fn supports_gnosis_network_config() {
+        let config = get_network_config(parse_network("gnosis").expect("gnosis must be supported"));
+        assert_eq!(config.genesis_time, 1638993340);
+        assert_eq!(config.seconds_per_slot, 5);
+        assert_eq!(config.forks.altair.epoch, 512);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0xf5dcb5564e829aab27264b9becd5dfaa017085611224cb3036f573368dbb9d47"
+        );
+    }
+
+    #[test]
+    fn supports_holesky_network_config() {
+        let config =
+            get_network_config(parse_network("holesky").expect("holesky must be supported"));
+        assert_eq!(config.genesis_time, 1695902400);
+        assert_eq!(config.seconds_per_slot, 12);
+        assert_eq!(config.forks.capella.epoch, 256);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1"
+        );
+    }
+
+    #[test]
+    fn supports_hoodi_network_config() {
+        let config = get_network_config(parse_network("hoodi").expect("hoodi must be supported"));
+        assert_eq!(config.genesis_time, 1742213400);
+        assert_eq!(config.seconds_per_slot, 12);
+        assert_eq!(config.forks.electra.epoch, 2048);
+        assert_eq!(
+            format!("{:#x}", config.genesis_root),
+            "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f"
+        );
+    }
+
+    #[test]
+    fn supports_xdai_alias_for_gnosis() {
+        let network = parse_network("xdai").expect("xdai alias must resolve");
+        assert!(matches!(network, ConsensusNetwork::Gnosis));
+    }
+
+    #[test]
+    fn rejects_unsupported_networks() {
+        let err = parse_network("polygon").expect_err("polygon should fail in desktop verifier");
+        assert!(
+            err.contains("Unsupported network for consensus verification"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn slot_calculation_respects_seconds_per_slot() {
+        let now = UNIX_EPOCH + Duration::from_secs(100);
+        assert_eq!(expected_current_slot_for_network(now, 0, 5), 20);
+        assert_eq!(expected_current_slot_for_network(now, 0, 12), 8);
+    }
+
+    #[test]
+    fn returns_machine_readable_error_code_for_unsupported_network() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: Some(
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            ),
+            bootstrap: Some("{}".to_string()),
+            updates: Some(vec![]),
+            finality_update: Some("{}".to_string()),
+            consensus_mode: "beacon".to_string(),
+            network: "polygon".to_string(),
+            proof_payload: None,
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 0,
+            package_chain_id: None,
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+    }
+
+    #[test]
+    fn returns_machine_readable_error_code_for_invalid_checkpoint() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: Some("0x1234".to_string()),
+            bootstrap: Some("{}".to_string()),
+            updates: Some(vec![]),
+            finality_update: Some("{}".to_string()),
+            consensus_mode: "beacon".to_string(),
+            network: "mainnet".to_string(),
+            proof_payload: None,
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 0,
+            package_chain_id: None,
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_INVALID_CHECKPOINT));
+    }
+
+    #[test]
+    fn verifies_opstack_mode_when_execution_envelope_checks_pass() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert_eq!(result.error, None);
+        assert_eq!(result.verified_block_number, Some(1));
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-schema" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-header-hashes" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "mode-verification" && check.passed));
+    }
+
+    #[test]
+    fn verifies_linea_mode_when_execution_envelope_checks_pass() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert_eq!(result.error, None);
+        assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn rejects_unknown_non_beacon_consensus_mode_before_payload_validation() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "arb-nitro".to_string(),
+            network: "arbitrum".to_string(),
+            proof_payload: None,
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(42161),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_UNSUPPORTED_CONSENSUS_MODE)
+        );
+        assert!(result
+            .error
+            .as_deref()
+            .is_some_and(|error| error
+                .contains("Desktop verifier supports 'beacon', 'opstack', and 'linea'.")));
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_chain_id_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(8453),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope chainId does not match package chainId.")
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_without_package_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: None,
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("packageChainId is required for non-beacon consensus envelope verification.")
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_unsupported_schema() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v0\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Unsupported proofPayload.schema 'execution-block-header-v0'; expected 'execution-block-header-v1'."
+            )
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_invalid_block_hash() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0x1234\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.hash:")),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_invalid_parent_hash() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0x1234\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.parentHash:")),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_invalid_state_root() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0x1234\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert!(
+            result
+                .error
+                .as_deref()
+                .is_some_and(|error| error.starts_with("Invalid proofPayload.block.stateRoot:")),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn returns_explicit_state_root_mismatch_code_for_package_envelope_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_STATE_ROOT_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match package consensusProof.stateRoot.")
+        );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_non_beacon_envelope_when_package_state_root_has_no_0x_prefix() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && check.passed));
+    }
+
+    #[test]
+    fn returns_explicit_block_number_mismatch_code_for_package_envelope_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope block number does not match package consensusProof.blockNumber.")
+        );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-block-number" && !check.passed));
+    }
+
+    #[test]
+    fn returns_state_root_mismatch_for_non_beacon_envelope_root_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_STATE_ROOT_MISMATCH));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn preserves_non_beacon_checks_when_expected_state_root_is_invalid() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root: "0x1234".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_EXPECTED_STATE_ROOT)
+        );
+        assert_eq!(
+            result.verified_state_root.as_deref(),
+            Some("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-state-root" && check.passed));
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-block-number" && check.passed));
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_with_non_finalized_block_tag() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"latest\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: None,
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_NON_FINALIZED_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Non-beacon consensus envelopes must use finalized blocks; got blockTag='latest'."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-finality-tag" && !check.passed));
+    }
+
+    #[test]
+    fn returns_stale_error_for_non_beacon_envelope_with_old_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-03T00:00:01Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_STALE_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Consensus envelope block timestamp is stale relative to package timestamp.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_non_beacon_envelope_when_packaged_at_precedes_block_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2025-12-31T23:59:55Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && check.passed));
+        assert!(result.checks.iter().any(|check| {
+            check.id == "envelope-freshness"
+                && check
+                    .detail
+                    .as_deref()
+                    .is_some_and(|detail| detail.contains("Age at packaging: 0s"))
+        }));
+    }
+
+    #[test]
+    fn rejects_non_beacon_envelope_without_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_INVALID_PROOF_PAYLOAD)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("proofPayload.block.timestamp is missing or invalid RFC3339 timestamp.")
+        );
+    }
+
+    #[test]
+    fn returns_state_root_mismatch_for_linea_envelope_root_mismatch() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_STATE_ROOT_MISMATCH));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Envelope state root does not match onchainPolicyProof.stateRoot.")
+        );
+        assert_eq!(result.verified_block_number, Some(1));
+    }
+
+    #[test]
+    fn returns_stale_error_for_linea_envelope_with_old_timestamp() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-03T00:00:01Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_STALE_CONSENSUS_ENVELOPE)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Consensus envelope block timestamp is stale relative to package timestamp.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-freshness" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_opstack_envelope_for_unsupported_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":42161,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(42161),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Unsupported chainId for OP Stack consensus verification: 42161.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-supported-network" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_linea_envelope_for_unsupported_chain_id() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "linea".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59141,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59141),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(result.error_code.as_deref(), Some(ERR_UNSUPPORTED_NETWORK));
+        assert_eq!(
+            result.error.as_deref(),
+            Some("Unsupported chainId for Linea consensus verification: 59141.")
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-supported-network" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_opstack_envelope_with_mismatched_package_network_metadata() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "base".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Package network 'base' does not match expected network 'optimism or oeth' for chainId 10 in OP Stack mode."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && !check.passed));
+    }
+
+    #[test]
+    fn accepts_legacy_oeth_network_metadata_for_opstack_chain_id_10() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "oeth".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":10,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(10),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && check.passed));
+    }
+
+    #[test]
+    fn verifies_base_opstack_mode_when_execution_envelope_checks_pass() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "base".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":8453,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x2\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(8453),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(result.valid);
+        assert_eq!(result.error_code, None);
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && check.passed));
+    }
+
+    #[test]
+    fn rejects_base_opstack_envelope_with_mismatched_package_network_metadata() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "opstack".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"opstack\",\"chainId\":8453,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x2\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 2,
+            package_chain_id: Some(8453),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Package network 'optimism' does not match expected network 'base' for chainId 8453 in OP Stack mode."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && !check.passed));
+    }
+
+    #[test]
+    fn rejects_linea_envelope_with_mismatched_package_network_metadata() {
+        let result = verify_consensus_proof(ConsensusProofInput {
+            checkpoint: None,
+            bootstrap: None,
+            updates: None,
+            finality_update: None,
+            consensus_mode: "linea".to_string(),
+            network: "optimism".to_string(),
+            proof_payload: Some(
+                "{\"schema\":\"execution-block-header-v1\",\"consensusMode\":\"linea\",\"chainId\":59144,\"blockTag\":\"finalized\",\"block\":{\"number\":\"0x1\",\"hash\":\"0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"parentHash\":\"0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\",\"stateRoot\":\"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"timestamp\":\"2026-01-01T00:00:00Z\"}}".to_string(),
+            ),
+            state_root: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_string(),
+            expected_state_root:
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            block_number: 1,
+            package_chain_id: Some(59144),
+            package_packaged_at: Some("2026-01-01T00:05:00Z".to_string()),
+        });
+
+        assert!(!result.valid);
+        assert_eq!(
+            result.error_code.as_deref(),
+            Some(ERR_ENVELOPE_NETWORK_MISMATCH)
+        );
+        assert_eq!(
+            result.error.as_deref(),
+            Some(
+                "Package network 'optimism' does not match expected network 'linea' for chainId 59144 in Linea mode."
+            )
+        );
+        assert!(result
+            .checks
+            .iter()
+            .any(|check| check.id == "envelope-network" && !check.passed));
+    }
+}

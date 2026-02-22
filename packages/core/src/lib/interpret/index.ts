@@ -4,18 +4,22 @@
  * ┌─────────────────────────────────────────────────────────────────┐
  * │  SUPPORTED PROTOCOLS                                           │
  * │                                                                 │
- * │  id              │ protocol  │ action        │ severity         │
- * │  ────────────────┼───────────┼───────────────┼─────────────     │
- * │  cowswap-twap    │ CoW Swap  │ TWAP Order    │ info             │
- * │  safe-policy     │ Safe      │ Policy Change │ critical         │
- * │  erc7730         │ (dynamic) │ (dynamic)     │ info             │
+ * │  id              │ protocol     │ action         │ severity      │
+ * │  ────────────────┼──────────────┼────────────────┼─────────────  │
+ * │  token-transfer  │ ERC-20/Native│ Transfer/…     │ info/warning  │
+ * │  cowswap-twap    │ CoW Swap     │ TWAP Order     │ info          │
+ * │  cowswap-presign │ CoW Protocol │ Pre-Sign Order │ info          │
+ * │  safe-policy     │ Safe         │ Policy Change  │ critical      │
+ * │  erc7730         │ (dynamic)    │ (dynamic)      │ info          │
  * │                                                                 │
  * │  To add a new protocol, follow the checklist in ./types.ts.    │
  * └─────────────────────────────────────────────────────────────────┘
  */
 
 import type { Interpretation, Interpreter } from "./types";
+import { interpretTokenTransfer } from "./token-transfer";
 import { interpretCowSwapTwap } from "./cowswap-twap";
+import { interpretCowSwapPreSign } from "./cowswap-presign";
 import { interpretSafePolicy } from "./safe-policy";
 import { createERC7730Interpreter } from "../erc7730/interpreter";
 import { getGlobalIndex } from "../erc7730/global-index";
@@ -24,7 +28,7 @@ import { getGlobalIndex } from "../erc7730/global-index";
 // Each interpreter is tried in order; the first non-null result wins.
 // Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
 
-// Lazy ERC-7730 interpreter — caches the inner interpreter and rebuilds
+// Lazy ERC-7730 interpreter: caches the inner interpreter and rebuilds
 // only when the global index identity changes (after setGlobalDescriptors).
 let cachedIndex: ReturnType<typeof getGlobalIndex> | null = null;
 let cachedInterpreter: ReturnType<typeof createERC7730Interpreter> | null = null;
@@ -57,7 +61,9 @@ const erc7730Interpreter: Interpreter = (
 };
 
 const INTERPRETERS: Interpreter[] = [
+  interpretTokenTransfer,
   interpretCowSwapTwap,
+  interpretCowSwapPreSign,
   interpretSafePolicy,
   erc7730Interpreter,
 ];
@@ -101,7 +107,9 @@ export type {
   Interpretation,
   Severity,
   CowSwapTwapDetails,
+  CowSwapPreSignDetails,
   SafePolicyChangeDetails,
+  TokenTransferDetails,
   ERC7730Details,
   TokenInfo,
 } from "./types";

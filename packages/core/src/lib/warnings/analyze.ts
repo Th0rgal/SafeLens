@@ -9,7 +9,7 @@ export type TransactionWarning = {
 };
 
 /**
- * Identify the proposer — the confirmation with the earliest submissionDate.
+ * Identify the proposer: the confirmation with the earliest submissionDate.
  */
 export function identifyProposer(
   confirmations: { owner: string; submissionDate: string }[]
@@ -41,7 +41,7 @@ export function analyzeTarget(
   if (resolved === null && operation === 1) {
     warnings.push({
       level: "danger",
-      message: "DelegateCall to unknown contract — this executes foreign code in the Safe's context",
+      message: "DelegateCall to unknown contract: this executes foreign code in the Safe's context",
     });
   } else if (operation === 1) {
     warnings.push({
@@ -71,7 +71,7 @@ export function analyzeSigners(
     if (resolved === null) {
       warnings.push({
         level: "warning",
-        message: "Unknown signer — not in your address registry",
+        message: "Unknown signer: not in your address registry",
       });
     }
 

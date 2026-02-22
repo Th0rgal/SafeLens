@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,20 +13,42 @@ import {
   fetchSafeTransaction,
   fetchPendingTransactions,
   createEvidencePackage,
+  enrichWithOnchainProof,
+  enrichWithSimulation,
+  enrichWithConsensusProof,
+  finalizeEvidenceExport,
+  UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
+  decodeSimulationEvents,
+  decodeNativeTransfers,
+  computeRemainingApprovals,
+  DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
+  getExportContractReasonLabel,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
+import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
+import { summarizeConsensusProof } from "@/lib/consensus-proof-summary";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
+const lineaConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS === "1";
+const RPC_PING_TIMEOUT_MS = 3500;
+const DEFAULT_RPC_CANDIDATES: Record<number, [string, string]> = {
+  1: ["https://eth.drpc.org", "https://eth1.lava.build"],
+  10: ["https://optimism.drpc.org", "https://go.getblock.io/e8a75f8dcf614861becfbcb185be6eb4"],
+  100: ["https://gnosis.lfg.rs", "https://rpc.gnosischain.com"],
+  137: ["https://polygon.drpc.org", "https://polygon.lava.build"],
+  8453: ["https://base.drpc.org", "https://base.api.pocket.network"],
+  42161: ["https://arbitrum.drpc.org", "https://arb-one.api.pocket.network"],
+  11155111: ["https://sepolia.drpc.org", "https://rpc.sepolia.ethpandaops.io"],
+};
 
 type PendingTx = SafeTransaction & { _chainId: number };
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-
 function extractAddress(input: string): string | null {
   const trimmed = input.trim();
   if (ADDRESS_RE.test(trimmed)) return trimmed;
@@ -34,8 +57,271 @@ function extractAddress(input: string): string | null {
   return match && !trimmed.startsWith("http") ? match[0] : null;
 }
 
+async function fetchRpcChainId(rpcUrl: string): Promise<number | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RPC_PING_TIMEOUT_MS);
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_chainId",
+        params: [],
+      }),
+      signal: ctrl.signal,
+    });
+
+    if (!response.ok) return null;
+    const payload = await response.json() as { result?: string };
+    if (typeof payload.result !== "string") return null;
+    const chainId = Number.parseInt(payload.result, 16);
+    return Number.isFinite(chainId) ? chainId : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function pingRpcChainId(rpcUrl: string, expectedChainId: number): Promise<boolean> {
+  const chainId = await fetchRpcChainId(rpcUrl);
+  return chainId === expectedChainId;
+}
+
+function EvidenceDisplay({
+  evidence,
+  onDownload,
+  onCopy,
+  copied,
+}: {
+  evidence: EvidencePackage;
+  onDownload: () => void;
+  onCopy: () => void;
+  copied: boolean;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const isFullyVerifiable = evidence.exportContract?.mode === "fully-verifiable";
+
+  // Decode simulation events
+  const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
+  const sim = evidence.simulation;
+  const logEvents = sim
+    ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
+    : [];
+  const nativeEvents = sim?.nativeTransfers?.length
+    ? decodeNativeTransfers(sim.nativeTransfers, evidence.safeAddress, nativeSymbol)
+    : [];
+  const allEvents = [...nativeEvents, ...logEvents];
+  const transfers = allEvents.filter((e) => e.kind !== "approval");
+  const approvals = computeRemainingApprovals(allEvents);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>Evidence Package</CardTitle>
+          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
+            isFullyVerifiable
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+          }`}>
+            {isFullyVerifiable ? "Fully verifiable" : "Partial"}
+          </span>
+        </div>
+        <CardDescription>
+          {getChainName(evidence.chainId)} · Nonce #{evidence.transaction.nonce} · {evidence.confirmations.length}/{evidence.confirmationsRequired} signatures
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Partial export reasons */}
+        {evidence.exportContract?.mode === "partial" && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            {evidence.exportContract.reasons.map((reason) => (
+              <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Simulation effects - the most important info, always visible */}
+        {sim ? (
+          <>
+            <div className={`rounded-md border px-3 py-2 text-xs font-medium ${
+              sim.success
+                ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-300"
+                : "border-red-500/20 bg-red-500/5 text-red-300"
+            }`}>
+              Simulation {sim.success ? "succeeded" : "reverted"} at block {sim.blockNumber}
+            </div>
+            {transfers.length > 0 && (
+              <div className="space-y-1.5">
+                {transfers.map((e, i) => {
+                  const colorClass =
+                    e.direction === "send" ? "text-red-400"
+                    : e.direction === "receive" ? "text-emerald-400"
+                    : "text-muted";
+                  const bgClass =
+                    e.direction === "send" ? "bg-red-500/5"
+                    : e.direction === "receive" ? "bg-emerald-500/5"
+                    : "bg-surface-2/30";
+                  const arrow =
+                    e.direction === "send" ? "↗" : e.direction === "receive" ? "↙" : "↔";
+                  const verb =
+                    e.direction === "send" ? "Send" : e.direction === "receive" ? "Receive" : "Transfer";
+                  const counterparty =
+                    e.direction === "send" ? e.to : e.direction === "receive" ? e.from : e.to;
+                  const preposition =
+                    e.direction === "send" ? "to" : e.direction === "receive" ? "from" : "at";
+
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
+                      <span className={`font-medium ${colorClass}`}>{arrow} {verb}</span>
+                      <span className="font-medium">{e.amountFormatted}</span>
+                      <span className="text-muted">{preposition}</span>
+                      <AddressDisplay address={counterparty} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {transfers.length === 0 && sim.success && (
+              <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
+                No token movements detected.
+              </div>
+            )}
+            {approvals.length > 0 && (
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                <div className="text-xs font-medium text-amber-200">Remaining approvals</div>
+                <div className="mt-1.5 space-y-1">
+                  {approvals.map((a, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
+                      <span className={a.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
+                        {a.amountFormatted}
+                      </span>
+                      <span className="text-amber-400/70">to</span>
+                      <AddressDisplay address={a.spender} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sim.traceAvailable === false && (
+              <div className="text-xs text-amber-400">
+                Event details not available, the RPC does not support debug_traceCall on this chain.
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
+            No simulation included in this package.
+          </div>
+        )}
+
+        {/* Expandable details toggle */}
+        <button
+          onClick={() => setShowDetails((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
+        >
+          <ChevronRight className={`h-3 w-3 transition-transform ${showDetails ? "rotate-90" : ""}`} />
+          {showDetails ? "Hide details" : "Show details"}
+        </button>
+
+        {showDetails && (
+          <div className="space-y-2 border-t border-border/10 pt-3">
+            <DetailRow label="Safe Address">
+              <AddressDisplay address={evidence.safeAddress} />
+            </DetailRow>
+            <DetailRow label="Target">
+              <AddressDisplay address={evidence.transaction.to} />
+            </DetailRow>
+            <DetailRow label="Safe TX Hash">
+              <AddressDisplay address={evidence.safeTxHash} />
+            </DetailRow>
+            {evidence.onchainPolicyProof && (() => {
+              const policy = evidence.onchainPolicyProof.decodedPolicy;
+              const hasModules = policy.modules.length > 0;
+              const hasGuard = policy.guard !== "0x0000000000000000000000000000000000000000";
+              return (
+                <>
+                  <DetailRow label="Policy Proof">
+                    <span className="text-blue-400">
+                      Block {evidence.onchainPolicyProof.blockNumber}
+                    </span>
+                  </DetailRow>
+                  <DetailRow label="Threshold">
+                    <span>{policy.threshold} of {policy.owners.length}</span>
+                  </DetailRow>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted">Owners</div>
+                    {policy.owners.map((owner) => (
+                      <div key={owner} className="ml-2">
+                        <AddressDisplay address={owner} />
+                      </div>
+                    ))}
+                  </div>
+                  {hasModules && (
+                    <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
+                      <span className="font-medium text-amber-200">Modules — can bypass signatures</span>
+                      <div className="mt-1 space-y-0.5">
+                        {policy.modules.map((mod) => (
+                          <div key={mod}>
+                            <AddressDisplay address={mod} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {hasGuard && (
+                    <DetailRow label="Guard">
+                      <AddressDisplay address={policy.guard} />
+                    </DetailRow>
+                  )}
+                </>
+              );
+            })()}
+            {evidence.consensusProof && (() => {
+              const summary = summarizeConsensusProof(evidence.consensusProof);
+              return (
+                <DetailRow label="Consensus Proof">
+                  <span className={summary.toneClassName}>{summary.text}</span>
+                </DetailRow>
+              );
+            })()}
+            {sim && (
+              <DetailRow label="Gas Used">
+                <span className="font-mono">{sim.gasUsed}</span>
+              </DetailRow>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
+          <Button onClick={onDownload} className="flex-1">
+            {isFullyVerifiable ? "Download Fully Verifiable JSON" : "Download Partial JSON"}
+          </Button>
+          <Button onClick={onCopy} variant="outline" className="flex-1">
+            {copied ? "Copied!" : "Copy to Clipboard"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-xs">
+      <span className="shrink-0 text-muted">{label}</span>
+      <span className="text-right">{children}</span>
+    </div>
+  );
+}
+
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
@@ -43,8 +329,159 @@ export default function AnalyzePage() {
   const [pendingTxs, setPendingTxs] = useState<PendingTx[] | null>(null);
   const [safeAddress, setSafeAddress] = useState<string | null>(null);
 
+  const [proofWarning, setProofWarning] = useState<string | null>(null);
+  const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
+  const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
+  const [suggestedSimulationRpc, setSuggestedSimulationRpc] = useState<string | null>(null);
+
+  const resolveSuggestedRpcForChain = useCallback(async (chainId: number): Promise<string> => {
+    const candidates = DEFAULT_RPC_CANDIDATES[chainId];
+    if (!candidates) return "";
+
+    const [primary, secondary] = candidates;
+    const primaryOk = await pingRpcChainId(primary, chainId);
+    return primaryOk ? primary : secondary;
+  }, []);
+  /** Optionally enrich a package with on-chain policy proof, simulation, and consensus proof. */
+  const maybeEnrich = async (
+    pkg: EvidencePackage,
+    options?: { overrideRpcUrl?: string; showMissingSimulationWarning?: boolean }
+  ): Promise<EvidencePackage> => {
+    let enriched = pkg;
+    const resolvedRpcUrl = options?.overrideRpcUrl?.trim() ?? rpcUrl.trim();
+    const rpcProvided = Boolean(resolvedRpcUrl);
+    const { consensusMode, shouldAttemptConsensusProof } = buildConsensusEnrichmentPlan(pkg.chainId);
+    let consensusProofAttempted = false;
+    let consensusProofFailed = false;
+    let consensusProofUnsupportedMode = false;
+    let consensusProofDisabledByFeatureFlag = false;
+    let onchainPolicyProofFailed = false;
+    let simulationFailed = false;
+    let onchainPolicyProofAttempted = false;
+    let simulationAttempted = false;
+
+    if (!rpcProvided) {
+      setSuggestedSimulationRpc(null);
+      if (options?.showMissingSimulationWarning !== false) {
+        const suggestedRpc = await resolveSuggestedRpcForChain(pkg.chainId);
+        if (suggestedRpc) {
+          setSuggestedSimulationRpc(suggestedRpc);
+          setSimulationWarning(
+            `On-chain simulation data is missing. It is available for ${getChainName(pkg.chainId)} via ${suggestedRpc}.`
+          );
+        }
+      }
+    } else {
+      setSuggestedSimulationRpc(null);
+
+      const rpcChainId = await fetchRpcChainId(resolvedRpcUrl);
+      if (rpcChainId !== null && rpcChainId !== pkg.chainId) {
+        const suggestedRpc = await resolveSuggestedRpcForChain(pkg.chainId);
+        if (suggestedRpc) {
+          setSuggestedSimulationRpc(suggestedRpc);
+        }
+        setSimulationWarning(null);
+        setProofWarning(
+          `RPC chain mismatch: this transaction is on ${getChainName(pkg.chainId)} (chain ${pkg.chainId}), but the provided RPC is ${getChainName(rpcChainId)} (chain ${rpcChainId}). ` +
+          (suggestedRpc
+            ? `Retry with the built-in ${getChainName(pkg.chainId)} RPC: ${suggestedRpc}`
+            : "Please provide an RPC URL for the transaction chain and retry.")
+        );
+
+        return finalizeEvidenceExport(enriched, {
+          rpcProvided,
+          consensusProofAttempted,
+          consensusProofFailed,
+          consensusProofUnsupportedMode,
+          consensusProofDisabledByFeatureFlag,
+          onchainPolicyProofAttempted: true,
+          onchainPolicyProofFailed: true,
+          simulationAttempted: true,
+          simulationFailed: true,
+        });
+      }
+    }
+
+    // Fetch consensus proof first so policy proof can be pinned to the same
+    // finalized execution block.
+    if (shouldAttemptConsensusProof) {
+      consensusProofAttempted = true;
+      try {
+        enriched = await enrichWithConsensusProof(enriched, {
+          rpcUrl:
+            (consensusMode === "opstack" || consensusMode === "linea") &&
+            rpcProvided
+              ? resolvedRpcUrl
+              : undefined,
+          enableExperimentalLineaConsensus: lineaConsensusEnabled,
+        });
+      } catch (err) {
+        consensusProofFailed = true;
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
+        ) {
+          if ("reason" in err && err.reason === "disabled-by-feature-flag") {
+            consensusProofDisabledByFeatureFlag = true;
+          } else {
+            consensusProofUnsupportedMode = true;
+          }
+        }
+        console.warn("Failed to fetch consensus proof:", err);
+        setConsensusWarning(
+          `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+        );
+      }
+    }
+
+    if (rpcProvided) {
+      onchainPolicyProofAttempted = true;
+      try {
+        enriched = await enrichWithOnchainProof(enriched, {
+          rpcUrl: resolvedRpcUrl,
+          blockNumber: enriched.consensusProof?.blockNumber,
+        });
+      } catch (err) {
+        onchainPolicyProofFailed = true;
+        console.warn("Failed to fetch on-chain policy proof:", err);
+        setProofWarning(
+          `Policy proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without proof.`
+        );
+      }
+
+      simulationAttempted = true;
+      try {
+        enriched = await enrichWithSimulation(enriched, { rpcUrl: resolvedRpcUrl });
+      } catch (err) {
+        simulationFailed = true;
+        console.warn("Failed to simulate transaction:", err);
+        setSimulationWarning(
+          `Simulation failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without simulation.`
+        );
+      }
+    }
+
+    return finalizeEvidenceExport(enriched, {
+      rpcProvided,
+      consensusProofAttempted,
+      consensusProofFailed,
+      consensusProofUnsupportedMode,
+      consensusProofDisabledByFeatureFlag,
+      onchainPolicyProofAttempted,
+      onchainPolicyProofFailed,
+      simulationAttempted,
+      simulationFailed,
+    });
+  };
+
   const handleAnalyze = async () => {
     setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
+    setSuggestedSimulationRpc(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -55,7 +492,7 @@ export default function AnalyzePage() {
       const rawAddress = extractAddress(input);
 
       if (rawAddress) {
-        // Raw address — query all supported chains in parallel
+        // Raw address: query all supported chains in parallel
         const results = await Promise.allSettled(
           SUPPORTED_CHAIN_IDS.map(async (chainId) => {
             const txs = await fetchPendingTransactions(chainId, rawAddress);
@@ -79,7 +516,8 @@ export default function AnalyzePage() {
 
         if (result.type === "transaction") {
           const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
-          const pkg = createEvidencePackage(tx, result.data.chainId, input);
+          let pkg = createEvidencePackage(tx, result.data.chainId, input);
+          pkg = await maybeEnrich(pkg);
           setEvidence(pkg);
         } else {
           const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
@@ -101,13 +539,19 @@ export default function AnalyzePage() {
   const handleSelectTransaction = async (tx: PendingTx) => {
     setLoading(true);
     setPendingTxs(null);
+    setEvidence(null);
     setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
+    setSuggestedSimulationRpc(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);
       const addr = safeAddress ?? tx.safe;
       const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
-      const pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      let pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
+      pkg = await maybeEnrich(pkg);
       setEvidence(pkg);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create evidence package");
@@ -129,6 +573,30 @@ export default function AnalyzePage() {
       setTimeout(() => setCopied(false), 2000);
     }
   }, [evidence]);
+
+  const handleRetrySimulationWithSuggestedRpc = async () => {
+    if (!evidence || !suggestedSimulationRpc) return;
+
+    setLoading(true);
+    setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
+
+    try {
+      const enriched = await maybeEnrich(evidence, {
+        overrideRpcUrl: suggestedSimulationRpc,
+        showMissingSimulationWarning: false,
+      });
+      setEvidence(enriched);
+      setRpcUrl(suggestedSimulationRpc);
+      setSuggestedSimulationRpc(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to retry on-chain enrichment");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Group pending txs by chain for display
   const txsByChain = pendingTxs
@@ -160,7 +628,7 @@ export default function AnalyzePage() {
             Paste a transaction URL, a queue URL, or a Safe address (0x...)
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex gap-2">
             <Input
               type="text"
@@ -172,6 +640,18 @@ export default function AnalyzePage() {
             <Button onClick={handleAnalyze} disabled={loading || !url}>
               {loading ? "Searching..." : "Analyze"}
             </Button>
+          </div>
+          <div>
+            <Input
+              type="text"
+              placeholder="RPC URL (optional, enables on-chain policy proof)"
+              value={rpcUrl}
+              onChange={(e) => setRpcUrl(e.target.value)}
+              className="text-xs"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Optional. Leave blank to generate quickly without simulation; SafeLens can suggest a chain RPC and let you retry enrichment.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -268,55 +748,59 @@ export default function AnalyzePage() {
         </Card>
       )}
 
-      {evidence && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evidence Package</CardTitle>
-            <CardDescription>
-              Transaction successfully analyzed and evidence package created.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="font-medium text-muted">Chain</div>
-                <div className="font-mono">{getChainName(evidence.chainId)}</div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Nonce</div>
-                <div className="font-mono">{evidence.transaction.nonce}</div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Safe Address</div>
-                <AddressDisplay address={evidence.safeAddress} />
-              </div>
-              <div>
-                <div className="font-medium text-muted">Target</div>
-                <AddressDisplay address={evidence.transaction.to} />
-              </div>
-              <div>
-                <div className="font-medium text-muted">Signatures</div>
-                <div className="font-mono">
-                  {evidence.confirmations.length} / {evidence.confirmationsRequired}
-                </div>
-              </div>
-              <div className="col-span-2">
-                <div className="font-medium text-muted">Safe TX Hash</div>
-                <AddressDisplay address={evidence.safeTxHash} />
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleDownload} className="flex-1">
-                Download JSON
+      {proofWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Policy Proof Warning</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <div>{proofWarning}</div>
+            {suggestedSimulationRpc && evidence && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 border-amber-500/30 bg-transparent text-xs text-amber-100 hover:bg-amber-500/10"
+                onClick={handleRetrySimulationWithSuggestedRpc}
+                disabled={loading}
+              >
+                Retry using {suggestedSimulationRpc}
               </Button>
-              <Button onClick={handleCopy} variant="outline" className="flex-1">
-                {copied ? "Copied!" : "Copy to Clipboard"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
+
+      {simulationWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Simulation Warning</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <div>{simulationWarning}</div>
+            {suggestedSimulationRpc && evidence && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 border-amber-500/30 bg-transparent text-xs text-amber-100 hover:bg-amber-500/10"
+                onClick={handleRetrySimulationWithSuggestedRpc}
+                disabled={loading}
+              >
+                Retry using {suggestedSimulationRpc}
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {consensusWarning && (
+        <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
+          <AlertTitle>Consensus Proof Warning</AlertTitle>
+          <AlertDescription>{consensusWarning}</AlertDescription>
+        </Alert>
+      )}
+
+      {evidence && <EvidenceDisplay
+        evidence={evidence}
+        onDownload={handleDownload}
+        onCopy={handleCopy}
+        copied={copied}
+      />}
     </div>
   );
 }
