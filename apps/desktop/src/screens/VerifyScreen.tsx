@@ -772,6 +772,7 @@ function ExecutionSafetyPanel({
       ),
     [checks]
   );
+  const checksForVerificationStatus = checksWithoutRedundantRevertWarning;
 
   // ── Badge popover positioning + dismiss ──────────────────────────
   useEffect(() => {
@@ -844,8 +845,8 @@ function ExecutionSafetyPanel({
   }
 
   // ── Verification status ───────────────────────────────────────────
-  const hasError = checks.some((check) => check.status === "error");
-  const hasWarning = checks.some((check) => check.status === "warning");
+  const hasError = checksForVerificationStatus.some((check) => check.status === "error");
+  const hasWarning = checksForVerificationStatus.some((check) => check.status === "warning");
 
   const freshnessDescription = (() => {
     const sim = evidence.simulation;
@@ -868,7 +869,7 @@ function ExecutionSafetyPanel({
     "consensus-proof-fetch-failed",
   ]);
 
-  const nonPassingChecks = checks.filter((c) => c.status !== "check");
+  const nonPassingChecks = checksForVerificationStatus.filter((c) => c.status !== "check");
   const allDataAbsent = nonPassingChecks.length > 0 && nonPassingChecks.every(
     (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
   );
@@ -929,9 +930,9 @@ function ExecutionSafetyPanel({
 
   // ── Expandable detail data ────────────────────────────────────────
   const simulationFreshness = buildSimulationFreshnessDetail(evidence.simulation, evidence.packagedAt);
-  const passedChecks = checks.filter((c) => c.status === "check").length;
-  const warningChecks = checks.filter((c) => c.status === "warning").length;
-  const errorChecks = checks.filter((c) => c.status === "error").length;
+  const passedChecks = checksForVerificationStatus.filter((c) => c.status === "check").length;
+  const warningChecks = checksForVerificationStatus.filter((c) => c.status === "warning").length;
+  const errorChecks = checksForVerificationStatus.filter((c) => c.status === "error").length;
   const consensusDetails = buildConsensusDetailRows(evidence, consensusVerification);
   const policyDetails = buildPolicyDetailRows(policyProof);
   const simulationDetails = buildSimulationDetailRows(
