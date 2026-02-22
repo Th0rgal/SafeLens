@@ -10,7 +10,7 @@ interface CallArrayProps {
   dataDecoded: unknown;
   txTo: string;
   txValue: string;
-  txOperation: number;
+  txOperation: 0 | 1;
   txData: string | null;
 }
 
