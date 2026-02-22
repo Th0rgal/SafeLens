@@ -6,6 +6,11 @@ import {
 import type { ConsensusMode } from "../types";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
+export type DecodedCalldataVerificationStatus =
+  | "self-verified"
+  | "partial"
+  | "mismatch"
+  | "api-only";
 
 interface ConsensusSourceMetadata {
   name: string;
@@ -78,6 +83,7 @@ export interface VerificationSourceContext {
   hasSettings: boolean;
   hasUnsupportedSignatures: boolean;
   hasDecodedData: boolean;
+  decodedCalldataVerification?: DecodedCalldataVerificationStatus;
   hasOnchainPolicyProof: boolean;
   hasSimulation: boolean;
   hasConsensusProof: boolean;
@@ -257,10 +263,26 @@ export function buildVerificationSources(
       ? {
           id: VERIFICATION_SOURCE_IDS.DECODED_CALLDATA,
           title: "Decoded calldata",
-          trust: "api-sourced",
-          summary: "Decoded calldata is API-provided metadata.",
+          trust:
+            context.decodedCalldataVerification === "self-verified"
+              ? "self-verified"
+              : "api-sourced",
+          summary:
+            context.decodedCalldataVerification === "self-verified"
+              ? "Decoded calldata was locally verified against raw calldata."
+              : context.decodedCalldataVerification === "partial"
+                ? "Decoded calldata is partially locally verified."
+                : context.decodedCalldataVerification === "mismatch"
+                  ? "Decoded calldata conflicts with raw calldata local checks."
+                  : "Decoded calldata is API-provided metadata.",
           detail:
-            "Assumption: decoded method names/arguments are informational and may be wrong. Raw calldata and hash checks remain authoritative.",
+            context.decodedCalldataVerification === "self-verified"
+              ? "Method selectors and decoded arguments matched local calldata checks for all decoded call steps."
+              : context.decodedCalldataVerification === "partial"
+                ? "At least one decoded call step matched local calldata checks, but other steps were missing enough data for full local verification."
+                : context.decodedCalldataVerification === "mismatch"
+                  ? "At least one decoded call step failed local selector/parameter verification. Treat decoded method names/arguments as untrusted metadata."
+                  : "Assumption: decoded method names/arguments are informational and may be wrong. Raw calldata and hash checks remain authoritative.",
           status: "enabled",
         }
       : {

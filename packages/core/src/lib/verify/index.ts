@@ -16,6 +16,10 @@ import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources, createVerificationSourceContext } from "../trust";
 import {
+  normalizeCallSteps,
+  verifyCalldata,
+} from "../decode";
+import {
   mapConsensusVerifierErrorCodeToTrustReason,
   type ConsensusTrustDecisionReason,
 } from "./consensus-trust";
@@ -240,11 +244,38 @@ function buildReportSources(
       options.evidence.onchainPolicyProof.blockNumber
       ? "proof-verified"
       : options.evidence.simulation?.trust;
+  const decodedSteps = options.evidence.dataDecoded
+    ? normalizeCallSteps(
+        options.evidence.dataDecoded,
+        options.evidence.transaction.to,
+        options.evidence.transaction.value,
+        options.evidence.transaction.operation,
+        options.evidence.transaction.data
+      )
+    : [];
+  const decodedStatuses = decodedSteps.map((step) => verifyCalldata(step).status);
+  const hasDecodedMismatch = decodedStatuses.some((status) =>
+    status === "selector-mismatch" ||
+    status === "params-mismatch" ||
+    status === "error"
+  );
+  const hasDecodedVerified = decodedStatuses.some((status) => status === "verified");
+  const hasDecodedNoData = decodedStatuses.some((status) => status === "no-data");
+  const decodedCalldataVerification = !options.evidence.dataDecoded
+    ? undefined
+    : hasDecodedMismatch
+      ? "mismatch"
+      : hasDecodedVerified && hasDecodedNoData
+        ? "partial"
+        : hasDecodedVerified
+          ? "self-verified"
+          : "api-only";
 
   return buildVerificationSources(createVerificationSourceContext({
     hasSettings: Boolean(options.settings),
     hasUnsupportedSignatures: options.signatureSummary.unsupported > 0,
     hasDecodedData: Boolean(options.evidence.dataDecoded),
+    decodedCalldataVerification,
     hasOnchainPolicyProof: Boolean(options.evidence.onchainPolicyProof),
     hasSimulation: Boolean(options.evidence.simulation),
     hasConsensusProof: Boolean(options.evidence.consensusProof),

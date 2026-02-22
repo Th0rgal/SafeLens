@@ -38,9 +38,25 @@ describe("verifyEvidencePackage", () => {
     expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD)?.trust).toBe("api-sourced");
     expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA)?.status).toBe("enabled");
+    expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA)?.trust).toBe("self-verified");
     // Without policy proof or simulation, those sections should be disabled
     expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF)?.status).toBe("disabled");
     expect(result.sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION)?.status).toBe("disabled");
+  });
+
+  it("keeps decoded calldata api-sourced when local selector checks mismatch", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const decoded = evidence.dataDecoded as { method?: string };
+    decoded.method = "definitelyWrongMethodName";
+    evidence.dataDecoded = decoded;
+
+    const result = await verifyEvidencePackage(evidence);
+    const decodedSource = result.sources.find(
+      (s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA
+    );
+
+    expect(decodedSource?.trust).toBe("api-sourced");
+    expect(decodedSource?.summary).toContain("conflicts");
   });
 
   it("detects tampered safeTxHash and still validates signatures against recomputed hash", async () => {
