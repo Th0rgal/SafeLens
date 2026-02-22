@@ -349,6 +349,40 @@ export async function fetchSimulationWitness(
     throw new Error("Simulation witness block number is null.");
   }
 
+  const safeTxHash = computeSafeTxHash({
+    safeAddress: safeAddress as Hex,
+    chainId,
+    to: transaction.to as Hex,
+    value: BigInt(transaction.value),
+    data: (transaction.data ?? "0x") as Hex,
+    operation: transaction.operation,
+    safeTxGas: BigInt(transaction.safeTxGas),
+    baseGas: BigInt(transaction.baseGas),
+    gasPrice: BigInt(transaction.gasPrice),
+    gasToken: transaction.gasToken as Hex,
+    refundReceiver: transaction.refundReceiver as Hex,
+    nonce: transaction.nonce,
+  });
+  const signature = await SIMULATION_ACCOUNT.sign({
+    hash: safeTxHash as Hex,
+  });
+  const calldata = encodeFunctionData({
+    abi: EXEC_TRANSACTION_ABI,
+    functionName: "execTransaction",
+    args: [
+      transaction.to as Address,
+      BigInt(transaction.value),
+      (transaction.data ?? "0x") as Hex,
+      transaction.operation,
+      BigInt(transaction.safeTxGas),
+      BigInt(transaction.baseGas),
+      BigInt(transaction.gasPrice),
+      transaction.gasToken as Address,
+      transaction.refundReceiver as Address,
+      signature,
+    ],
+  });
+
   const stateDiff = buildSafeStateDiff(transaction.nonce, SIMULATION_ACCOUNT.address);
   const storageKeys = stateDiff.map((entry) => entry.slot);
   const proof = await client.getProof({
@@ -356,6 +390,19 @@ export async function fetchSimulationWitness(
     storageKeys,
     blockNumber,
   });
+  const replayAccounts = await tryCollectReplayAccounts(
+    client,
+    safeAddress,
+    calldata,
+    blockNumber,
+    [
+      {
+        address: safeAddress,
+        stateDiff,
+      },
+    ],
+    [safeAddress, transaction.to as Address, SIMULATION_ACCOUNT.address]
+  );
 
   return {
     chainId,
@@ -380,6 +427,9 @@ export async function fetchSimulationWitness(
       value: entry.value,
     })),
     simulationDigest: computeSimulationDigest(simulation),
+    replayAccounts,
+    replayCaller: SIMULATION_ACCOUNT.address,
+    replayGasLimit: normalizeReplayGasLimit(transaction.safeTxGas),
   };
 }
 
@@ -406,6 +456,86 @@ function extractRevertData(err: unknown): Hex | null {
     current = obj.cause;
   }
   return null;
+}
+
+function normalizeReplayGasLimit(safeTxGas: string): number {
+  try {
+    const value = BigInt(safeTxGas);
+    if (value <= 0n) {
+      return 3_000_000;
+    }
+    if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+    return Number(value);
+  } catch {
+    return 3_000_000;
+  }
+}
+
+interface PrestateAccount {
+  balance?: string;
+  nonce?: string;
+  code?: string;
+  storage?: Record<string, string>;
+}
+
+type PrestateTrace = Record<string, PrestateAccount>;
+
+function isAddressLike(value: string): boolean {
+  return /^0x[0-9a-fA-F]{40}$/.test(value);
+}
+
+function normalizeWordHex(value: string): Hex {
+  return pad(normalizeHex(value) as Hex, { size: 32 }) as Hex;
+}
+
+function parseNonce(value: string | undefined): number {
+  if (!value) {
+    return 0;
+  }
+  const normalized = normalizeHex(value);
+  const parsed = BigInt(normalized);
+  if (parsed <= 0n) {
+    return 0;
+  }
+  if (parsed > BigInt(Number.MAX_SAFE_INTEGER)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return Number(parsed);
+}
+
+function traceToReplayAccounts(
+  trace: PrestateTrace,
+  requiredAddresses: Address[]
+): SimulationWitness["replayAccounts"] {
+  const byAddress = new Map<string, NonNullable<SimulationWitness["replayAccounts"]>[number]>();
+  for (const [address, account] of Object.entries(trace)) {
+    if (!isAddressLike(address)) {
+      continue;
+    }
+
+    const storageEntries = Object.entries(account.storage ?? {});
+    const storage = Object.fromEntries(
+      storageEntries.map(([slot, value]) => [normalizeWordHex(slot), normalizeWordHex(value)])
+    );
+
+    byAddress.set(address.toLowerCase(), {
+      address: normalizeHex(address).toLowerCase() as Address,
+      balance: account.balance ? normalizeHex(account.balance) : "0x0",
+      nonce: parseNonce(account.nonce),
+      code: account.code ? normalizeHex(account.code) : "0x",
+      storage,
+    });
+  }
+
+  const required = requiredAddresses.map((value) => value.toLowerCase());
+  const hasRequiredCoverage = required.every((address) => byAddress.has(address));
+  if (!hasRequiredCoverage) {
+    return undefined;
+  }
+
+  return Array.from(byAddress.values());
 }
 
 // ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
@@ -541,3 +671,70 @@ async function tryTraceCall(
     return { logs: [], nativeTransfers: [], gasUsed: null, available: false };
   }
 }
+
+async function tryCollectReplayAccounts(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  calldata: Hex,
+  blockNumber: bigint,
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>,
+  requiredAddresses: Address[]
+): Promise<SimulationWitness["replayAccounts"]> {
+  try {
+    const stateOverrideObj: Record<
+      string,
+      { stateDiff: Record<string, string> }
+    > = {};
+    for (const override of stateOverride) {
+      const diffs: Record<string, string> = {};
+      for (const entry of override.stateDiff) {
+        diffs[entry.slot] = entry.value;
+      }
+      stateOverrideObj[override.address] = { stateDiff: diffs };
+    }
+
+    const result = await client.request({
+      method: "debug_traceCall" as "eth_call",
+      params: [
+        {
+          to: safeAddress,
+          data: calldata,
+        },
+        `0x${blockNumber.toString(16)}`,
+        {
+          tracer: "prestateTracer",
+          tracerConfig: { diffMode: true },
+          stateOverrides: stateOverrideObj,
+        },
+      ] as unknown as [
+        { to: Address; data: Hex },
+        string,
+        Record<string, unknown>,
+      ],
+    });
+
+    const raw = result as unknown;
+    if (!raw || typeof raw !== "object") {
+      return undefined;
+    }
+
+    const rawRecord = raw as Record<string, unknown>;
+    const pre = rawRecord.pre;
+    const trace =
+      pre && typeof pre === "object"
+        ? (pre as PrestateTrace)
+        : (raw as PrestateTrace);
+
+    return traceToReplayAccounts(trace, requiredAddresses);
+  } catch {
+    return undefined;
+  }
+}
+
+export const __internal = {
+  traceToReplayAccounts,
+  normalizeReplayGasLimit,
+};

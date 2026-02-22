@@ -31,6 +31,8 @@ Verification (desktop/CLI, offline):
   → Recompute safeTxHash from tx fields (CRITICAL: never trust package's hash)
   → ECDSA signature recovery against recomputed hash
   → MPT verification of on-chain policy proof against state root
+  → MPT verification of simulation witness anchoring + digest
+  → Local `revm` replay of simulation witness world state (desktop path)
   → BLS sync committee verification of consensus proof (Rust/Helios)
   → Cross-validate: consensus state root == policy proof state root
   → Emit trust-classified verification report
@@ -165,6 +167,14 @@ Evidence packages may contain sensitive pre-execution transaction details. Airga
 |---|---|---|
 | `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:368` |
 | No Rust toolchain in CI for desktop build verification | Process | CI config |
+
+### Replay Status
+
+| Capability | Status |
+|---|---|
+| Witness-complete local replay (`revm`) for simulation verification | Implemented |
+| Deterministic mismatch reason codes for replay failures | Implemented |
+| Replay latency benchmark harness (`p50`/`p95`) | Implemented (`benchmark_replay_latency_profiles`) |
 
 ### Resolved In Current Branch
 

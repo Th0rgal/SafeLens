@@ -125,7 +125,7 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
       (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
     );
     expect(simulationSource?.trust).toBe("rpc-sourced");
-    expect(simulationSource?.summary).toContain("local replay was not run");
+    expect(simulationSource?.summary).toContain("local replay was unavailable");
   });
 
   it("keeps simulation source rpc-sourced when witness does not align with policy anchor", async () => {

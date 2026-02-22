@@ -33,7 +33,7 @@ as proof infrastructure is added.
 | Signature scheme coverage | api-sourced when unsupported signatures exist | Contract signatures / pre-approved hashes are not fully verified locally | Use on-chain or Safe-native validation when unsupported signatures appear |
 | Safe owners and threshold | api-sourced (upgradable to proof-verified) | `confirmations` and `confirmationsRequired` in evidence reflect on-chain state | Include `onchainPolicyProof` to upgrade to proof-verified |
 | On-chain policy proof | proof-verified when present, disabled otherwise | Merkle storage proofs for owners, threshold, nonce, modules, guard, fallback handler, singleton are valid against provided state root | Verify state root against finalized beacon chain consensus (Phase 4) |
-| Transaction simulation | rpc-sourced when present, disabled otherwise | Simulation of `execTransaction` with state overrides reflects actual execution | Include consensus proofs to upgrade from rpc-sourced to proof-verified |
+| Transaction simulation | rpc-sourced by default, upgradeable to proof-verified | RPC simulation output may be wrong until witness and local replay checks pass | Include `simulationWitness` and run desktop replay verification to upgrade simulation trust |
 | Decoded calldata metadata | api-sourced | Human-readable decode (`dataDecoded`) may be incorrect | Treat raw calldata + hash as canonical; decode independently when needed |
 | Local settings labels | user-provided | Address/contract labels are accurate | Keep settings under change control and review diffs |
 

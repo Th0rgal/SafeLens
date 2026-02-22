@@ -35,15 +35,27 @@ The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capab
 - Interpreter precedence contract: [`docs/architecture/interpretation-precedence.md`](docs/architecture/interpretation-precedence.md)
 - Verification source contract: [`docs/architecture/verification-source-contract.md`](docs/architecture/verification-source-contract.md)
 - ERC-7730 bundle update runbook: [`docs/runbooks/erc7730-bundle-update.md`](docs/runbooks/erc7730-bundle-update.md)
+- Simulation replay benchmark runbook: [`docs/runbooks/simulation-replay-benchmark.md`](docs/runbooks/simulation-replay-benchmark.md)
 
 ## Verification coverage
 
 - `self-verified`: Safe tx hash recomputation and supported signature recovery.
 - `proof-verified`: on-chain Safe policy proof verification (`eth_getProof` artifacts).
+- `proof-verified` (simulation): witness-anchored local `revm` replay matches packaged simulation output (success/revert, return data, logs, gas policy).
 - `consensus-verified-beacon`: beacon consensus proofs verified by desktop via Helios.
 - `consensus-verified-opstack` / `consensus-verified-linea`: deterministic envelope checks with explicit non-equivalence to beacon light-client finality.
 
 The generator/CLI can attach optional `onchainPolicyProof`, `simulation`, and `consensusProof` sections. Desktop/CLI verify consume these sections when present.
+
+### Replay benchmark
+
+Run the desktop replay benchmark harness (manual/ignored test) to capture p50/p95 latency:
+
+```bash
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml benchmark_replay_latency_profiles -- --ignored --nocapture
+```
+
+See [`docs/runbooks/simulation-replay-benchmark.md`](docs/runbooks/simulation-replay-benchmark.md) for interpretation guidance.
 
 ## Quick start
 
