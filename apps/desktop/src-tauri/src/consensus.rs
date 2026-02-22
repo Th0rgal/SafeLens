@@ -883,15 +883,24 @@ fn verify_execution_envelope(
     }
 
     let age_seconds = raw_age.max(0);
-    let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS;
+    let is_within_skew = raw_age < 0 && raw_age >= -(NON_BEACON_MAX_FUTURE_SKEW_SECS as i64);
+    let is_fresh = age_seconds <= NON_BEACON_MAX_BLOCK_AGE_SECS && !is_within_skew;
+    let detail = if is_within_skew {
+        Some(format!(
+            "Envelope block is {}s in the future (within {}s skew tolerance), age calculation unavailable.",
+            -raw_age, NON_BEACON_MAX_FUTURE_SKEW_SECS
+        ))
+    } else {
+        Some(format!(
+            "Age at packaging: {}s (max {}s).",
+            age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
+        ))
+    };
     checks.push(ConsensusCheck {
         id: "envelope-freshness".into(),
         label: "Envelope block timestamp is fresh at packaging time".into(),
         passed: is_fresh,
-        detail: Some(format!(
-            "Age at packaging: {}s (max {}s).",
-            age_seconds, NON_BEACON_MAX_BLOCK_AGE_SECS
-        )),
+        detail,
     });
     if !is_fresh {
         return ConsensusVerificationResult {
