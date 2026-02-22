@@ -57,7 +57,7 @@ export const safeTransactionSchema = z.object({
   gasUsed: z.number().nullable(),
   fee: z.string().nullable(),
   origin: z.string().nullable(),
-  dataDecoded: z.any().nullable(),
+  dataDecoded: z.unknown().nullable(),
   confirmationsRequired: z.number(),
   confirmations: z.array(
     z.object({
@@ -350,7 +350,7 @@ export const evidencePackageSchema = z.object({
   ),
   confirmationsRequired: z.number(),
   ethereumTxHash: hashSchema.nullable().optional(),
-  dataDecoded: z.any().nullable().optional(),
+  dataDecoded: z.unknown().nullable().optional(),
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
   simulation: simulationSchema.optional(),
   consensusProof: consensusProofSchema.optional(),

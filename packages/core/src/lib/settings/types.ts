@@ -12,7 +12,7 @@ export const addressRegistryEntrySchema = z.object({
   kind: z.enum(["eoa", "contract"]).default("contract"),
   group: z.string().min(1).optional(),
   chainIds: z.array(z.number()).optional(),
-  abi: z.any().optional(),
+  abi: z.unknown().optional(),
   tokenSymbol: z.string().min(1).optional(),
   tokenDecimals: z.number().int().min(0).max(255).optional(),
   note: z.string().optional(),

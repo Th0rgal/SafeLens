@@ -557,7 +557,7 @@ export default function VerifyScreen() {
                   </span>
                   <span>{evidence.transaction.nonce}</span>
                 </div>
-                {evidence.dataDecoded && (
+                {Boolean(evidence.dataDecoded) && (
                   <CallArray
                     dataDecoded={evidence.dataDecoded}
                     txTo={evidence.transaction.to}

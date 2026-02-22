@@ -596,9 +596,9 @@ export default function AnalyzePage() {
                           <span className="font-mono text-xs text-muted">
                             {tx.to.slice(0, 6)}...{tx.to.slice(-4)}
                           </span>
-                          {tx.dataDecoded?.method && (
+                          {(tx.dataDecoded as { method?: string })?.method && (
                             <span className="rounded bg-surface-2 px-1.5 py-0.5 text-xs font-medium">
-                              {tx.dataDecoded.method}
+                              {(tx.dataDecoded as { method?: string }).method}
                             </span>
                           )}
                         </div>
