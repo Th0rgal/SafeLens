@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use tauri::Manager;
 
 mod consensus;
@@ -26,13 +27,17 @@ fn main() {
             verify_simulation_replay
         ])
         .setup(|app| {
-            let window = app.get_webview_window("main").unwrap();
-
             #[cfg(target_os = "macos")]
             {
+                let window = app.get_webview_window("main").unwrap();
                 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
                 apply_vibrancy(&window, NSVisualEffectMaterial::Sidebar, None, None)
                     .expect("failed to apply vibrancy");
+            }
+
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = app;
             }
 
             Ok(())

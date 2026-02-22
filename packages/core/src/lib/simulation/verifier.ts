@@ -23,12 +23,23 @@ export interface SimulationVerificationResult {
   checks: SimulationCheck[];
 }
 
+function parseEvmQuantity(raw: string): bigint | null {
+  if (!/^(?:0[xX][0-9a-fA-F]+|[0-9]+)$/.test(raw)) {
+    return null;
+  }
+  try {
+    return BigInt(raw);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Verify structural consistency of a simulation result.
  *
  * Checks:
  * 1. Block number is a positive integer
- * 2. Gas used is a non-negative decimal string
+ * 2. Gas used is a non-negative numeric quantity string (decimal or hex)
  * 3. Return data is valid hex (or null)
  * 4. All logs have valid structure
  * 5. All state diffs have valid structure (if present)
@@ -56,8 +67,8 @@ export function verifySimulation(
   }
 
   // 2. Gas used
-  const gasNum = Number(simulation.gasUsed);
-  const gasValid = !isNaN(gasNum) && gasNum >= 0;
+  const gasValue = parseEvmQuantity(simulation.gasUsed);
+  const gasValid = gasValue !== null && gasValue >= 0n;
   checks.push({
     id: "gas-used",
     label: "Gas used",

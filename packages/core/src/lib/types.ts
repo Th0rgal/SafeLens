@@ -16,6 +16,12 @@ export const hexDataSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]*$/, "Invalid hex data");
 
+// EVM quantity-like numeric string accepted across package boundaries.
+// Supports decimal ("21000") and hex ("0x5208"/"0X5208").
+export const evmQuantitySchema = z
+  .string()
+  .regex(/^(?:0[xX][a-fA-F0-9]+|[0-9]+)$/, "Invalid numeric quantity");
+
 // Storage slot keys from eth_getProof may be compact quantities (e.g. 0x0)
 // or fully padded 32-byte words.
 export const storageSlotKeySchema = z
@@ -33,13 +39,13 @@ export const storageValueSchema = z
 export const safeTransactionSchema = z.object({
   safe: addressSchema,
   to: addressSchema,
-  value: z.string(),
+  value: z.coerce.string().pipe(evmQuantitySchema),
   data: hexDataSchema.nullable(),
   operation: z.union([z.literal(0), z.literal(1)]),
   gasToken: addressSchema,
-  safeTxGas: z.coerce.string(),
-  baseGas: z.coerce.string(),
-  gasPrice: z.coerce.string(),
+  safeTxGas: z.coerce.string().pipe(evmQuantitySchema),
+  baseGas: z.coerce.string().pipe(evmQuantitySchema),
+  gasPrice: z.coerce.string().pipe(evmQuantitySchema),
   refundReceiver: addressSchema,
   nonce: z.number(),
   executionDate: z.string().nullable(),
@@ -106,7 +112,7 @@ export type StorageProofEntry = z.infer<typeof storageProofEntrySchema>;
 // Account proof from eth_getProof
 export const accountProofSchema = z.object({
   address: addressSchema,
-  balance: z.string(),
+  balance: evmQuantitySchema,
   codeHash: hashSchema,
   nonce: z.number(),
   storageHash: hashSchema,
@@ -215,14 +221,13 @@ export type ConsensusProof = z.infer<typeof consensusProofSchema>;
 export const simulationSchema = z.object({
   success: z.boolean(),
   returnData: hexDataSchema.nullable(),
-  gasUsed: z.string(),
+  gasUsed: evmQuantitySchema,
   logs: z.array(simulationLogSchema),
   nativeTransfers: z.array(nativeTransferSchema).optional(),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
   blockNumber: z.number(),
   /** RFC3339 timestamp for the block used during simulation, when available. */
   blockTimestamp: z.string().datetime({ offset: true }).optional(),
-  /** Whether debug_traceCall was available for this simulation. */
   /** Whether debug_traceCall was available on the RPC. When false, logs and
    *  nativeTransfers are unavailable (not just empty). */
   traceAvailable: z.boolean().optional(),
@@ -250,7 +255,7 @@ export const simulationWitnessSchema = z.object({
   replayAccounts: z.array(
     z.object({
       address: addressSchema,
-      balance: z.string(),
+      balance: evmQuantitySchema,
       nonce: z.number().int().nonnegative(),
       code: hexDataSchema,
       storage: z.record(storageSlotKeySchema, storageValueSchema).default({}),
@@ -362,13 +367,13 @@ export const evidencePackageSchema = z.object({
   chainId: z.number(),
   transaction: z.object({
     to: addressSchema,
-    value: z.string(),
+    value: evmQuantitySchema,
     data: hexDataSchema.nullable(),
     operation: z.union([z.literal(0), z.literal(1)]),
     nonce: z.number(),
-    safeTxGas: z.string(),
-    baseGas: z.string(),
-    gasPrice: z.string(),
+    safeTxGas: evmQuantitySchema,
+    baseGas: evmQuantitySchema,
+    gasPrice: evmQuantitySchema,
     gasToken: addressSchema,
     refundReceiver: addressSchema,
   }),

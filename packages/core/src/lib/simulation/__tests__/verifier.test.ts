@@ -78,6 +78,20 @@ describe("verifySimulation", () => {
     expect(check?.passed).toBe(true);
   });
 
+  it("passes for hex gas quantity", () => {
+    const result = verifySimulation(makeValidSimulation({ gasUsed: "0x5208" }));
+    expect(result.valid).toBe(true);
+    const check = result.checks.find((c) => c.id === "gas-used");
+    expect(check?.passed).toBe(true);
+  });
+
+  it("fails for malformed hex gas quantity", () => {
+    const result = verifySimulation(makeValidSimulation({ gasUsed: "0x" }));
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "gas-used");
+    expect(check?.passed).toBe(false);
+  });
+
   it("fails for invalid returnData hex", () => {
     const result = verifySimulation(
       makeValidSimulation({ returnData: "invalid-hex" as `0x${string}` })
