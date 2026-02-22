@@ -327,25 +327,23 @@ export default function AnalyzePage() {
   const [proofWarning, setProofWarning] = useState<string | null>(null);
   const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
   const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
+  const [suggestedSimulationRpc, setSuggestedSimulationRpc] = useState<string | null>(null);
 
-  const resolveRpcForChain = useCallback(async (chainId: number): Promise<string> => {
-    const manual = rpcUrl.trim();
-    if (manual) return manual;
-
+  const resolveSuggestedRpcForChain = useCallback(async (chainId: number): Promise<string> => {
     const candidates = DEFAULT_RPC_CANDIDATES[chainId];
     if (!candidates) return "";
 
     const [primary, secondary] = candidates;
     const primaryOk = await pingRpcChainId(primary, chainId);
-    const chosen = primaryOk ? primary : secondary;
-    setRpcUrl(chosen);
-    return chosen;
-  }, [rpcUrl]);
-
+    return primaryOk ? primary : secondary;
+  }, []);
   /** Optionally enrich a package with on-chain policy proof, simulation, and consensus proof. */
-  const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
+  const maybeEnrich = async (
+    pkg: EvidencePackage,
+    options?: { overrideRpcUrl?: string; showMissingSimulationWarning?: boolean }
+  ): Promise<EvidencePackage> => {
     let enriched = pkg;
-    const resolvedRpcUrl = await resolveRpcForChain(pkg.chainId);
+    const resolvedRpcUrl = options?.overrideRpcUrl?.trim() ?? rpcUrl.trim();
     const rpcProvided = Boolean(resolvedRpcUrl);
     const { consensusMode, shouldAttemptConsensusProof } = buildConsensusEnrichmentPlan(pkg.chainId);
     let consensusProofAttempted = false;
@@ -356,6 +354,21 @@ export default function AnalyzePage() {
     let simulationFailed = false;
     let onchainPolicyProofAttempted = false;
     let simulationAttempted = false;
+
+    if (!rpcProvided) {
+      setSuggestedSimulationRpc(null);
+      if (options?.showMissingSimulationWarning !== false) {
+        const suggestedRpc = await resolveSuggestedRpcForChain(pkg.chainId);
+        if (suggestedRpc) {
+          setSuggestedSimulationRpc(suggestedRpc);
+          setSimulationWarning(
+            `On-chain simulation data is missing. It is available for ${getChainName(pkg.chainId)} via ${suggestedRpc}.`
+          );
+        }
+      }
+    } else {
+      setSuggestedSimulationRpc(null);
+    }
 
     // Fetch consensus proof first so policy proof can be pinned to the same
     // finalized execution block.
@@ -436,6 +449,7 @@ export default function AnalyzePage() {
     setProofWarning(null);
     setSimulationWarning(null);
     setConsensusWarning(null);
+    setSuggestedSimulationRpc(null);
     setEvidence(null);
     setPendingTxs(null);
     setSafeAddress(null);
@@ -469,13 +483,11 @@ export default function AnalyzePage() {
         const result = parseSafeUrlFlexible(input);
 
         if (result.type === "transaction") {
-          await resolveRpcForChain(result.data.chainId);
           const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
           let pkg = createEvidencePackage(tx, result.data.chainId, input);
           pkg = await maybeEnrich(pkg);
           setEvidence(pkg);
         } else {
-          await resolveRpcForChain(result.data.chainId);
           const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
           if (txs.length === 0) {
             setError("No pending transactions found for this Safe.");
@@ -500,10 +512,10 @@ export default function AnalyzePage() {
     setProofWarning(null);
     setSimulationWarning(null);
     setConsensusWarning(null);
+    setSuggestedSimulationRpc(null);
 
     try {
       const prefix = getChainPrefix(tx._chainId);
-      await resolveRpcForChain(tx._chainId);
       const addr = safeAddress ?? tx.safe;
       const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
       let pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
@@ -529,6 +541,30 @@ export default function AnalyzePage() {
       setTimeout(() => setCopied(false), 2000);
     }
   }, [evidence]);
+
+  const handleRetrySimulationWithSuggestedRpc = async () => {
+    if (!evidence || !suggestedSimulationRpc) return;
+
+    setLoading(true);
+    setError(null);
+    setProofWarning(null);
+    setSimulationWarning(null);
+    setConsensusWarning(null);
+
+    try {
+      const enriched = await maybeEnrich(evidence, {
+        overrideRpcUrl: suggestedSimulationRpc,
+        showMissingSimulationWarning: false,
+      });
+      setEvidence(enriched);
+      setRpcUrl(suggestedSimulationRpc);
+      setSuggestedSimulationRpc(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to retry on-chain enrichment");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Group pending txs by chain for display
   const txsByChain = pendingTxs
@@ -582,7 +618,7 @@ export default function AnalyzePage() {
               className="text-xs"
             />
             <p className="mt-1 text-xs text-muted">
-              For supported chains, SafeLens auto-prefills a tested RPC URL and falls back to a secondary endpoint if the primary fails a ping.
+              Optional. Leave blank to generate quickly without simulation; SafeLens can suggest a chain RPC and let you retry enrichment.
             </p>
           </div>
         </CardContent>
@@ -690,7 +726,20 @@ export default function AnalyzePage() {
       {simulationWarning && (
         <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
           <AlertTitle>Simulation Warning</AlertTitle>
-          <AlertDescription>{simulationWarning}</AlertDescription>
+          <AlertDescription className="space-y-2">
+            <div>{simulationWarning}</div>
+            {suggestedSimulationRpc && evidence && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 border-amber-500/30 bg-transparent text-xs text-amber-100 hover:bg-amber-500/10"
+                onClick={handleRetrySimulationWithSuggestedRpc}
+                disabled={loading}
+              >
+                Retry using {suggestedSimulationRpc}
+              </Button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
