@@ -119,6 +119,11 @@ export type SimulationReplayVerificationResult = {
     | "simulation-replay-mismatch-gas"
   >;
   error?: string | null;
+  replayLogs?: Array<{
+    address: string;
+    topics: string[];
+    data: string;
+  }>;
 };
 
 interface BuildReportSourcesOptions {

@@ -263,6 +263,9 @@ export const simulationWitnessSchema = z.object({
   ).optional(),
   replayCaller: addressSchema.optional(),
   replayGasLimit: z.number().int().positive().optional(),
+  /** When true, simulation effects (logs/nativeTransfers) are intentionally
+   * omitted from the packaged simulation and must be derived from local replay. */
+  witnessOnly: z.boolean().optional(),
 });
 
 export type SimulationWitness = z.infer<typeof simulationWitnessSchema>;

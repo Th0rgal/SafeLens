@@ -21,7 +21,9 @@ User Input (Safe URL/address)
   → Fetch from Safe Transaction Service API (api-sourced)
   → Create base evidence package
   → OPTIONAL: Enrich with on-chain policy proof via eth_getProof (rpc-sourced)
-  → OPTIONAL: Enrich with simulation via eth_call + state overrides (rpc-sourced)
+  → OPTIONAL: Enrich with simulation via eth_call + state overrides (rpc-sourced generation input)
+  → OPTIONAL: Attach simulation witness (state root, account/storage proofs, replay world-state)
+  → If witness replay inputs are complete, export in witness-only simulation mode (effects derived from replay)
   → OPTIONAL: Enrich with consensus proof (beacon BLS data or execution envelope)
   → Finalize export contract (fully-verifiable | partial)
   → Export JSON
@@ -33,6 +35,7 @@ Verification (desktop/CLI, offline):
   → MPT verification of on-chain policy proof against state root
   → MPT verification of simulation witness anchoring + digest
   → Local `revm` replay of simulation witness world state (desktop path)
+  → Derive simulation effects from replay outputs when package is witness-only
   → BLS sync committee verification of consensus proof (Rust/Helios)
   → Cross-validate: consensus state root == policy proof state root
   → Emit trust-classified verification report

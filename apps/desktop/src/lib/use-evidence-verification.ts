@@ -45,6 +45,7 @@ type EvidenceVerificationState = {
   hashMatch: boolean;
   policyProof: PolicyProofVerificationResult | undefined;
   simulationVerification: SimulationVerificationResult | undefined;
+  simulationReplayVerification: SimulationReplayVerificationResult | undefined;
   consensusVerification: ConsensusVerificationResult | undefined;
   consensusSourceSummary: string;
 };
@@ -58,6 +59,7 @@ const EMPTY_STATE: EvidenceVerificationState = {
   hashMatch: true,
   policyProof: undefined,
   simulationVerification: undefined,
+  simulationReplayVerification: undefined,
   consensusVerification: undefined,
   consensusSourceSummary: "",
 };
@@ -111,6 +113,7 @@ export function useEvidenceVerification(
       hashMatch: true,
       policyProof: undefined,
       simulationVerification: undefined,
+      simulationReplayVerification: undefined,
       consensusVerification: undefined,
       consensusSourceSummary: currentEvidence.consensusProof
         ? "Consensus proof included but not yet verified (requires desktop app)."
@@ -139,6 +142,7 @@ export function useEvidenceVerification(
           hashMatch: report.hashMatch,
           policyProof: report.policyProof,
           simulationVerification: report.simulationVerification,
+          simulationReplayVerification: undefined,
           consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
         }));
 
@@ -168,6 +172,13 @@ export function useEvidenceVerification(
               simulationReplayVerification: replayResult,
             })
           : report;
+
+        if (!cancelled && replayResult) {
+          setState((prev) => ({
+            ...prev,
+            simulationReplayVerification: replayResult,
+          }));
+        }
 
         if (!currentEvidence.consensusProof) return;
 

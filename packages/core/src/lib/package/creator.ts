@@ -168,8 +168,20 @@ export async function enrichWithSimulation(
   return {
     ...evidence,
     version: withEnrichmentVersion(evidence.version),
-    simulation,
-    simulationWitness,
+    simulation: simulationWitness
+      ? {
+          ...simulation,
+          // Witness-only mode: do not ship decoded effects from RPC output.
+          logs: [],
+          nativeTransfers: undefined,
+        }
+      : simulation,
+    simulationWitness: simulationWitness
+      ? {
+          ...simulationWitness,
+          witnessOnly: true,
+        }
+      : simulationWitness,
   };
 }
 

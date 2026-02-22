@@ -59,6 +59,23 @@ For OP Stack and Linea, summary/detail must preserve the non-equivalence boundar
 3. `mismatch` -> trust `api-sourced` with explicit mismatch wording
 4. `api-only` or omitted -> trust `api-sourced`
 
+## Simulation trust matrix
+
+`simulation` trust is derived from witness + replay outcomes:
+
+1. no simulation artifact -> source disabled
+2. simulation without witness -> trust `rpc-sourced`
+3. simulation + witness, but witness verification fails -> trust `rpc-sourced`
+4. simulation + witness verified, replay not run/failed/mismatch -> trust `rpc-sourced`
+5. simulation + witness verified, replay executes and matches -> trust `proof-verified`
+
+Notes:
+
+- In witness-only packages, simulation effects are intentionally omitted from
+  packaged RPC output and are derived from local replay during verification.
+- Log equality checks apply when packaged logs are present; witness-only replay
+  still enforces success/return-data/gas policy checks.
+
 ## Required tests
 
 When changing this contract, update and run:

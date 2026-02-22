@@ -325,6 +325,17 @@ export function classifySimulationStatus(
     };
   }
 
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
+  if (witnessOnlySimulation) {
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "check",
+      detail:
+        "Simulation ran successfully. This package is witness-only, effects are derived from local replay.",
+    };
+  }
+
   const summary = summarizeSimulationEvents(
     evidence.simulation.logs ?? [],
     evidence.safeAddress,

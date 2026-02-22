@@ -46,7 +46,7 @@ pub struct ReplaySimulation {
     pub logs: Vec<ReplaySimulationLog>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplaySimulationLog {
     pub address: String,
@@ -61,6 +61,7 @@ pub struct ReplayWitness {
     pub replay_accounts: Option<Vec<ReplayWitnessAccount>>,
     pub replay_caller: Option<String>,
     pub replay_gas_limit: Option<u64>,
+    pub witness_only: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +82,7 @@ pub struct SimulationReplayVerificationResult {
     pub success: bool,
     pub reason: String,
     pub error: Option<String>,
+    pub replay_logs: Option<Vec<ReplaySimulationLog>>,
 }
 
 #[derive(Debug)]
@@ -103,6 +105,7 @@ pub fn verify_simulation_replay(
                 "simulationWitness.replayAccounts is missing; witness is incomplete for local replay."
                     .to_string(),
             ),
+            replay_logs: None,
         };
     };
 
@@ -114,6 +117,7 @@ pub fn verify_simulation_replay(
                 success: false,
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(error),
+                replay_logs: None,
             };
         }
     };
@@ -129,6 +133,7 @@ pub fn verify_simulation_replay(
                 "Replay success mismatch: replay={}, simulation={}",
                 replay.success, input.simulation.success
             )),
+            replay_logs: Some(replay.logs.clone()),
         };
     }
 
@@ -141,18 +146,23 @@ pub fn verify_simulation_replay(
                 "Replay returnData mismatch: replay={}, simulation={}",
                 replay.return_data, expected_return_data
             )),
+            replay_logs: Some(replay.logs.clone()),
         };
     }
 
-    let expected_logs = normalize_simulation_logs(&input.simulation.logs);
-    let replay_logs = normalize_simulation_logs(&replay.logs);
-    if replay_logs != expected_logs {
-        return SimulationReplayVerificationResult {
-            executed: true,
-            success: false,
-            reason: REASON_REPLAY_MISMATCH_LOGS.to_string(),
-            error: Some("Replay logs mismatch against packaged simulation logs.".to_string()),
-        };
+    let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
+    if !witness_only {
+        let expected_logs = normalize_simulation_logs(&input.simulation.logs);
+        let replay_logs = normalize_simulation_logs(&replay.logs);
+        if replay_logs != expected_logs {
+            return SimulationReplayVerificationResult {
+                executed: true,
+                success: false,
+                reason: REASON_REPLAY_MISMATCH_LOGS.to_string(),
+                error: Some("Replay logs mismatch against packaged simulation logs.".to_string()),
+                replay_logs: Some(replay.logs.clone()),
+            };
+        }
     }
 
     let expected_gas_used = match parse_u256(&input.simulation.gas_used) {
@@ -163,6 +173,7 @@ pub fn verify_simulation_replay(
                 success: false,
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(format!("Invalid simulation.gasUsed: {err}")),
+                replay_logs: Some(replay.logs.clone()),
             };
         }
     };
@@ -176,6 +187,7 @@ pub fn verify_simulation_replay(
                 "Replay gas policy mismatch: replayGas={} exceeds simulationGas={}",
                 replay.gas_used, expected_gas_used
             )),
+            replay_logs: Some(replay.logs.clone()),
         };
     }
 
@@ -184,6 +196,7 @@ pub fn verify_simulation_replay(
         success: true,
         reason: REASON_REPLAY_NOT_RUN.to_string(),
         error: None,
+        replay_logs: Some(replay.logs),
     }
 }
 
@@ -415,6 +428,7 @@ mod tests {
                 replay_accounts: None,
                 replay_caller: None,
                 replay_gas_limit: None,
+                witness_only: None,
             },
         });
 
@@ -448,6 +462,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                witness_only: None,
             },
         });
 
@@ -482,6 +497,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                witness_only: None,
             },
         });
 
@@ -537,6 +553,7 @@ mod tests {
                         ]),
                         replay_caller: Some(caller.to_string()),
                         replay_gas_limit: Some(500000),
+                        witness_only: None,
                     },
                 };
 
