@@ -211,7 +211,7 @@ export type Interpretation =
 export type Interpreter = (
   dataDecoded: unknown,
   txTo: string,
-  txOperation: number,
+  txOperation: 0 | 1,
   txData?: string | null,
   chainId?: number,
   txValue?: string,

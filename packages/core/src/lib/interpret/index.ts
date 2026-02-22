@@ -76,7 +76,7 @@ const INTERPRETERS: Interpreter[] = [
 export function interpretTransaction(
   dataDecoded: unknown,
   txTo: string,
-  txOperation: number,
+  txOperation: 0 | 1,
   disabledIds?: string[],
   txData?: string | null,
   chainId?: number,
