@@ -26,6 +26,8 @@ SafeLens generates and verifies evidence packages for Gnosis Safe multisig trans
 
 ## Trust model
 
+Even if your computer, RPC node, Safe API, and frontend are all compromised, you will never sign something you don't intend to. SafeLens runs on a trusted machine you control, so attackers cannot fake what you sign or trace your signing activity.
+
 The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capability, it cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
 
 ## Quick start
@@ -178,6 +180,10 @@ Generator rollout flags:
 - `ExecutionSafetyPanel` collapsed view now surfaces a prioritized `Attention needed` summary (errors/warnings first, explicit reason codes, deduped against network-support helper text), while detailed helper text remains in expanded view to reduce repeated partial-support copy.
 - Core now exports a strict `ConsensusVerifierErrorCode` contract + type guard; desktop consensus-detail mapping only accepts that explicit code set (plus one documented feature-flag fallback), reducing broad string handling drift at the app/core boundary.
 - Core now also exports `findLegacyPendingConsensusExportReason(...)`; desktop support/safety UI uses this shared helper instead of duplicating `*-consensus-verifier-pending` checks, keeping legacy-reason handling centralized and typed.
+
+---
+
+Developed by [LFG Labs](https://lfg.rs) for the [Kohaku](https://kohaku.io) initiative. Originally an idea from [@nconsigny](https://x.com/nconsigny).
 
 ### Cleanup
 
