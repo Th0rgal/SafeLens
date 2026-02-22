@@ -329,6 +329,9 @@ export default function SettingsScreen() {
                 </div>
             ))}
             <div className="flex items-start gap-2 border-t border-border/15 pt-2">
+              <div className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/20 bg-surface-2/40 text-muted">
+                <Circle className="h-3.5 w-3.5" />
+              </div>
               <div className="grid flex-1 grid-cols-3 gap-2">
                 <Input value={newChainId} onChange={(e) => setNewChainId(e.target.value)} placeholder="Chain ID" className="text-xs" />
                 <Input value={newChainName} onChange={(e) => setNewChainName(e.target.value)} placeholder="Name" className="text-xs" />
