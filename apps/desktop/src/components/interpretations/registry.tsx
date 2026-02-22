@@ -35,8 +35,23 @@ export interface EvidenceContext {
 // variant is added to the union, TypeScript will error here until a
 // renderer is provided.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const RENDERERS: Record<Interpretation["id"], ComponentType<{ details: any; context?: EvidenceContext }>> = {
+type RendererPropsById = {
+  [K in Interpretation["id"]]: {
+    details: Extract<Interpretation, { id: K }>["details"];
+    context?: EvidenceContext;
+  };
+};
+
+type RendererById = {
+  [K in Interpretation["id"]]: ComponentType<RendererPropsById[K]>;
+};
+
+type AnyRendererProps = {
+  details: Interpretation["details"];
+  context?: EvidenceContext;
+};
+
+const RENDERERS: RendererById = {
   "token-transfer": TokenTransferCard,
   "cowswap-twap": CowSwapTwapCard,
   "cowswap-presign": CowSwapPreSignCard,
@@ -44,8 +59,8 @@ const RENDERERS: Record<Interpretation["id"], ComponentType<{ details: any; cont
   "erc7730": ERC7730Card,
 };
 
-export function getRenderer(id: Interpretation["id"]): ComponentType<{ details: Interpretation["details"]; context?: EvidenceContext }> {
-  return RENDERERS[id];
+export function getRenderer(id: Interpretation["id"]): ComponentType<AnyRendererProps> {
+  return RENDERERS[id] as ComponentType<AnyRendererProps>;
 }
 
 // ── Severity-driven styling ─────────────────────────────────────────
