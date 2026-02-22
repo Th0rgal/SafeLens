@@ -10,7 +10,7 @@ import { useSettingsConfig } from "@/lib/settings/hooks";
 interface InterpretationCardProps {
   dataDecoded: unknown;
   txTo: string;
-  txOperation: number;
+  txOperation: 0 | 1;
   /** Raw calldata hex for selector-based fallback when dataDecoded is null. */
   txData?: string | null;
   /** Chain ID for token metadata resolution. */
