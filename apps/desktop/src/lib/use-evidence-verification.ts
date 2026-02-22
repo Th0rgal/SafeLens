@@ -142,28 +142,6 @@ export function useEvidenceVerification(
           consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
         }));
 
-        if (!currentEvidence.consensusProof) return;
-
-        const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
-        const consensusResult = !expectedStateRoot
-          ? createConsensusFailureResult(
-              "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
-              "missing-policy-state-root"
-            )
-          : await invoke<ConsensusVerificationResult>("verify_consensus_proof", {
-              input: {
-                ...currentEvidence.consensusProof,
-                expectedStateRoot,
-                packageChainId: currentEvidence.chainId,
-                packagePackagedAt: currentEvidence.packagedAt,
-              } satisfies ConsensusProofVerifyInput,
-            }).catch((err) =>
-              createConsensusFailureResult(
-                err instanceof Error ? err.message : String(err),
-                "tauri-invoke-failed"
-              )
-            );
-
         const replayResult =
           currentEvidence.simulation && currentEvidence.simulationWitness
             ? await invoke<SimulationReplayVerificationResult>(
@@ -190,6 +168,28 @@ export function useEvidenceVerification(
               simulationReplayVerification: replayResult,
             })
           : report;
+
+        if (!currentEvidence.consensusProof) return;
+
+        const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
+        const consensusResult = !expectedStateRoot
+          ? createConsensusFailureResult(
+              "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
+              "missing-policy-state-root"
+            )
+          : await invoke<ConsensusVerificationResult>("verify_consensus_proof", {
+              input: {
+                ...currentEvidence.consensusProof,
+                expectedStateRoot,
+                packageChainId: currentEvidence.chainId,
+                packagePackagedAt: currentEvidence.packagedAt,
+              } satisfies ConsensusProofVerifyInput,
+            }).catch((err) =>
+              createConsensusFailureResult(
+                err instanceof Error ? err.message : String(err),
+                "tauri-invoke-failed"
+              )
+            );
 
         const upgradedReport = applyConsensusVerificationToReport(withReplay, currentEvidence, {
           settings,

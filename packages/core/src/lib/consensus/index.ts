@@ -24,13 +24,13 @@ export interface FetchConsensusProofOptions
   extends BeaconFetchConsensusProofOptions,
     FetchExecutionConsensusProofOptions {
   /**
-   * Rollout gate for experimental OP Stack consensus envelopes.
-   * Default is false until verifier/runtime hardening is complete.
+   * Optional rollout override for OP Stack consensus envelopes.
+   * Defaults to enabled; set to false only for emergency rollback.
    */
   enableExperimentalOpstackConsensus?: boolean;
   /**
-   * Rollout gate for experimental Linea consensus envelopes.
-   * Default is false until the full verifier path is complete.
+   * Optional rollout override for Linea consensus envelopes.
+   * Defaults to enabled; set to false only for emergency rollback.
    */
   enableExperimentalLineaConsensus?: boolean;
 }
@@ -59,7 +59,7 @@ export class UnsupportedConsensusModeError extends Error {
  * Fetch a consensus proof for a chain using explicit mode routing.
  * Beacon uses light-client proofs; opstack/linea return execution-header
  * proof envelopes for packaging. Desktop verification runs deterministic
- * envelope checks for those modes and emits explicit pending-verifier codes.
+ * envelope checks for those modes.
  */
 export async function fetchConsensusProof(
   chainId: number,
@@ -79,7 +79,7 @@ export async function fetchConsensusProof(
 
   if (
     capability.consensusMode === "opstack" &&
-    options.enableExperimentalOpstackConsensus !== true
+    options.enableExperimentalOpstackConsensus === false
   ) {
     throw new UnsupportedConsensusModeError(
       chainId,
@@ -90,7 +90,7 @@ export async function fetchConsensusProof(
 
   if (
     capability.consensusMode === "linea" &&
-    options.enableExperimentalLineaConsensus !== true
+    options.enableExperimentalLineaConsensus === false
   ) {
     throw new UnsupportedConsensusModeError(
       chainId,

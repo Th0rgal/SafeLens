@@ -259,10 +259,7 @@ function buildReportSources(
           : options.simulationReplayVerification?.reason ===
               "simulation-replay-exec-error"
             ? "simulation-replay-exec-error"
-            : options.simulationReplayVerification?.reason ===
-                "simulation-replay-not-run"
-              ? "simulation-replay-not-run"
-              : "simulation-replay-not-run";
+            : "simulation-replay-not-run";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
         options.evidence.dataDecoded,
