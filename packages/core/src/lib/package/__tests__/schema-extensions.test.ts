@@ -501,6 +501,11 @@ describe("simulation schema", () => {
     expect(simulationSchema.safeParse(invalid).success).toBe(false);
   });
 
+  it("rejects simulation with invalid gas quantity", () => {
+    const invalid = { ...MOCK_SIMULATION, gasUsed: "not-a-quantity" };
+    expect(simulationSchema.safeParse(invalid).success).toBe(false);
+  });
+
   it("validates simulation log structure", () => {
     const result = simulationSchema.safeParse(MOCK_SIMULATION);
     expect(result.success).toBe(true);
@@ -557,5 +562,30 @@ describe("simulation witness schema", () => {
       expect(result.data.replayCaller).toBe(witness.replayCaller);
       expect(result.data.replayGasLimit).toBe(3000000);
     }
+  });
+
+  it("rejects replay account balances that are not numeric quantities", () => {
+    const witness = {
+      chainId: 1,
+      safeAddress: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
+      blockNumber: 19000000,
+      stateRoot:
+        "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+      safeAccountProof: MOCK_POLICY_PROOF.accountProof,
+      overriddenSlots: [],
+      simulationDigest:
+        "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      replayAccounts: [
+        {
+          address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
+          balance: "one-eth",
+          nonce: 0,
+          code: "0x",
+          storage: {},
+        },
+      ],
+    };
+
+    expect(simulationWitnessSchema.safeParse(witness).success).toBe(false);
   });
 });
