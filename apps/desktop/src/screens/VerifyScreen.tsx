@@ -13,6 +13,8 @@ import {
   decodeSimulationEvents,
   decodeNativeTransfers,
   computeRemainingApprovals,
+  normalizeCallSteps,
+  verifyCalldata,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
@@ -309,6 +311,24 @@ export default function VerifyScreen() {
       classifySimulationStatus(evidence, simulationVerification),
     ];
   }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification]);
+  const decodedCallsSummary = useMemo(() => {
+    if (!evidence?.dataDecoded) return null;
+    const steps = normalizeCallSteps(
+      evidence.dataDecoded,
+      evidence.transaction.to,
+      evidence.transaction.value,
+      evidence.transaction.operation,
+      evidence.transaction.data
+    );
+    if (steps.length === 0) return null;
+    const allVerified = steps.every((step) => verifyCalldata(step).status === "verified");
+    return {
+      count: steps.length,
+      trustLevel: allVerified
+        ? ("self-verified" as const)
+        : ("api-sourced" as const),
+    };
+  }, [evidence]);
 
   return (
     <div className="space-y-6">
@@ -562,6 +582,14 @@ export default function VerifyScreen() {
                     <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted hover:text-fg transition-colors [&::-webkit-details-marker]:hidden">
                       <ChevronRight className="h-3 w-3 transition-transform group-open/decoded:rotate-90" />
                       Decoded Calls
+                      {decodedCallsSummary && (
+                        <>
+                          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-surface-2/60 px-1.5 text-[10px] font-semibold text-muted">
+                            {decodedCallsSummary.count}
+                          </span>
+                          <TrustBadge level={decodedCallsSummary.trustLevel} />
+                        </>
+                      )}
                     </summary>
                     <div className="mt-1.5">
                       <CallArray
