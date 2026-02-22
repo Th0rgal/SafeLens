@@ -83,8 +83,8 @@ function makeWitness(
   };
 }
 
-describe("verifyEvidencePackage simulation witness trust upgrades", () => {
-  it("upgrades simulation source to proof-verified when witness and policy proof validate", async () => {
+describe("verifyEvidencePackage simulation witness trust handling", () => {
+  it("keeps simulation source rpc-sourced until local replay verification exists", async () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const simulation = makeSimulation();
     const enriched = {
@@ -101,7 +101,8 @@ describe("verifyEvidencePackage simulation witness trust upgrades", () => {
     const simulationSource = report.sources.find(
       (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
     );
-    expect(simulationSource?.trust).toBe("proof-verified");
+    expect(simulationSource?.trust).toBe("rpc-sourced");
+    expect(simulationSource?.summary).toContain("local replay was not run");
   });
 
   it("keeps simulation source rpc-sourced when witness does not align with policy anchor", async () => {

@@ -11,6 +11,9 @@ export type DecodedCalldataVerificationStatus =
   | "partial"
   | "mismatch"
   | "api-only";
+export type SimulationVerificationReason =
+  | "simulation-replay-not-run"
+  | "simulation-witness-proof-failed";
 
 interface ConsensusSourceMetadata {
   name: string;
@@ -86,6 +89,8 @@ export interface VerificationSourceContext {
   decodedCalldataVerification?: DecodedCalldataVerificationStatus;
   hasOnchainPolicyProof: boolean;
   hasSimulation: boolean;
+  hasSimulationWitness?: boolean;
+  simulationVerificationReason?: SimulationVerificationReason;
   hasConsensusProof: boolean;
   onchainPolicyProofTrust?: TrustLevel;
   simulationTrust?: TrustLevel;
@@ -100,6 +105,7 @@ export const DEFAULT_VERIFICATION_SOURCE_CONTEXT: VerificationSourceContext = {
   hasDecodedData: false,
   hasOnchainPolicyProof: false,
   hasSimulation: false,
+  hasSimulationWitness: false,
   hasConsensusProof: false,
 };
 
@@ -300,9 +306,17 @@ export function buildVerificationSources(
           title: "Transaction simulation",
           trust: context.simulationTrust ?? "rpc-sourced",
           summary:
-            "Transaction simulated via execTransaction with state overrides.",
+            context.simulationVerificationReason === "simulation-witness-proof-failed"
+              ? "Simulation witness checks failed; simulation remains RPC-sourced."
+              : context.simulationVerificationReason === "simulation-replay-not-run"
+                ? "Simulation witness checks passed, but local replay was not run."
+                : "Transaction simulated via execTransaction with state overrides.",
           detail:
-            "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified if backed by consensus proofs.",
+            context.simulationVerificationReason === "simulation-witness-proof-failed"
+              ? "Simulation output was compared against witness metadata, but witness proof validation failed. Treat simulation outcome as RPC-trusted until witness and replay verification both pass."
+              : context.simulationVerificationReason === "simulation-replay-not-run"
+                ? "Witness anchoring checks passed, but this verifier path does not execute a full local EVM replay yet. Trust remains RPC-sourced until replay verification is available and passes."
+                : "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified only when a full local replay verifier confirms the packaged result.",
           status: "enabled" as VerificationSourceStatus,
         }
       : {
