@@ -164,7 +164,7 @@ Evidence packages may contain sensitive pre-execution transaction details. Airga
 | Issue | Severity | Location |
 |---|---|---|
 | `fail_result()` drops accumulated checks in non-beacon envelope verifier | Medium | `consensus.rs:1258` |
-| `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:213` |
+| `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:368` |
 | Future-dated envelope timestamps bypass staleness check (clamped to 0) | Low | `consensus.rs:885` |
 | Unnormalized state root comparison may cause false rejection in envelope verifier | Low | `consensus.rs` |
 | No Rust toolchain in CI for desktop build verification | Process | CI config |
