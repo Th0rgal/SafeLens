@@ -54,9 +54,9 @@ function extractValue(
     }
 
     // Traverse into nested struct (e.g., #.params.tokenIn)
-    let value: any = param.value;
+    let value: unknown = param.value;
     for (const part of parts.slice(1)) {
-      value = value?.[part];
+      value = (value as Record<string, unknown>)?.[part];
     }
     return value != null ? String(value) : null;
   }
@@ -89,9 +89,9 @@ function extractValue(
     }
 
     // Traverse into nested struct
-    let value: any = param.value;
+    let value: unknown = param.value;
     for (const part of parts.slice(1)) {
-      value = value?.[part];
+      value = (value as Record<string, unknown>)?.[part];
     }
     return value != null ? String(value) : null;
   }
