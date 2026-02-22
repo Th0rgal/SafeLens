@@ -17,10 +17,10 @@ export const hexDataSchema = z
   .regex(/^0x[a-fA-F0-9]*$/, "Invalid hex data");
 
 // EVM quantity-like numeric string accepted across package boundaries.
-// Supports decimal ("21000") and hex ("0x5208"/"0X5208").
+// Supports decimal ("21000") and lowercase-prefixed hex ("0x5208").
 export const evmQuantitySchema = z
   .string()
-  .regex(/^(?:0[xX][a-fA-F0-9]+|[0-9]+)$/, "Invalid numeric quantity");
+  .regex(/^(?:0x[a-fA-F0-9]+|[0-9]+)$/, "Invalid numeric quantity");
 
 // Storage slot keys from eth_getProof may be compact quantities (e.g. 0x0)
 // or fully padded 32-byte words.
