@@ -635,7 +635,7 @@ function SafePolicySection({ evidence }: { evidence: EvidencePackage }) {
         {/* Threshold */}
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted">Threshold</span>
-          <span className="font-medium">{policy.threshold} of {policy.owners.length}</span>
+          <span className="font-medium">{policy.threshold}</span>
         </div>
 
         {/* Owners */}
@@ -1019,7 +1019,7 @@ function ExecutionSafetyPanel({
           </>
         ) : simulationAvailable && simulationVerification?.executionReverted ? (
           <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            Simulation ran but the transaction reverted. Token effects could not be determined.
+            Token effects could not be determined because the simulation reverted.
           </div>
         ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
