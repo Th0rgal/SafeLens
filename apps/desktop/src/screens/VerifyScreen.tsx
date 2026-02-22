@@ -15,6 +15,7 @@ import {
   computeRemainingApprovals,
   normalizeCallSteps,
   verifyCalldata,
+  VERIFICATION_SOURCE_IDS,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
@@ -159,7 +160,9 @@ export default function VerifyScreen() {
         setHashMatch(report.hashMatch);
         setPolicyProof(report.policyProof);
         setSimulationVerification(report.simulationVerification);
-        const initialConsensusSource = report.sources.find((source) => source.id === "consensus-proof");
+        const initialConsensusSource = report.sources.find(
+          (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+        );
         if (initialConsensusSource) {
           setConsensusSourceSummary(initialConsensusSource.summary);
         }
@@ -187,7 +190,9 @@ export default function VerifyScreen() {
               }
             );
             if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
+              const consensusSource = upgradedReport.sources.find(
+                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+              );
               setConsensusVerification(missingRootResult);
               if (consensusSource) {
                 setConsensusSourceSummary(consensusSource.summary);
@@ -217,7 +222,9 @@ export default function VerifyScreen() {
               }
             );
             if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
+              const consensusSource = upgradedReport.sources.find(
+                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+              );
               setConsensusVerification(consensusResult);
               if (consensusSource) {
                 setConsensusSourceSummary(consensusSource.summary);
@@ -243,7 +250,9 @@ export default function VerifyScreen() {
               }
             );
             if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find((source) => source.id === "consensus-proof");
+              const consensusSource = upgradedReport.sources.find(
+                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+              );
               setConsensusVerification(failedResult);
               if (consensusSource) {
                 setConsensusSourceSummary(consensusSource.summary);

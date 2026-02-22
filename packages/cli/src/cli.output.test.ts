@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import { createEvidencePackage } from "@safelens/core";
+import { createEvidencePackage, VERIFICATION_SOURCE_IDS } from "@safelens/core";
 import {
   COWSWAP_TWAP_TX,
   CHAIN_ID,
@@ -93,19 +93,19 @@ describe("CLI verify output", () => {
     });
     expect(parsed.sources).toHaveLength(10);
     expect(parsed.sources.map((item: { id: string }) => item.id)).toEqual([
-      "evidence-package",
-      "hash-recompute",
-      "signatures",
-      "signature-scheme-coverage",
-      "safe-owners-threshold",
-      "onchain-policy-proof",
-      "decoded-calldata",
-      "simulation",
-      "consensus-proof",
-      "settings",
+      VERIFICATION_SOURCE_IDS.EVIDENCE_PACKAGE,
+      VERIFICATION_SOURCE_IDS.HASH_RECOMPUTE,
+      VERIFICATION_SOURCE_IDS.SIGNATURES,
+      VERIFICATION_SOURCE_IDS.SIGNATURE_SCHEME_COVERAGE,
+      VERIFICATION_SOURCE_IDS.SAFE_OWNERS_THRESHOLD,
+      VERIFICATION_SOURCE_IDS.ONCHAIN_POLICY_PROOF,
+      VERIFICATION_SOURCE_IDS.DECODED_CALLDATA,
+      VERIFICATION_SOURCE_IDS.SIMULATION,
+      VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
+      VERIFICATION_SOURCE_IDS.SETTINGS,
     ]);
     expect(
-      parsed.sources.find((item: { id: string }) => item.id === "settings")?.status
+      parsed.sources.find((item: { id: string }) => item.id === VERIFICATION_SOURCE_IDS.SETTINGS)?.status
     ).toBe("enabled");
   });
 
@@ -191,10 +191,10 @@ describe("CLI verify output", () => {
     expect(result.code).toBe(0);
     const parsed = JSON.parse(result.stdout);
     const settingsSource = parsed.sources.find(
-      (item: { id: string }) => item.id === "settings"
+      (item: { id: string }) => item.id === VERIFICATION_SOURCE_IDS.SETTINGS
     );
     expect(settingsSource).toMatchObject({
-      id: "settings",
+      id: VERIFICATION_SOURCE_IDS.SETTINGS,
       status: "disabled",
     });
     expect(settingsSource?.trust).toBe("api-sourced");
