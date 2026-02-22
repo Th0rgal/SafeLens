@@ -45,6 +45,7 @@ export type ConsensusTrustDecisionReason =
   | null;
 
 export const CONSENSUS_VERIFIER_ERROR_CODES = [
+  "tauri-invoke-failed",
   "unsupported-consensus-mode",
   "unsupported-network",
   "envelope-network-mismatch",
@@ -74,6 +75,7 @@ export type ConsensusVerifierErrorCode =
 const CONSENSUS_ERROR_CODE_TO_TRUST_REASON: Readonly<
   Record<ConsensusVerifierErrorCode, Exclude<ConsensusTrustDecisionReason, null>>
 > = {
+  "tauri-invoke-failed": "consensus-proof-fetch-failed",
   "unsupported-consensus-mode": "unsupported-consensus-mode",
   "unsupported-network": "unsupported-network",
   "envelope-network-mismatch": "envelope-network-mismatch",

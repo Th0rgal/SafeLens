@@ -141,9 +141,8 @@ function getConsensusFailureDetail(
   const errorCode = consensusVerification.error_code;
   const mapped =
     errorCode &&
-    ((isConsensusVerifierErrorCode(errorCode) &&
-      isConsensusFailureDetailCode(errorCode)) ||
-      errorCode === "consensus-mode-disabled-by-feature-flag")
+    isConsensusVerifierErrorCode(errorCode) &&
+    isConsensusFailureDetailCode(errorCode)
       ? CONSENSUS_ERROR_DETAILS[errorCode]
       : undefined;
   if (mapped) {

@@ -13,6 +13,7 @@ import { buildVerificationSources, createVerificationSourceContext } from "../tr
 import {
   mapConsensusVerifierErrorCodeToTrustReason,
   type ConsensusTrustDecisionReason,
+  type ConsensusVerifierErrorCode,
 } from "./consensus-trust";
 export {
   CONSENSUS_VERIFIER_ERROR_CODES,
@@ -60,7 +61,7 @@ export type ConsensusVerificationResult = {
   state_root_matches: boolean;
   sync_committee_participants: number;
   error: string | null;
-  error_code?: string | null;
+  error_code?: ConsensusVerifierErrorCode | null;
   checks: Array<{
     id: string;
     label: string;
