@@ -632,10 +632,18 @@ function SafePolicySection({ evidence }: { evidence: EvidencePackage }) {
     <div className="space-y-1.5">
       <div className="text-xs font-medium text-muted">Safe Policy</div>
       <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 space-y-2">
-        {/* Threshold */}
+        {/* Signing policy summary */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted">Threshold</span>
+          <span className="text-muted">Required signatures</span>
           <span className="font-medium">{policy.threshold}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted">Signatures collected</span>
+          <span className="font-medium">{signedCount} / {policy.threshold}</span>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted">Total owners</span>
+          <span className="font-medium">{policy.owners.length}</span>
         </div>
 
         {/* Owners */}
@@ -714,6 +722,17 @@ function ExecutionSafetyPanel({
   const badgeWrapperRef = useRef<HTMLDivElement>(null);
   const badgePopupRef = useRef<HTMLDivElement>(null);
   const [badgePopupStyle, setBadgePopupStyle] = useState<React.CSSProperties>({});
+  const checksWithoutRedundantRevertWarning = useMemo(
+    () =>
+      checks.filter(
+        (check) =>
+          !(
+            check.id === "simulation-outcome" &&
+            check.reasonCode === "simulation-execution-reverted"
+          )
+      ),
+    [checks]
+  );
 
   // ── Badge popover positioning + dismiss ──────────────────────────
   useEffect(() => {
@@ -827,7 +846,11 @@ function ExecutionSafetyPanel({
   const VerificationIcon = verificationStyle.icon;
 
   // ── Top attention item (most severe issue, shown below badge) ─────
-  const attentionItems = buildSafetyAttentionItems(checks, networkSupport, 3);
+  const attentionItems = buildSafetyAttentionItems(
+    checksWithoutRedundantRevertWarning,
+    networkSupport,
+    3
+  );
   const topAttention = attentionItems.length > 0 && verification.status !== "check"
     ? attentionItems[0]
     : null;
@@ -908,22 +931,34 @@ function ExecutionSafetyPanel({
                     could differ from what was simulated.
                   </div>
                 ) : (
-                  checks.filter((c) => c.status !== "check").map((check) => {
-                    const s = SAFETY_STATUS_STYLE[check.status];
-                    const SIcon = s.icon;
-                    return (
-                      <div key={check.id}>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium text-fg">{check.label}</span>
-                          <span className={`inline-flex items-center gap-1 ${s.text}`}>
-                            <SIcon className="h-3 w-3" />
-                            {check.status === "warning" ? "Warning" : "Error"}
-                          </span>
-                        </div>
-                        <div className={`mt-0.5 ${s.text}`}>{check.detail}</div>
-                      </div>
+                  (() => {
+                    const nonCheckWarnings = checksWithoutRedundantRevertWarning.filter(
+                      (check) => check.status !== "check"
                     );
-                  })
+                    if (nonCheckWarnings.length === 0) {
+                      return (
+                        <div className="text-muted">
+                          Simulation reverted. See the Simulation section for details.
+                        </div>
+                      );
+                    }
+                    return nonCheckWarnings.map((check) => {
+                      const s = SAFETY_STATUS_STYLE[check.status];
+                      const SIcon = s.icon;
+                      return (
+                        <div key={check.id}>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-fg">{check.label}</span>
+                            <span className={`inline-flex items-center gap-1 ${s.text}`}>
+                              <SIcon className="h-3 w-3" />
+                              {check.status === "warning" ? "Warning" : "Error"}
+                            </span>
+                          </div>
+                          <div className={`mt-0.5 ${s.text}`}>{check.detail}</div>
+                        </div>
+                      );
+                    });
+                  })()
                 )}
               </div>
             )}
@@ -1084,6 +1119,7 @@ function ExecutionSafetyPanel({
             {(() => {
               const check = checks.find((c) => c.id === "simulation-outcome");
               if (!check) return null;
+              if (check.reasonCode === "simulation-execution-reverted") return null;
               const style = SAFETY_STATUS_STYLE[check.status];
               const Icon = style.icon;
               return (
