@@ -57,7 +57,7 @@ function extractAddress(input: string): string | null {
   return match && !trimmed.startsWith("http") ? match[0] : null;
 }
 
-async function pingRpcChainId(rpcUrl: string, expectedChainId: number): Promise<boolean> {
+async function fetchRpcChainId(rpcUrl: string): Promise<number | null> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), RPC_PING_TIMEOUT_MS);
   try {
@@ -73,16 +73,21 @@ async function pingRpcChainId(rpcUrl: string, expectedChainId: number): Promise<
       signal: ctrl.signal,
     });
 
-    if (!response.ok) return false;
+    if (!response.ok) return null;
     const payload = await response.json() as { result?: string };
-    if (typeof payload.result !== "string") return false;
+    if (typeof payload.result !== "string") return null;
     const chainId = Number.parseInt(payload.result, 16);
-    return Number.isFinite(chainId) && chainId === expectedChainId;
+    return Number.isFinite(chainId) ? chainId : null;
   } catch {
-    return false;
+    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function pingRpcChainId(rpcUrl: string, expectedChainId: number): Promise<boolean> {
+  const chainId = await fetchRpcChainId(rpcUrl);
+  return chainId === expectedChainId;
 }
 
 function EvidenceDisplay({
@@ -368,6 +373,33 @@ export default function AnalyzePage() {
       }
     } else {
       setSuggestedSimulationRpc(null);
+
+      const rpcChainId = await fetchRpcChainId(resolvedRpcUrl);
+      if (rpcChainId !== null && rpcChainId !== pkg.chainId) {
+        const suggestedRpc = await resolveSuggestedRpcForChain(pkg.chainId);
+        if (suggestedRpc) {
+          setSuggestedSimulationRpc(suggestedRpc);
+        }
+        setSimulationWarning(null);
+        setProofWarning(
+          `RPC chain mismatch: this transaction is on ${getChainName(pkg.chainId)} (chain ${pkg.chainId}), but the provided RPC is ${getChainName(rpcChainId)} (chain ${rpcChainId}). ` +
+          (suggestedRpc
+            ? `Retry with the built-in ${getChainName(pkg.chainId)} RPC: ${suggestedRpc}`
+            : "Please provide an RPC URL for the transaction chain and retry.")
+        );
+
+        return finalizeEvidenceExport(enriched, {
+          rpcProvided,
+          consensusProofAttempted,
+          consensusProofFailed,
+          consensusProofUnsupportedMode,
+          consensusProofDisabledByFeatureFlag,
+          onchainPolicyProofAttempted: true,
+          onchainPolicyProofFailed: true,
+          simulationAttempted: true,
+          simulationFailed: true,
+        });
+      }
     }
 
     // Fetch consensus proof first so policy proof can be pinned to the same
@@ -719,7 +751,20 @@ export default function AnalyzePage() {
       {proofWarning && (
         <Alert className="mb-6 border-amber-500/20 bg-amber-500/10 text-amber-200">
           <AlertTitle>Policy Proof Warning</AlertTitle>
-          <AlertDescription>{proofWarning}</AlertDescription>
+          <AlertDescription className="space-y-2">
+            <div>{proofWarning}</div>
+            {suggestedSimulationRpc && evidence && (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 border-amber-500/30 bg-transparent text-xs text-amber-100 hover:bg-amber-500/10"
+                onClick={handleRetrySimulationWithSuggestedRpc}
+                disabled={loading}
+              >
+                Retry using {suggestedSimulationRpc}
+              </Button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
