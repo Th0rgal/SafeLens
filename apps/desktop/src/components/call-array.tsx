@@ -12,6 +12,7 @@ interface CallArrayProps {
   txValue: string;
   txOperation: number;
   txData: string | null;
+  showHeader?: boolean;
 }
 
 /** Parse a Solidity tuple type string like "(address,bytes32,bytes)" into individual types. */
@@ -176,6 +177,7 @@ export function CallArray({
   txValue,
   txOperation,
   txData,
+  showHeader = true,
 }: CallArrayProps) {
   const steps = useMemo(
     () => normalizeCallSteps(dataDecoded, txTo, txValue, txOperation, txData),
@@ -194,13 +196,15 @@ export function CallArray({
 
   return (
     <div>
-      <div className="mb-2 flex items-center gap-2 font-medium text-muted">
-        <span>Decoded Calls</span>
-        <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-surface-2/60 px-1.5 text-[10px] font-semibold text-muted">
-          {steps.length}
-        </span>
-        <TrustBadge level={allVerified ? "self-verified" : "api-sourced"} />
-      </div>
+      {showHeader && (
+        <div className="mb-2 flex items-center gap-2 font-medium text-muted">
+          <span>Decoded Calls</span>
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded bg-surface-2/60 px-1.5 text-[10px] font-semibold text-muted">
+            {steps.length}
+          </span>
+          <TrustBadge level={allVerified ? "self-verified" : "api-sourced"} />
+        </div>
+      )}
       <div className="space-y-1.5">
         {steps.map((step, i) => (
           <CallStepCard key={step.index} step={step} showIndex={isMulti} verification={verifications[i]} />

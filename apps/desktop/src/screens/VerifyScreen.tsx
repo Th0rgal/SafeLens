@@ -558,23 +558,34 @@ export default function VerifyScreen() {
                   <span>{evidence.transaction.nonce}</span>
                 </div>
                 {evidence.dataDecoded && (
-                  <CallArray
-                    dataDecoded={evidence.dataDecoded}
-                    txTo={evidence.transaction.to}
-                    txValue={evidence.transaction.value}
-                    txOperation={evidence.transaction.operation}
-                    txData={evidence.transaction.data}
-                  />
+                  <details className="group/decoded pb-1 open:pb-0">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted hover:text-fg transition-colors [&::-webkit-details-marker]:hidden">
+                      <ChevronRight className="h-3 w-3 transition-transform group-open/decoded:rotate-90" />
+                      Decoded Calls
+                    </summary>
+                    <div className="mt-1.5">
+                      <CallArray
+                        dataDecoded={evidence.dataDecoded}
+                        txTo={evidence.transaction.to}
+                        txValue={evidence.transaction.value}
+                        txOperation={evidence.transaction.operation}
+                        txData={evidence.transaction.data}
+                        showHeader={false}
+                      />
+                    </div>
+                  </details>
                 )}
                 {evidence.transaction.data && (
-                  <div>
-                    <div className="mb-1 flex items-center gap-2 font-medium text-muted">
-                      Calldata <TrustBadge level="self-verified" />
-                    </div>
-                    <code className="block break-all rounded-md border border-border/15 glass-subtle p-2 text-xs">
+                  <details className="group/calldata pb-1 open:pb-0">
+                    <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-muted hover:text-fg transition-colors [&::-webkit-details-marker]:hidden">
+                      <ChevronRight className="h-3 w-3 transition-transform group-open/calldata:rotate-90" />
+                      Calldata
+                      <TrustBadge level="self-verified" />
+                    </summary>
+                    <code className="mt-1.5 block break-all rounded-md border border-border/15 glass-subtle p-2 text-xs">
                       {evidence.transaction.data}
                     </code>
-                  </div>
+                  </details>
                 )}
               </div>
             </CardContent>
