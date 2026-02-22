@@ -231,6 +231,26 @@ export const simulationSchema = z.object({
 
 export type Simulation = z.infer<typeof simulationSchema>;
 
+// Witness artifact for simulation verification.
+// This does not include a full execution proof; it anchors simulation context
+// to a proven state root and binds the simulation payload with a digest.
+export const simulationWitnessSchema = z.object({
+  chainId: z.number(),
+  safeAddress: addressSchema,
+  blockNumber: z.number(),
+  stateRoot: hashSchema,
+  safeAccountProof: accountProofSchema,
+  overriddenSlots: z.array(
+    z.object({
+      key: storageSlotKeySchema,
+      value: storageValueSchema,
+    })
+  ),
+  simulationDigest: hashSchema,
+});
+
+export type SimulationWitness = z.infer<typeof simulationWitnessSchema>;
+
 // Generator export contract status (explicit full vs partial package mode)
 export const exportContractReasonSchema = z.enum([
   "missing-consensus-proof",
@@ -353,6 +373,7 @@ export const evidencePackageSchema = z.object({
   dataDecoded: z.any().nullable().optional(),
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
   simulation: simulationSchema.optional(),
+  simulationWitness: simulationWitnessSchema.optional(),
   consensusProof: consensusProofSchema.optional(),
   exportContract: evidenceExportContractSchema.optional(),
   sources: z.object({

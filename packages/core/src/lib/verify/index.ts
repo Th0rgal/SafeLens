@@ -6,7 +6,12 @@ import {
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
 import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof";
-import { verifySimulation, type SimulationVerificationResult } from "../simulation";
+import {
+  verifySimulation,
+  verifySimulationWitness,
+  type SimulationVerificationResult,
+  type SimulationWitnessVerificationResult,
+} from "../simulation";
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources, createVerificationSourceContext } from "../trust";
@@ -79,6 +84,7 @@ export type EvidenceVerificationReport = {
   hashMatch: boolean;
   policyProof?: PolicyProofVerificationResult;
   simulationVerification?: SimulationVerificationResult;
+  simulationWitnessVerification?: SimulationWitnessVerificationResult;
   /** Consensus verification result (from Tauri backend, if available). */
   consensusVerification?: ConsensusVerificationResult;
   /**
@@ -98,6 +104,8 @@ interface BuildReportSourcesOptions {
   settings?: SettingsConfig | null;
   signatureSummary: SignatureCheckSummary;
   policyProof?: PolicyProofVerificationResult;
+  simulationVerification?: SimulationVerificationResult;
+  simulationWitnessVerification?: SimulationWitnessVerificationResult;
   consensusVerification?: ConsensusVerificationResult;
 }
 
@@ -219,6 +227,20 @@ function buildReportSources(
     options.consensusVerification
   );
 
+  const simulationTrust =
+    options.evidence.simulation &&
+    options.simulationVerification?.valid &&
+    options.simulationWitnessVerification?.valid &&
+    options.policyProof?.valid &&
+    options.evidence.onchainPolicyProof &&
+    options.evidence.simulationWitness &&
+    options.evidence.simulationWitness.stateRoot.toLowerCase() ===
+      options.evidence.onchainPolicyProof.stateRoot.toLowerCase() &&
+    options.evidence.simulationWitness.blockNumber ===
+      options.evidence.onchainPolicyProof.blockNumber
+      ? "proof-verified"
+      : options.evidence.simulation?.trust;
+
   return buildVerificationSources(createVerificationSourceContext({
     hasSettings: Boolean(options.settings),
     hasUnsupportedSignatures: options.signatureSummary.unsupported > 0,
@@ -232,7 +254,7 @@ function buildReportSources(
     onchainPolicyProofTrust: options.policyProof?.valid
       ? "proof-verified"
       : options.evidence.onchainPolicyProof?.trust,
-    simulationTrust: options.evidence.simulation?.trust,
+    simulationTrust,
     consensusVerified: consensusDecision.trusted,
     consensusTrustDecisionReason: consensusDecision.reason,
     consensusMode: options.evidence.consensusProof?.consensusMode ?? "beacon",
@@ -260,6 +282,8 @@ export function applyConsensusVerificationToReport(
       settings: options.settings,
       signatureSummary: report.signatures.summary,
       policyProof: report.policyProof,
+      simulationVerification: report.simulationVerification,
+      simulationWitnessVerification: report.simulationWitnessVerification,
       consensusVerification: options.consensusVerification,
     }),
   };
@@ -404,6 +428,19 @@ export async function verifyEvidencePackage(
     simulationVerification = verifySimulation(evidence.simulation);
   }
 
+  let simulationWitnessVerification: SimulationWitnessVerificationResult | undefined;
+  if (evidence.simulation && evidence.simulationWitness) {
+    simulationWitnessVerification = verifySimulationWitness(
+      evidence.simulation,
+      evidence.simulationWitness,
+      {
+        chainId: evidence.chainId,
+        safeAddress: evidence.safeAddress as Address,
+        onchainPolicyProof: evidence.onchainPolicyProof,
+      }
+    );
+  }
+
   const consensusDecision = evaluateConsensusTrustDecision(evidence);
 
   return {
@@ -414,6 +451,8 @@ export async function verifyEvidencePackage(
       settings,
       signatureSummary: summary,
       policyProof,
+      simulationVerification,
+      simulationWitnessVerification,
     }),
     signatures: {
       list: signatureList,
@@ -424,6 +463,7 @@ export async function verifyEvidencePackage(
     hashMatch,
     policyProof,
     simulationVerification,
+    simulationWitnessVerification,
     consensusTrustDecisionReason: consensusDecision.reason,
   };
 }

@@ -38,7 +38,13 @@ import {
   moduleSlot,
   slotToKey,
 } from "../proof/safe-layout";
-import type { Simulation, NativeTransfer, TrustClassification } from "../types";
+import type {
+  Simulation,
+  NativeTransfer,
+  SimulationWitness,
+  TrustClassification,
+} from "../types";
+import { computeSimulationDigest } from "./witness-verifier";
 
 // ── Fake owner for state-override simulation ──────────────────────
 
@@ -81,6 +87,30 @@ interface TransactionFields {
   gasPrice: string;
   gasToken: string;
   refundReceiver: string;
+}
+
+function buildSafeStateDiff(
+  nonce: number,
+  simulatorAddress: Address
+): Array<{ slot: Hex; value: Hex }> {
+  return [
+    // ownerCount = 1
+    { slot: slotToKey(SLOT_OWNER_COUNT), value: pad("0x1" as Hex, { size: 32 }) },
+    // threshold = 1
+    { slot: slotToKey(SLOT_THRESHOLD), value: pad("0x1" as Hex, { size: 32 }) },
+    // nonce = transaction nonce (so the hash matches)
+    { slot: slotToKey(SLOT_NONCE), value: pad(toHex(nonce), { size: 32 }) },
+    // owners[SENTINEL] = simulatorAddress
+    { slot: ownerSlot(SENTINEL), value: pad(simulatorAddress, { size: 32 }) },
+    // owners[simulatorAddress] = SENTINEL (close the linked list)
+    { slot: ownerSlot(simulatorAddress), value: pad(SENTINEL, { size: 32 }) },
+    // guard = address(0) (disable guard checks)
+    { slot: GUARD_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
+    // fallbackHandler = address(0) (prevent fallback interference)
+    { slot: FALLBACK_HANDLER_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
+    // modules[SENTINEL] = SENTINEL (close the modules linked list)
+    { slot: moduleSlot(SENTINEL), value: pad(SENTINEL, { size: 32 }) },
+  ];
 }
 
 // ── Main fetcher ──────────────────────────────────────────────────
@@ -168,24 +198,7 @@ export async function fetchSimulation(
 
   const simulatorAddress = SIMULATION_ACCOUNT.address;
 
-  const safeStateDiff: Array<{ slot: Hex; value: Hex }> = [
-    // ownerCount = 1
-    { slot: slotToKey(SLOT_OWNER_COUNT), value: pad("0x1" as Hex, { size: 32 }) },
-    // threshold = 1
-    { slot: slotToKey(SLOT_THRESHOLD), value: pad("0x1" as Hex, { size: 32 }) },
-    // nonce = transaction nonce (so the hash matches)
-    { slot: slotToKey(SLOT_NONCE), value: pad(toHex(transaction.nonce), { size: 32 }) },
-    // owners[SENTINEL] = simulatorAddress
-    { slot: ownerSlot(SENTINEL), value: pad(simulatorAddress, { size: 32 }) },
-    // owners[simulatorAddress] = SENTINEL (close the linked list)
-    { slot: ownerSlot(simulatorAddress), value: pad(SENTINEL, { size: 32 }) },
-    // guard = address(0) (disable guard checks)
-    { slot: GUARD_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
-    // fallbackHandler = address(0) (prevent fallback interference)
-    { slot: FALLBACK_HANDLER_STORAGE_SLOT, value: pad("0x0" as Hex, { size: 32 }) },
-    // modules[SENTINEL] = SENTINEL (close the modules linked list)
-    { slot: moduleSlot(SENTINEL), value: pad(SENTINEL, { size: 32 }) },
-  ];
+  const safeStateDiff = buildSafeStateDiff(transaction.nonce, simulatorAddress);
 
   const viemStateOverride = [{ address: safeAddress, stateDiff: safeStateDiff }];
 
@@ -294,6 +307,80 @@ export async function fetchSimulation(
   };
 
   return simulation;
+}
+
+export async function fetchSimulationWitness(
+  safeAddress: Address,
+  chainId: number,
+  transaction: TransactionFields,
+  simulation: Simulation,
+  options: FetchSimulationOptions = {}
+): Promise<SimulationWitness> {
+  const capability = getExecutionCapability(chainId);
+  if (!capability) {
+    throw new Error(`Unsupported chain ID for simulation witness: ${chainId}`);
+  }
+  if (!capability.supportsSimulation) {
+    throw new Error(
+      `Simulation witness is not supported on ${capability.chainName} (chain ${chainId}).`
+    );
+  }
+
+  const chain = CHAIN_BY_ID[chainId];
+  if (!chain) {
+    throw new Error(`Unsupported chain ID for simulation witness: ${chainId}`);
+  }
+
+  const rpcUrl = options.rpcUrl ?? DEFAULT_RPC_URLS[chainId];
+  if (!rpcUrl) {
+    throw new Error(
+      `No RPC URL available for chain ${chainId}. Pass one via options.rpcUrl.`
+    );
+  }
+
+  const client = createPublicClient({
+    chain,
+    transport: http(rpcUrl),
+  });
+
+  const blockNumber = BigInt(simulation.blockNumber);
+  const block = await client.getBlock({ blockNumber });
+  if (block.number == null) {
+    throw new Error("Simulation witness block number is null.");
+  }
+
+  const stateDiff = buildSafeStateDiff(transaction.nonce, SIMULATION_ACCOUNT.address);
+  const storageKeys = stateDiff.map((entry) => entry.slot);
+  const proof = await client.getProof({
+    address: safeAddress,
+    storageKeys,
+    blockNumber,
+  });
+
+  return {
+    chainId,
+    safeAddress,
+    blockNumber: Number(block.number),
+    stateRoot: block.stateRoot,
+    safeAccountProof: {
+      address: proof.address,
+      balance: proof.balance.toString(),
+      codeHash: proof.codeHash,
+      nonce: Number(proof.nonce),
+      storageHash: proof.storageHash,
+      accountProof: proof.accountProof,
+      storageProof: proof.storageProof.map((sp) => ({
+        key: sp.key,
+        value: pad(toHex(sp.value), { size: 32 }),
+        proof: sp.proof,
+      })),
+    },
+    overriddenSlots: stateDiff.map((entry) => ({
+      key: entry.slot,
+      value: entry.value,
+    })),
+    simulationDigest: computeSimulationDigest(simulation),
+  };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

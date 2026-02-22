@@ -1,5 +1,6 @@
 export {
   fetchSimulation,
+  fetchSimulationWitness,
   type FetchSimulationOptions,
 } from "./fetcher";
 
@@ -8,6 +9,13 @@ export {
   type SimulationVerificationResult,
   type SimulationCheck,
 } from "./verifier";
+
+export {
+  computeSimulationDigest,
+  verifySimulationWitness,
+  type SimulationWitnessVerificationResult,
+  type SimulationWitnessCheck,
+} from "./witness-verifier";
 
 export {
   decodeSimulationEvents,

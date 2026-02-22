@@ -13,6 +13,7 @@ import {
 } from "../proof";
 import {
   fetchSimulation,
+  fetchSimulationWitness,
   type FetchSimulationOptions,
 } from "../simulation";
 import {
@@ -149,10 +150,26 @@ export async function enrichWithSimulation(
     options
   );
 
+  let simulationWitness: EvidencePackage["simulationWitness"] | undefined;
+  try {
+    simulationWitness = await fetchSimulationWitness(
+      evidence.safeAddress as Address,
+      evidence.chainId,
+      evidence.transaction,
+      simulation,
+      options
+    );
+  } catch {
+    // Witness generation is best-effort: keep simulation artifact even when
+    // RPC cannot provide proof data for witness construction.
+    simulationWitness = undefined;
+  }
+
   return {
     ...evidence,
     version: withEnrichmentVersion(evidence.version),
     simulation,
+    simulationWitness,
   };
 }
 
