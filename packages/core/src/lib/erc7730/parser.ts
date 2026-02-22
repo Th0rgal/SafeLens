@@ -48,7 +48,7 @@ const FieldFormatSchema = z.enum([
   "calldata",
 ]);
 
-const FieldDefinitionSchema: z.ZodType<any> = z.lazy(() =>
+const FieldDefinitionSchema: z.ZodType<unknown> = z.lazy(() =>
   z.object({
     label: z.string().optional(),
     path: z.string().optional(),
