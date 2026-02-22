@@ -237,11 +237,13 @@ function buildReportSources(
       ? "rpc-sourced"
       : options.evidence.simulation?.trust;
   const simulationVerificationReason =
-    options.evidence.simulation && options.evidence.simulationWitness
-      ? options.simulationWitnessVerification?.valid
-        ? "simulation-replay-not-run"
-        : "simulation-witness-proof-failed"
-      : undefined;
+    !options.evidence.simulation
+      ? undefined
+      : !options.evidence.simulationWitness
+        ? "missing-simulation-witness"
+        : options.simulationWitnessVerification?.valid
+          ? "simulation-replay-not-run"
+          : "simulation-witness-proof-failed";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
         options.evidence.dataDecoded,

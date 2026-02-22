@@ -84,6 +84,26 @@ function makeWitness(
 }
 
 describe("verifyEvidencePackage simulation witness trust handling", () => {
+  it("keeps simulation source rpc-sourced when witness artifact is missing", async () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const simulation = makeSimulation();
+    const enriched = {
+      ...base,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation,
+    };
+
+    const report = await verifyEvidencePackage(enriched);
+    expect(report.simulationVerification?.valid).toBe(true);
+    expect(report.simulationWitnessVerification).toBeUndefined();
+    const simulationSource = report.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
+    );
+    expect(simulationSource?.trust).toBe("rpc-sourced");
+    expect(simulationSource?.summary).toContain("No simulation witness was included");
+  });
+
   it("keeps simulation source rpc-sourced until local replay verification exists", async () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const simulation = makeSimulation();
