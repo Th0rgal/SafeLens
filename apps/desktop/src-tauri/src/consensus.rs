@@ -541,10 +541,16 @@ fn verify_execution_envelope(
         )),
     });
     if !chain_id_matches {
-        return fail_result(
-            ERR_INVALID_PROOF_PAYLOAD,
-            "Envelope chainId does not match package chainId.".into(),
-        );
+        return ConsensusVerificationResult {
+            valid: false,
+            verified_state_root: None,
+            verified_block_number: None,
+            state_root_matches: false,
+            sync_committee_participants: 0,
+            error: Some("Envelope chainId does not match package chainId.".into()),
+            error_code: Some(ERR_INVALID_PROOF_PAYLOAD.into()),
+            checks,
+        };
     }
     let chain_id_is_supported = mode.supports_chain_id(envelope_chain_id);
     checks.push(ConsensusCheck {
