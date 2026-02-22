@@ -35,6 +35,16 @@ import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
 const lineaConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS === "1";
+const RPC_PING_TIMEOUT_MS = 3500;
+const DEFAULT_RPC_CANDIDATES: Record<number, [string, string]> = {
+  1: ["https://eth.drpc.org", "https://eth1.lava.build"],
+  10: ["https://optimism.drpc.org", "https://go.getblock.io/e8a75f8dcf614861becfbcb185be6eb4"],
+  100: ["https://gnosis.lfg.rs", "https://rpc.gnosischain.com"],
+  137: ["https://polygon.drpc.org", "https://polygon.lava.build"],
+  8453: ["https://base.drpc.org", "https://base.api.pocket.network"],
+  42161: ["https://arbitrum.drpc.org", "https://arb-one.api.pocket.network"],
+  11155111: ["https://sepolia.drpc.org", "https://rpc.sepolia.ethpandaops.io"],
+};
 
 type PendingTx = SafeTransaction & { _chainId: number };
 
@@ -45,6 +55,34 @@ function extractAddress(input: string): string | null {
   // Also match if user pasted with surrounding quotes or whitespace
   const match = trimmed.match(/0x[a-fA-F0-9]{40}/);
   return match && !trimmed.startsWith("http") ? match[0] : null;
+}
+
+async function pingRpcChainId(rpcUrl: string, expectedChainId: number): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), RPC_PING_TIMEOUT_MS);
+  try {
+    const response = await fetch(rpcUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "eth_chainId",
+        params: [],
+      }),
+      signal: ctrl.signal,
+    });
+
+    if (!response.ok) return false;
+    const payload = await response.json() as { result?: string };
+    if (typeof payload.result !== "string") return false;
+    const chainId = Number.parseInt(payload.result, 16);
+    return Number.isFinite(chainId) && chainId === expectedChainId;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function EvidenceDisplay({
@@ -290,11 +328,25 @@ export default function AnalyzePage() {
   const [simulationWarning, setSimulationWarning] = useState<string | null>(null);
   const [consensusWarning, setConsensusWarning] = useState<string | null>(null);
 
+  const resolveRpcForChain = useCallback(async (chainId: number): Promise<string> => {
+    const manual = rpcUrl.trim();
+    if (manual) return manual;
+
+    const candidates = DEFAULT_RPC_CANDIDATES[chainId];
+    if (!candidates) return "";
+
+    const [primary, secondary] = candidates;
+    const primaryOk = await pingRpcChainId(primary, chainId);
+    const chosen = primaryOk ? primary : secondary;
+    setRpcUrl(chosen);
+    return chosen;
+  }, [rpcUrl]);
+
   /** Optionally enrich a package with on-chain policy proof, simulation, and consensus proof. */
   const maybeEnrich = async (pkg: EvidencePackage): Promise<EvidencePackage> => {
     let enriched = pkg;
-    const trimmedRpc = rpcUrl.trim();
-    const rpcProvided = Boolean(trimmedRpc);
+    const resolvedRpcUrl = await resolveRpcForChain(pkg.chainId);
+    const rpcProvided = Boolean(resolvedRpcUrl);
     const { consensusMode, shouldAttemptConsensusProof } = buildConsensusEnrichmentPlan(pkg.chainId);
     let consensusProofAttempted = false;
     let consensusProofFailed = false;
@@ -314,7 +366,7 @@ export default function AnalyzePage() {
           rpcUrl:
             (consensusMode === "opstack" || consensusMode === "linea") &&
             rpcProvided
-              ? trimmedRpc
+              ? resolvedRpcUrl
               : undefined,
           enableExperimentalLineaConsensus: lineaConsensusEnabled,
         });
@@ -343,7 +395,7 @@ export default function AnalyzePage() {
       onchainPolicyProofAttempted = true;
       try {
         enriched = await enrichWithOnchainProof(enriched, {
-          rpcUrl: trimmedRpc,
+          rpcUrl: resolvedRpcUrl,
           blockNumber: enriched.consensusProof?.blockNumber,
         });
       } catch (err) {
@@ -356,7 +408,7 @@ export default function AnalyzePage() {
 
       simulationAttempted = true;
       try {
-        enriched = await enrichWithSimulation(enriched, { rpcUrl: trimmedRpc });
+        enriched = await enrichWithSimulation(enriched, { rpcUrl: resolvedRpcUrl });
       } catch (err) {
         simulationFailed = true;
         console.warn("Failed to simulate transaction:", err);
@@ -417,11 +469,13 @@ export default function AnalyzePage() {
         const result = parseSafeUrlFlexible(input);
 
         if (result.type === "transaction") {
+          await resolveRpcForChain(result.data.chainId);
           const tx = await fetchSafeTransaction(result.data.chainId, result.data.safeTxHash);
           let pkg = createEvidencePackage(tx, result.data.chainId, input);
           pkg = await maybeEnrich(pkg);
           setEvidence(pkg);
         } else {
+          await resolveRpcForChain(result.data.chainId);
           const txs = await fetchPendingTransactions(result.data.chainId, result.data.safeAddress);
           if (txs.length === 0) {
             setError("No pending transactions found for this Safe.");
@@ -449,6 +503,7 @@ export default function AnalyzePage() {
 
     try {
       const prefix = getChainPrefix(tx._chainId);
+      await resolveRpcForChain(tx._chainId);
       const addr = safeAddress ?? tx.safe;
       const syntheticUrl = `https://app.safe.global/transactions/tx?safe=${prefix}:${addr}&id=multisig_${addr}_${tx.safeTxHash}`;
       let pkg = createEvidencePackage(tx, tx._chainId, syntheticUrl);
@@ -527,7 +582,7 @@ export default function AnalyzePage() {
               className="text-xs"
             />
             <p className="mt-1 text-xs text-muted">
-              Provide an Ethereum RPC URL to include a cryptographic policy proof (owners, threshold, modules) via eth_getProof.
+              For supported chains, SafeLens auto-prefills a tested RPC URL and falls back to a secondary endpoint if the primary fails a ping.
             </p>
           </div>
         </CardContent>
