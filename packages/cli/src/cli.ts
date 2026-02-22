@@ -67,8 +67,8 @@ Usage:
 
 Options:
   --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
-  --enable-experimental-opstack-consensus  Enable experimental OP Stack consensus envelope fetch in analyze
-  --enable-experimental-linea-consensus  Enable experimental Linea consensus envelope fetch in analyze
+  --disable-opstack-consensus  Disable OP Stack consensus envelope fetch in analyze
+  --disable-linea-consensus  Disable Linea consensus envelope fetch in analyze
 
 Examples:
   safelens analyze "https://app.safe.global/transactions/tx?safe=eth:0x...&id=multisig_..." --out evidence.json
@@ -432,8 +432,8 @@ async function runAnalyze(args: string[]) {
   const format = getOutputFormat(args, "text");
 
   const rpcUrl = getFlag(args, "--rpc-url");
-  const enableExperimentalOpstackConsensus = hasFlag(args, "--enable-experimental-opstack-consensus");
-  const enableExperimentalLineaConsensus = hasFlag(args, "--enable-experimental-linea-consensus");
+  const disableOpstackConsensus = hasFlag(args, "--disable-opstack-consensus");
+  const disableLineaConsensus = hasFlag(args, "--disable-linea-consensus");
 
   const parsed = parseSafeUrlFlexible(url);
 
@@ -476,11 +476,11 @@ async function runAnalyze(args: string[]) {
       if ((consensusMode === "opstack" || consensusMode === "linea") && rpcUrl) {
         consensusOptions.rpcUrl = rpcUrl;
       }
-      if (enableExperimentalOpstackConsensus) {
-        consensusOptions.enableExperimentalOpstackConsensus = true;
+      if (disableOpstackConsensus) {
+        consensusOptions.enableExperimentalOpstackConsensus = false;
       }
-      if (enableExperimentalLineaConsensus) {
-        consensusOptions.enableExperimentalLineaConsensus = true;
+      if (disableLineaConsensus) {
+        consensusOptions.enableExperimentalLineaConsensus = false;
       }
       evidence = await enrichWithConsensusProof(evidence, consensusOptions);
     } catch (err) {

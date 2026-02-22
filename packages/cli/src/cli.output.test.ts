@@ -316,10 +316,10 @@ describe("CLI verify output", () => {
     expect(result.stderr).toContain("Invalid JSON format");
   });
 
-  it("documents experimental consensus analyze flags in help output", () => {
+  it("documents consensus rollout override flags in help output", () => {
     const result = runCli([]);
     expect(result.code).toBe(0);
-    expect(result.stdout).toContain("--enable-experimental-opstack-consensus");
-    expect(result.stdout).toContain("--enable-experimental-linea-consensus");
+    expect(result.stdout).toContain("--disable-opstack-consensus");
+    expect(result.stdout).toContain("--disable-linea-consensus");
   });
 });
