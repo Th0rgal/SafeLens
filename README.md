@@ -29,6 +29,13 @@ SafeLens generates and verifies evidence packages for Gnosis Safe multisig trans
 
 The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capability, it cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
 
+## Architecture and runbooks
+
+- Docs index: [`docs/README.md`](docs/README.md)
+- Interpreter precedence contract: [`docs/architecture/interpretation-precedence.md`](docs/architecture/interpretation-precedence.md)
+- Verification source contract: [`docs/architecture/verification-source-contract.md`](docs/architecture/verification-source-contract.md)
+- ERC-7730 bundle update runbook: [`docs/runbooks/erc7730-bundle-update.md`](docs/runbooks/erc7730-bundle-update.md)
+
 ## Verification coverage
 
 - `self-verified`: Safe tx hash recomputation and supported signature recovery.
