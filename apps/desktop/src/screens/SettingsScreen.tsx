@@ -96,6 +96,66 @@ function ChainSupportInfoButton({ support }: { support: ChainSupportStatus }) {
   );
 }
 
+function RemoveChainButton({
+  locked,
+  onRemove,
+}: {
+  locked: boolean;
+  onRemove: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  return (
+    <div ref={wrapperRef} className="relative h-9 w-9 shrink-0">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => {
+          if (locked) setOpen((v) => !v);
+          else onRemove();
+        }}
+        className={`h-9 w-9 ${
+          locked
+            ? "text-muted/40 hover:bg-surface-2/40 hover:text-muted/60"
+            : ""
+        }`}
+        title={locked ? "Built-in Helios chain (cannot remove)" : "Remove chain"}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+      {open && locked && (
+        <div className="absolute right-10 top-0 z-50 w-80 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg">
+          <div className="font-medium text-fg">Cannot Remove Built-in Chain</div>
+          <div className="mt-1 text-muted">
+            This chain has built-in Helios support in SafeLens, so it cannot be removed from settings.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
@@ -234,7 +294,7 @@ export default function SettingsScreen() {
               <div key={index} className="flex items-start gap-2">
                 {(() => {
                   const support = getChainSupportStatus(chainId);
-                  const removeDisabled = support === "full";
+                  const removeLocked = support === "full";
                   return (
                     <>
                       <ChainSupportInfoButton support={support} />
@@ -259,11 +319,10 @@ export default function SettingsScreen() {
                         />
                       </div>
 
-                      {!removeDisabled && (
-                        <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
+                      <RemoveChainButton
+                        locked={removeLocked}
+                        onRemove={() => removeChain(index)}
+                      />
                     </>
                   );
                 })()}
