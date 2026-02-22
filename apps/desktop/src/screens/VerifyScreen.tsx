@@ -7,15 +7,12 @@ import { useToast } from "@/components/ui/toast";
 import {
   parseEvidencePackage,
   getChainName,
-  verifyEvidencePackage,
-  applyConsensusVerificationToReport,
   buildCoreExecutionSafetyFields,
   decodeSimulationEvents,
   decodeNativeTransfers,
   computeRemainingApprovals,
   normalizeCallSteps,
   verifyCalldata,
-  VERIFICATION_SOURCE_IDS,
 } from "@safelens/core";
 import { TrustBadge } from "@/components/trust-badge";
 import { InterpretationCard } from "@/components/interpretation-card";
@@ -38,28 +35,16 @@ import { buildSimulationDetailRows } from "@/lib/simulation-details";
 import {
   getSimulationUnavailableReason,
 } from "@/lib/simulation-unavailable";
+import { useEvidenceVerification } from "@/lib/use-evidence-verification";
 import { ShieldCheck, AlertTriangle, HelpCircle, Upload, ChevronRight } from "lucide-react";
 import type {
   EvidencePackage,
-  SignatureCheckResult,
   TransactionWarning,
-  SafeTxHashDetails,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
   ConsensusVerificationResult,
   WarningLevel,
 } from "@safelens/core";
-import { invoke } from "@tauri-apps/api/core";
-
-type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
-  ? T extends object
-    ? T & {
-        expectedStateRoot: string;
-        packageChainId: number;
-        packagePackagedAt: string;
-      }
-    : never
-  : never;
 
 type WarningStyle = {
   border: string;
@@ -88,188 +73,31 @@ function WarningBanner({ warning, className }: { warning: TransactionWarning; cl
 export default function VerifyScreen() {
   const [jsonInput, setJsonInput] = useState("");
   const [evidence, setEvidence] = useState<EvidencePackage | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [verified, setVerified] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(true);
-  const [sigResults, setSigResults] = useState<Record<string, SignatureCheckResult>>({});
-  const [proposer, setProposer] = useState<string | null>(null);
-  const [targetWarnings, setTargetWarnings] = useState<TransactionWarning[]>([]);
-  const [hashDetails, setHashDetails] = useState<SafeTxHashDetails | undefined>(undefined);
-  const [hashMatch, setHashMatch] = useState<boolean>(true);
-  const [policyProof, setPolicyProof] = useState<PolicyProofVerificationResult | undefined>(undefined);
-  const [simulationVerification, setSimulationVerification] = useState<SimulationVerificationResult | undefined>(undefined);
-  const [consensusVerification, setConsensusVerification] = useState<ConsensusVerificationResult | undefined>(undefined);
-  const [consensusSourceSummary, setConsensusSourceSummary] = useState<string>("");
   const [showSafetyDetails, setShowSafetyDetails] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { config } = useSettingsConfig();
   const { success: toastSuccess } = useToast();
+  const {
+    errors: verificationErrors,
+    sigResults,
+    proposer,
+    targetWarnings,
+    hashDetails,
+    hashMatch,
+    policyProof,
+    simulationVerification,
+    consensusVerification,
+    consensusSourceSummary,
+  } = useEvidenceVerification(evidence, config ?? null);
+  const errors = [...parseErrors, ...verificationErrors];
 
   useEffect(() => {
-    const currentEvidence = evidence;
-
-    if (!currentEvidence) {
-      setSigResults({});
-      setProposer(null);
-      setTargetWarnings([]);
-      setErrors([]);
-      setHashMatch(true);
-      setPolicyProof(undefined);
-      setSimulationVerification(undefined);
-      setConsensusVerification(undefined);
-      setConsensusSourceSummary("");
-      setShowSafetyDetails(false);
-      return;
-    }
-
-    setSigResults({});
-    setProposer(null);
-    setTargetWarnings([]);
-    setErrors([]);
-    setHashMatch(true);
-    setPolicyProof(undefined);
-    setSimulationVerification(undefined);
-    setConsensusVerification(undefined);
-    // Only set "included but not yet verified" when a proof actually exists.
-    // Otherwise classifyConsensusStatus sees this as a fallback and misleadingly
-    // reports "included" for packages that have no consensus proof at all.
-    setConsensusSourceSummary(
-      currentEvidence?.consensusProof
-        ? "Consensus proof included but not yet verified (requires desktop app)."
-        : "",
-    );
     setShowSafetyDetails(false);
-
-    let cancelled = false;
-
-    async function verifyAll() {
-      if (!currentEvidence) return;
-      try {
-        const report = await verifyEvidencePackage(currentEvidence, {
-          settings: config ?? null,
-        });
-
-        if (cancelled) return;
-        setSigResults(report.signatures.byOwner);
-        setProposer(report.proposer);
-        setTargetWarnings(report.targetWarnings);
-        setErrors([]);
-        setHashDetails(report.hashDetails);
-        setHashMatch(report.hashMatch);
-        setPolicyProof(report.policyProof);
-        setSimulationVerification(report.simulationVerification);
-        const initialConsensusSource = report.sources.find(
-          (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
-        );
-        if (initialConsensusSource) {
-          setConsensusSourceSummary(initialConsensusSource.summary);
-        }
-
-        // If consensus proof is present, verify via Tauri backend (BLS verification)
-        if (currentEvidence.consensusProof) {
-          const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
-          if (!expectedStateRoot) {
-            const missingRootResult: ConsensusVerificationResult = {
-              valid: false,
-              verified_state_root: null,
-              verified_block_number: null,
-              state_root_matches: false,
-              sync_committee_participants: 0,
-              error: "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
-              error_code: "missing-policy-state-root",
-              checks: [],
-            };
-            const upgradedReport = applyConsensusVerificationToReport(
-              report,
-              currentEvidence,
-              {
-                settings: config ?? null,
-                consensusVerification: missingRootResult,
-              }
-            );
-            if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find(
-                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
-              );
-              setConsensusVerification(missingRootResult);
-              if (consensusSource) {
-                setConsensusSourceSummary(consensusSource.summary);
-              }
-            }
-            return;
-          }
-
-          const consensusInput: ConsensusProofVerifyInput = {
-            ...currentEvidence.consensusProof,
-            expectedStateRoot,
-            packageChainId: currentEvidence.chainId,
-            packagePackagedAt: currentEvidence.packagedAt,
-          };
-
-          try {
-            const consensusResult = await invoke<ConsensusVerificationResult>(
-              "verify_consensus_proof",
-              { input: consensusInput }
-            );
-            const upgradedReport = applyConsensusVerificationToReport(
-              report,
-              currentEvidence,
-              {
-                settings: config ?? null,
-                consensusVerification: consensusResult,
-              }
-            );
-            if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find(
-                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
-              );
-              setConsensusVerification(consensusResult);
-              if (consensusSource) {
-                setConsensusSourceSummary(consensusSource.summary);
-              }
-            }
-          } catch (err) {
-            const failedResult: ConsensusVerificationResult = {
-              valid: false,
-              verified_state_root: null,
-              verified_block_number: null,
-              state_root_matches: false,
-              sync_committee_participants: 0,
-              error: err instanceof Error ? err.message : String(err),
-              error_code: "tauri-invoke-failed",
-              checks: [],
-            };
-            const upgradedReport = applyConsensusVerificationToReport(
-              report,
-              currentEvidence,
-              {
-                settings: config ?? null,
-                consensusVerification: failedResult,
-              }
-            );
-            if (!cancelled) {
-              const consensusSource = upgradedReport.sources.find(
-                (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
-              );
-              setConsensusVerification(failedResult);
-              if (consensusSource) {
-                setConsensusSourceSummary(consensusSource.summary);
-              }
-            }
-          }
-        }
-      } catch (err) {
-        if (cancelled) return;
-        setErrors([err instanceof Error ? err.message : "Verification failed unexpectedly"]);
-      }
-    }
-
-    verifyAll();
-    return () => {
-      cancelled = true;
-    };
-  }, [evidence, config]);
+  }, [evidence]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -279,15 +107,14 @@ export default function VerifyScreen() {
       const text = await file.text();
       setJsonInput(text);
     } catch {
-      setErrors(["Failed to read file"]);
+      setParseErrors(["Failed to read file"]);
     }
   };
 
   const handleVerify = () => {
     setEvidence(null);
-    setErrors([]);
+    setParseErrors([]);
     setVerified(false);
-    setHashDetails(undefined);
 
     const result = parseEvidencePackage(jsonInput);
 
@@ -300,7 +127,7 @@ export default function VerifyScreen() {
         "The evidence package is valid and the Safe transaction hash has been successfully recomputed and verified."
       );
     } else {
-      setErrors(result.errors);
+      setParseErrors(result.errors);
     }
   };
 

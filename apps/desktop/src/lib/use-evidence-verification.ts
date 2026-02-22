@@ -1,0 +1,178 @@
+import { useEffect, useState } from "react";
+import {
+  verifyEvidencePackage,
+  applyConsensusVerificationToReport,
+  VERIFICATION_SOURCE_IDS,
+} from "@safelens/core";
+import type {
+  EvidencePackage,
+  SignatureCheckResult,
+  TransactionWarning,
+  SafeTxHashDetails,
+  PolicyProofVerificationResult,
+  SimulationVerificationResult,
+  ConsensusVerificationResult,
+  SettingsConfig,
+} from "@safelens/core";
+import { invoke } from "@tauri-apps/api/core";
+
+type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer T
+  ? T extends object
+    ? T & {
+        expectedStateRoot: string;
+        packageChainId: number;
+        packagePackagedAt: string;
+      }
+    : never
+  : never;
+
+type EvidenceVerificationState = {
+  errors: string[];
+  sigResults: Record<string, SignatureCheckResult>;
+  proposer: string | null;
+  targetWarnings: TransactionWarning[];
+  hashDetails: SafeTxHashDetails | undefined;
+  hashMatch: boolean;
+  policyProof: PolicyProofVerificationResult | undefined;
+  simulationVerification: SimulationVerificationResult | undefined;
+  consensusVerification: ConsensusVerificationResult | undefined;
+  consensusSourceSummary: string;
+};
+
+const EMPTY_STATE: EvidenceVerificationState = {
+  errors: [],
+  sigResults: {},
+  proposer: null,
+  targetWarnings: [],
+  hashDetails: undefined,
+  hashMatch: true,
+  policyProof: undefined,
+  simulationVerification: undefined,
+  consensusVerification: undefined,
+  consensusSourceSummary: "",
+};
+
+function createConsensusFailureResult(error: string, errorCode: string): ConsensusVerificationResult {
+  return {
+    valid: false,
+    verified_state_root: null,
+    verified_block_number: null,
+    state_root_matches: false,
+    sync_committee_participants: 0,
+    error,
+    error_code: errorCode,
+    checks: [],
+  };
+}
+
+export function useEvidenceVerification(
+  evidence: EvidencePackage | null,
+  settings: SettingsConfig | null
+): EvidenceVerificationState {
+  const [state, setState] = useState<EvidenceVerificationState>(EMPTY_STATE);
+
+  useEffect(() => {
+    if (!evidence) {
+      setState(EMPTY_STATE);
+      return;
+    }
+    const currentEvidence = evidence;
+
+    let cancelled = false;
+
+    setState((prev) => ({
+      ...prev,
+      errors: [],
+      sigResults: {},
+      proposer: null,
+      targetWarnings: [],
+      hashDetails: undefined,
+      hashMatch: true,
+      policyProof: undefined,
+      simulationVerification: undefined,
+      consensusVerification: undefined,
+      consensusSourceSummary: currentEvidence.consensusProof
+        ? "Consensus proof included but not yet verified (requires desktop app)."
+        : "",
+    }));
+
+    async function verifyAll() {
+      try {
+        const report = await verifyEvidencePackage(currentEvidence, {
+          settings,
+        });
+
+        if (cancelled) return;
+
+        const initialConsensusSource = report.sources.find(
+          (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+        );
+
+        setState((prev) => ({
+          ...prev,
+          errors: [],
+          sigResults: report.signatures.byOwner,
+          proposer: report.proposer,
+          targetWarnings: report.targetWarnings,
+          hashDetails: report.hashDetails,
+          hashMatch: report.hashMatch,
+          policyProof: report.policyProof,
+          simulationVerification: report.simulationVerification,
+          consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
+        }));
+
+        if (!currentEvidence.consensusProof) return;
+
+        const expectedStateRoot = currentEvidence.onchainPolicyProof?.stateRoot;
+        const consensusResult = !expectedStateRoot
+          ? createConsensusFailureResult(
+              "Consensus proof cannot be independently verified: missing onchainPolicyProof.stateRoot.",
+              "missing-policy-state-root"
+            )
+          : await invoke<ConsensusVerificationResult>("verify_consensus_proof", {
+              input: {
+                ...currentEvidence.consensusProof,
+                expectedStateRoot,
+                packageChainId: currentEvidence.chainId,
+                packagePackagedAt: currentEvidence.packagedAt,
+              } satisfies ConsensusProofVerifyInput,
+            }).catch((err) =>
+              createConsensusFailureResult(
+                err instanceof Error ? err.message : String(err),
+                "tauri-invoke-failed"
+              )
+            );
+
+        const upgradedReport = applyConsensusVerificationToReport(report, currentEvidence, {
+          settings,
+          consensusVerification: consensusResult,
+        });
+        const consensusSource = upgradedReport.sources.find(
+          (source) => source.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF
+        );
+
+        if (!cancelled) {
+          setState((prev) => ({
+            ...prev,
+            consensusVerification: consensusResult,
+            consensusSourceSummary: consensusSource?.summary ?? prev.consensusSourceSummary,
+          }));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setState((prev) => ({
+          ...prev,
+          errors: [err instanceof Error ? err.message : "Verification failed unexpectedly"],
+        }));
+      }
+    }
+
+    verifyAll();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [evidence, settings]);
+
+  return state;
+}
