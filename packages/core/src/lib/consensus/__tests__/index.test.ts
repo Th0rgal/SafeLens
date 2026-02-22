@@ -52,6 +52,7 @@ describe("consensus mode routing", () => {
     const proof = await fetchConsensusProof(10, {
       rpcUrl: "https://example.invalid/rpc",
       blockTag: "finalized",
+      enableExperimentalOpstackConsensus: true,
     });
 
     expect(proof).toMatchObject({
@@ -85,6 +86,7 @@ describe("consensus mode routing", () => {
     const proof = await fetchConsensusProof(8453, {
       rpcUrl: "https://example.invalid/rpc",
       blockTag: "finalized",
+      enableExperimentalOpstackConsensus: true,
     });
 
     expect(proof).toMatchObject({
@@ -123,6 +125,14 @@ describe("consensus mode routing", () => {
     expect("proofPayload" in proof).toBe(true);
   });
 
+  it("rejects opstack envelopes when rollout feature flag is disabled", async () => {
+    await expect(fetchConsensusProof(10)).rejects.toMatchObject({
+      code: UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
+      consensusMode: "opstack",
+      reason: "disabled-by-feature-flag",
+    });
+  });
+
   it("rejects linea envelopes when rollout feature flag is disabled", async () => {
     await expect(fetchConsensusProof(59144)).rejects.toMatchObject({
       code: UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
@@ -142,6 +152,7 @@ describe("consensus mode routing", () => {
       fetchConsensusProof(10, {
         rpcUrl: "https://example.invalid/rpc",
         blockTag: "latest",
+        enableExperimentalOpstackConsensus: true,
       })
     ).rejects.toThrow(
       "Execution consensus envelopes require blockTag='finalized'; received 'latest'."

@@ -24,6 +24,11 @@ export interface FetchConsensusProofOptions
   extends BeaconFetchConsensusProofOptions,
     FetchExecutionConsensusProofOptions {
   /**
+   * Rollout gate for experimental OP Stack consensus envelopes.
+   * Default is false until verifier/runtime hardening is complete.
+   */
+  enableExperimentalOpstackConsensus?: boolean;
+  /**
    * Rollout gate for experimental Linea consensus envelopes.
    * Default is false until the full verifier path is complete.
    */
@@ -70,6 +75,17 @@ export async function fetchConsensusProof(
 
   if (capability.consensusMode === "beacon") {
     return fetchBeaconConsensusProof(chainId, options);
+  }
+
+  if (
+    capability.consensusMode === "opstack" &&
+    options.enableExperimentalOpstackConsensus !== true
+  ) {
+    throw new UnsupportedConsensusModeError(
+      chainId,
+      capability.consensusMode,
+      "disabled-by-feature-flag"
+    );
   }
 
   if (

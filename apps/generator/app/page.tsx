@@ -34,6 +34,7 @@ import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
+const opstackConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_OPSTACK_CONSENSUS === "1";
 const lineaConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS === "1";
 const RPC_PING_TIMEOUT_MS = 3500;
 const DEFAULT_RPC_CANDIDATES: Record<number, [string, string]> = {
@@ -414,6 +415,7 @@ export default function AnalyzePage() {
               ? resolvedRpcUrl
               : undefined,
           enableExperimentalLineaConsensus: lineaConsensusEnabled,
+          enableExperimentalOpstackConsensus: opstackConsensusEnabled,
         });
       } catch (err) {
         consensusProofFailed = true;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   verifyEvidencePackage,
+  applySimulationReplayVerificationToReport,
   applyConsensusVerificationToReport,
   VERIFICATION_SOURCE_IDS,
 } from "@safelens/core";
@@ -11,6 +12,7 @@ import type {
   SafeTxHashDetails,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
+  SimulationReplayVerificationResult,
   ConsensusVerificationResult,
   SettingsConfig,
 } from "@safelens/core";
@@ -25,6 +27,14 @@ type ConsensusProofVerifyInput = EvidencePackage["consensusProof"] extends infer
       }
     : never
   : never;
+
+type SimulationReplayVerifyInput = {
+  chainId: number;
+  safeAddress: string;
+  transaction: EvidencePackage["transaction"];
+  simulation: NonNullable<EvidencePackage["simulation"]>;
+  simulationWitness: NonNullable<EvidencePackage["simulationWitness"]>;
+};
 
 type EvidenceVerificationState = {
   errors: string[];
@@ -62,6 +72,17 @@ function createConsensusFailureResult(error: string, errorCode: string): Consens
     error,
     error_code: errorCode,
     checks: [],
+  };
+}
+
+function createSimulationReplayExecErrorResult(
+  error: string
+): SimulationReplayVerificationResult {
+  return {
+    executed: true,
+    success: false,
+    reason: "simulation-replay-exec-error",
+    error,
   };
 }
 
@@ -143,7 +164,34 @@ export function useEvidenceVerification(
               )
             );
 
-        const upgradedReport = applyConsensusVerificationToReport(report, currentEvidence, {
+        const replayResult =
+          currentEvidence.simulation && currentEvidence.simulationWitness
+            ? await invoke<SimulationReplayVerificationResult>(
+                "verify_simulation_replay",
+                {
+                  input: {
+                    chainId: currentEvidence.chainId,
+                    safeAddress: currentEvidence.safeAddress,
+                    transaction: currentEvidence.transaction,
+                    simulation: currentEvidence.simulation,
+                    simulationWitness: currentEvidence.simulationWitness,
+                  } satisfies SimulationReplayVerifyInput,
+                }
+              ).catch((err) =>
+                createSimulationReplayExecErrorResult(
+                  err instanceof Error ? err.message : String(err)
+                )
+              )
+            : undefined;
+
+        const withReplay = replayResult
+          ? applySimulationReplayVerificationToReport(report, currentEvidence, {
+              settings,
+              simulationReplayVerification: replayResult,
+            })
+          : report;
+
+        const upgradedReport = applyConsensusVerificationToReport(withReplay, currentEvidence, {
           settings,
           consensusVerification: consensusResult,
         });

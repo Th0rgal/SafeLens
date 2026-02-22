@@ -67,6 +67,7 @@ Usage:
 
 Options:
   --rpc-url <url>   Fetch on-chain policy proof + simulate transaction via RPC
+  --enable-experimental-opstack-consensus  Enable experimental OP Stack consensus envelope fetch in analyze
   --enable-experimental-linea-consensus  Enable experimental Linea consensus envelope fetch in analyze
 
 Examples:
@@ -431,6 +432,7 @@ async function runAnalyze(args: string[]) {
   const format = getOutputFormat(args, "text");
 
   const rpcUrl = getFlag(args, "--rpc-url");
+  const enableExperimentalOpstackConsensus = hasFlag(args, "--enable-experimental-opstack-consensus");
   const enableExperimentalLineaConsensus = hasFlag(args, "--enable-experimental-linea-consensus");
 
   const parsed = parseSafeUrlFlexible(url);
@@ -468,10 +470,14 @@ async function runAnalyze(args: string[]) {
     try {
       const consensusOptions: {
         rpcUrl?: string;
+        enableExperimentalOpstackConsensus?: boolean;
         enableExperimentalLineaConsensus?: boolean;
       } = {};
       if ((consensusMode === "opstack" || consensusMode === "linea") && rpcUrl) {
         consensusOptions.rpcUrl = rpcUrl;
+      }
+      if (enableExperimentalOpstackConsensus) {
+        consensusOptions.enableExperimentalOpstackConsensus = true;
       }
       if (enableExperimentalLineaConsensus) {
         consensusOptions.enableExperimentalLineaConsensus = true;
