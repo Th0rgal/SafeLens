@@ -124,3 +124,20 @@ export const safeTransactionListSchema = z.object({
 });
 
 export type SafeTransactionList = z.infer<typeof safeTransactionListSchema>;
+
+// Safe info from Transaction Service API
+export const safeInfoSchema = z.object({
+  address: addressSchema,
+  nonce: z.number(),
+  threshold: z.number(),
+  owners: z.array(addressSchema),
+  masterCopy: addressSchema,
+  plugins: z.array(addressSchema).optional(),
+  fallbackHandler: addressSchema.optional(),
+  guard: addressSchema.nullable(),
+  chainId: z.number(),
+  version: z.string().optional(),
+  implementation: addressSchema.optional(),
+});
+
+export type SafeInfo = z.infer<typeof safeInfoSchema>;

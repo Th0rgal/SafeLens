@@ -1,4 +1,4 @@
-import { SafeTransaction, SafeTransactionList, safeTransactionSchema, safeTransactionListSchema } from "../types";
+import { SafeTransaction, SafeTransactionList, SafeInfo, safeTransactionSchema, safeTransactionListSchema, safeInfoSchema } from "../types";
 import { getSafeApiUrl } from "./url-parser";
 
 /**
@@ -51,7 +51,8 @@ export async function fetchSafeNonce(
   }
 
   const data = await response.json();
-  return data.nonce;
+  const validated = safeInfoSchema.parse(data);
+  return validated.nonce;
 }
 
 /**
