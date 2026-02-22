@@ -54,6 +54,54 @@ describe("buildVerificationSources", () => {
     expect(sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.SIMULATION)?.status).toBe("disabled");
   });
 
+  it("marks decoded calldata as self-verified when all local checks pass", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: true,
+      decodedCalldataVerification: "self-verified",
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+    }));
+
+    const decodedSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA);
+    expect(decodedSource?.trust).toBe("self-verified");
+    expect(decodedSource?.summary).toContain("locally verified");
+  });
+
+  it("marks decoded calldata as partial when only some local checks can run", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: true,
+      decodedCalldataVerification: "partial",
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+    }));
+
+    const decodedSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA);
+    expect(decodedSource?.trust).toBe("api-sourced");
+    expect(decodedSource?.summary).toContain("partially");
+  });
+
+  it("keeps decoded calldata api-sourced when local checks detect mismatch", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: true,
+      decodedCalldataVerification: "mismatch",
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+    }));
+
+    const decodedSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.DECODED_CALLDATA);
+    expect(decodedSource?.trust).toBe("api-sourced");
+    expect(decodedSource?.summary).toContain("conflicts");
+  });
+
   it("marks settings source disabled when no settings are available", () => {
     const sources = buildVerificationSources(createVerificationSourceContext({
       hasSettings: false,
