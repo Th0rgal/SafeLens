@@ -24,7 +24,6 @@ import { AddressDisplay } from "@/components/address-display";
 import { HashValueDisplay, IntermediateHashesDetails } from "@/components/hash-verification-details";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import {
-  buildSafetyAttentionItems,
   classifyPolicyStatus,
   classifyConsensusStatus,
   classifySimulationStatus,
@@ -894,16 +893,6 @@ function ExecutionSafetyPanel({
   const verificationStyle = SAFETY_STATUS_STYLE[verification.status];
   const VerificationIcon = verificationStyle.icon;
 
-  // ── Top attention item (most severe issue, shown below badge) ─────
-  const attentionItems = buildSafetyAttentionItems(
-    checksWithoutRedundantRevertWarning,
-    networkSupport,
-    3
-  );
-  const topAttention = attentionItems.length > 0 && verification.status !== "check"
-    ? attentionItems[0]
-    : null;
-
   // ── Simulation effects ────────────────────────────────────────────
   const decodedEvents = useMemo(() => {
     if (!evidence.simulation?.logs) return [];
@@ -1016,102 +1005,46 @@ function ExecutionSafetyPanel({
         <CardDescription>{verification.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {/* Top attention hint (collapsed view) */}
-        {!showDetails && topAttention && topAttention.reasonCode !== "missing-onchain-policy-proof" && (
-          <div className={`rounded-md border px-3 py-2 text-xs ${
-            verification.status === "error"
-              ? "border-red-500/30 bg-red-500/10 text-red-300"
-              : "border-amber-500/30 bg-amber-500/10 text-amber-300"
-          }`}>
-            {topAttention.detail}
-          </div>
-        )}
-
-        {/* ── Safe Policy (always visible) ─────────────────────────── */}
-        <SafePolicySection evidence={evidence} />
-
-        {/* ── Simulation effects (always visible) ──────────────────── */}
-        <div className="text-xs font-medium text-muted">Simulation</div>
-        {simulationPassed ? (
-          <>
-            {transferEvents.length > 0 && (
-              <div className="space-y-1.5">
-                {transferEvents.map((event, i) => {
-                  const colorClass =
-                    event.direction === "send"
-                      ? "text-red-400"
-                      : event.direction === "receive"
-                        ? "text-emerald-400"
-                        : "text-muted";
-                  const bgClass =
-                    event.direction === "send"
-                      ? "bg-red-500/5"
-                      : event.direction === "receive"
-                        ? "bg-emerald-500/5"
-                        : "bg-surface-2/30";
-                  const arrow =
-                    event.direction === "send" ? "↗" : event.direction === "receive" ? "↙" : "↔";
-                  const verb =
-                    event.direction === "send" ? "Send" : event.direction === "receive" ? "Receive" : "Transfer";
-                  const counterparty =
-                    event.direction === "send" ? event.to : event.direction === "receive" ? event.from : event.to;
-                  const preposition =
-                    event.direction === "send" ? "to" : event.direction === "receive" ? "from" : "at";
-
-                  return (
-                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
-                      <span className={`font-medium ${colorClass}`}>
-                        {arrow} {verb}
-                      </span>
-                      <span className="font-medium">{event.amountFormatted}</span>
-                      <span className="text-muted">{preposition}</span>
-                      <AddressDisplay address={counterparty} chainId={evidence.chainId} />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {transferEvents.length === 0 && (
-              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-                {evidence.simulation?.traceAvailable === false
-                  ? "No token movements detected. Event details may be limited, RPC does not support debug_traceCall."
-                  : "No token movements detected."}
-              </div>
-            )}
-            {/* Remaining approvals warning */}
-            {remainingApprovals.length > 0 && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-                <div className="text-xs font-medium text-amber-200">
-                  Remaining token approvals
+        <div className="space-y-2">
+          {checksForVerificationStatus.map((check) => {
+            const style = SAFETY_STATUS_STYLE[check.status];
+            const Icon = style.icon;
+            return (
+              <div key={check.id} className="rounded-md border border-border/15 glass-subtle px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium">{check.label}</span>
+                  <span className={`inline-flex items-center gap-1 text-[11px] ${style.text}`}>
+                    <Icon className="h-3 w-3" />
+                    {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
+                  </span>
                 </div>
-                <div className="mt-1.5 space-y-1.5">
-                  {remainingApprovals.map((approval, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
-                      <span className={approval.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
-                        {approval.amountFormatted}
-                      </span>
-                      <span className="text-amber-400/70">to</span>
-                      <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-1.5 text-[11px] text-amber-400/70">
-                  These allowances remain active after execution. Verify that the approved spenders are trusted.
-                </div>
+                <div className={`mt-1 text-[11px] ${style.text}`}>{check.detail}</div>
               </div>
+            );
+          })}
+        </div>
+
+        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+          {simulationFreshness}
+        </div>
+
+        {networkSupport && (
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-muted">Network support</span>
+              <span
+                className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
+                  networkSupport.isFullySupported
+                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                    : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                {networkSupport.badgeText}
+              </span>
+            </div>
+            {networkSupport.helperText && (
+              <div className="mt-1 text-amber-300">{networkSupport.helperText}</div>
             )}
-          </>
-        ) : simulationAvailable && simulationVerification?.executionReverted ? (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-            Token effects could not be determined because the simulation reverted.
-          </div>
-        ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-            Simulation verification failed. Token effects cannot be trusted.
-          </div>
-        ) : (
-          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-            Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
           </div>
         )}
 
@@ -1126,6 +1059,91 @@ function ExecutionSafetyPanel({
         {/* ── Expandable details ───────────────────────────────────── */}
         {showDetails && (
           <div className="space-y-3 border-t border-border/10 pt-3">
+            <SafePolicySection evidence={evidence} />
+
+            <div className="text-xs font-medium text-muted">Simulation effects</div>
+            {simulationPassed ? (
+              <>
+                {transferEvents.length > 0 && (
+                  <div className="space-y-1.5">
+                    {transferEvents.map((event, i) => {
+                      const colorClass =
+                        event.direction === "send"
+                          ? "text-red-400"
+                          : event.direction === "receive"
+                            ? "text-emerald-400"
+                            : "text-muted";
+                      const bgClass =
+                        event.direction === "send"
+                          ? "bg-red-500/5"
+                          : event.direction === "receive"
+                            ? "bg-emerald-500/5"
+                            : "bg-surface-2/30";
+                      const arrow =
+                        event.direction === "send" ? "↗" : event.direction === "receive" ? "↙" : "↔";
+                      const verb =
+                        event.direction === "send" ? "Send" : event.direction === "receive" ? "Receive" : "Transfer";
+                      const counterparty =
+                        event.direction === "send" ? event.to : event.direction === "receive" ? event.from : event.to;
+                      const preposition =
+                        event.direction === "send" ? "to" : event.direction === "receive" ? "from" : "at";
+
+                      return (
+                        <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
+                          <span className={`font-medium ${colorClass}`}>
+                            {arrow} {verb}
+                          </span>
+                          <span className="font-medium">{event.amountFormatted}</span>
+                          <span className="text-muted">{preposition}</span>
+                          <AddressDisplay address={counterparty} chainId={evidence.chainId} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {transferEvents.length === 0 && (
+                  <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                    {evidence.simulation?.traceAvailable === false
+                      ? "No token movements detected. Event details may be limited, RPC does not support debug_traceCall."
+                      : "No token movements detected."}
+                  </div>
+                )}
+                {remainingApprovals.length > 0 && (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                    <div className="text-xs font-medium text-amber-200">
+                      Remaining token approvals
+                    </div>
+                    <div className="mt-1.5 space-y-1.5">
+                      {remainingApprovals.map((approval, i) => (
+                        <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
+                          <span className={approval.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
+                            {approval.amountFormatted}
+                          </span>
+                          <span className="text-amber-400/70">to</span>
+                          <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1.5 text-[11px] text-amber-400/70">
+                      These allowances remain active after execution. Verify that the approved spenders are trusted.
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : simulationAvailable && simulationVerification?.executionReverted ? (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                Token effects could not be determined because the simulation reverted.
+              </div>
+            ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
+              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+                Simulation verification failed. Token effects cannot be trusted.
+              </div>
+            ) : (
+              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
+              </div>
+            )}
+
             {/* ── Chain state + consensus details ──────────────────── */}
             {(() => {
               const check = checks.find((c) => c.id === "chain-state-finalized");
