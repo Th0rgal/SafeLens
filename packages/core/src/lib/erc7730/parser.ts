@@ -29,12 +29,11 @@ const MetadataSchema = z.object({
       deploymentDate: z.string().optional(),
       url: z.string().optional(),
     })
-    .passthrough()
     .optional(),
   token: TokenMetadataSchema.optional(),
   constants: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   enums: z.record(z.record(z.string())).optional(),
-}).passthrough();
+});
 
 const FieldFormatSchema = z.enum([
   "raw",
@@ -60,18 +59,18 @@ const FieldDefinitionSchema: z.ZodType<any> = z.lazy(() =>
     params: z.record(z.unknown()).optional().nullable(),
     fields: z.array(z.unknown()).optional(),
     value: z.unknown().optional(),
-  }).passthrough()
+  })
 );
 
 const FormatEntrySchema = z.object({
   intent: z.string().optional(),
   fields: z.array(FieldDefinitionSchema),
-}).passthrough();
+});
 
 const DisplaySchema = z.object({
   formats: z.record(FormatEntrySchema),
   definitions: z.record(FieldDefinitionSchema).optional(),
-}).passthrough();
+});
 
 const ContractContextSchema = z.object({
   deployments: z.array(DeploymentSchema),
