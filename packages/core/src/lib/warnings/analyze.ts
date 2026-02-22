@@ -31,7 +31,7 @@ export function identifyProposer(
  */
 export function analyzeTarget(
   to: string,
-  operation: number,
+  operation: 0 | 1,
   config: SettingsConfig,
   chainId?: number,
 ): TransactionWarning[] {
