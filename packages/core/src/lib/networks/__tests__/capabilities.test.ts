@@ -7,7 +7,14 @@ import {
   SAFE_ADDRESS_SEARCH_CHAIN_IDS,
   getNetworkCapability,
   getNetworkCapabilityByPrefix,
+  type BeaconNetworkCapability,
 } from "../capabilities";
+
+function isBeaconNetworkCapability(
+  network: ReturnType<typeof getNetworkCapability>
+): network is BeaconNetworkCapability {
+  return network?.consensusMode === "beacon" && Boolean(network?.consensus);
+}
 
 describe("network capability matrix", () => {
   it("uses explicit active chain IDs for generator/CLI discovery", () => {
@@ -49,7 +56,7 @@ describe("network capability matrix", () => {
     const gnosis = getNetworkCapabilityByPrefix("gno");
     expect(gnosis?.chainId).toBe(100);
     expect(gnosis?.consensusMode).toBe("beacon");
-    expect(gnosis?.consensus?.network).toBe("gnosis");
+    expect(isBeaconNetworkCapability(gnosis) ? gnosis.consensus?.network : undefined).toBe("gnosis");
   });
 
   it("labels pending verifier integrations with explicit consensus modes", () => {

@@ -20,7 +20,7 @@ export interface BeaconConsensusConfig {
 
 export type ConsensusVerifierMode = "beacon" | "opstack" | "linea";
 
-export interface NetworkCapability {
+export interface NetworkCapabilityBase {
   chainId: number;
   chainPrefix: string;
   chainName: string;
@@ -28,10 +28,32 @@ export interface NetworkCapability {
   defaultRpcUrl?: string;
   supportsOnchainPolicyProof: boolean;
   supportsSimulation: boolean;
-  consensusMode?: ConsensusVerifierMode;
-  consensus?: BeaconConsensusConfig;
   enabledInSafeAddressSearch: boolean;
 }
+
+export interface BeaconNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "beacon";
+  consensus: BeaconConsensusConfig;
+}
+
+export interface OpStackNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "opstack";
+}
+
+export interface LineaNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "linea";
+}
+
+export interface NoConsensusModeCapability extends NetworkCapabilityBase {
+  consensusMode?: undefined;
+  consensus?: undefined;
+}
+
+export type NetworkCapability =
+  | BeaconNetworkCapability
+  | OpStackNetworkCapability
+  | LineaNetworkCapability
+  | NoConsensusModeCapability;
 
 const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
   {
