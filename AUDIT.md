@@ -144,7 +144,7 @@ Beacon light client provides independent cryptographic verification (BLS aggrega
 
 ### Why offline verification?
 
-Evidence packages may contain sensitive pre-execution transaction details. Airgapped verification ensures no data leaks. The desktop app's CSP enforcement and Tauri allowlist prevent any network access during verification.
+The app is intended to be installed on a computer you trust. Even if your main computer where you received the signing request is compromised — as well as the RPC node you are using, the Gnosis Safe API and frontend — you will never sign something you don't intend to. It becomes impossible for a compromised attacker to know when, where, and what you signed.
 
 ## Known Risks
 
