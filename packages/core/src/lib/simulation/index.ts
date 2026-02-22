@@ -11,6 +11,15 @@ export {
 
 export {
   decodeSimulationEvents,
+  decodeNativeTransfers,
   type DecodedEvent,
   type DecodedEventKind,
 } from "./event-decoder";
+
+export {
+  summarizeSimulationEvents,
+  computeRemainingApprovals,
+  type SimulationEventsSummary,
+  type SimulationTransferPreview,
+  type RemainingApproval,
+} from "./summary";

@@ -184,4 +184,105 @@ describe("buildVerificationSources", () => {
       CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
     );
   });
+
+  it("surfaces feature-flag-disabled consensus omission when no consensus proof is included", () => {
+    const reason = "consensus-mode-disabled-by-feature-flag" as const;
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: false,
+      hasSimulation: false,
+      hasConsensusProof: false,
+      consensusVerified: false,
+      consensusTrustDecisionReason: reason,
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
+    expect(consensusSource?.detail).toContain(
+      CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON[reason]
+    );
+  });
+
+  it("uses mode-aware wording for unverified OP Stack consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: false,
+      consensusMode: "opstack",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.summary).toContain("Consensus proof (OP Stack) included");
+    expect(consensusSource?.detail).toContain("contains OP Stack consensus data");
+  });
+
+  it("uses mode-specific trust for verified OP Stack consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: true,
+      consensusMode: "opstack",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.trust).toBe("consensus-verified-opstack");
+    expect(consensusSource?.summary).toContain("verified against OP Stack consensus");
+    expect(consensusSource?.summary).toContain("not equivalent to Beacon light-client finality");
+    expect(consensusSource?.detail).toContain("not equivalent to Beacon light-client finality");
+  });
+
+  it("uses mode-aware wording for verified Linea consensus proofs", () => {
+    const sources = buildVerificationSources(createVerificationSourceContext({
+      hasSettings: false,
+      hasUnsupportedSignatures: false,
+      hasDecodedData: false,
+      hasOnchainPolicyProof: true,
+      hasSimulation: false,
+      hasConsensusProof: true,
+      consensusVerified: true,
+      consensusMode: "linea",
+    }));
+
+    const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+    expect(consensusSource?.trust).toBe("consensus-verified-linea");
+    expect(consensusSource?.summary).toContain("verified against Linea consensus");
+    expect(consensusSource?.detail).toContain("verified against Linea consensus data");
+    expect(consensusSource?.summary).toContain("not equivalent to Beacon light-client finality");
+    expect(consensusSource?.detail).toContain("not equivalent to Beacon light-client finality");
+  });
+
+  it("uses deterministic verified trust mapping for every consensus mode", () => {
+    const cases = [
+      { mode: "beacon" as const, expected: "consensus-verified-beacon" as const },
+      { mode: "opstack" as const, expected: "consensus-verified-opstack" as const },
+      { mode: "linea" as const, expected: "consensus-verified-linea" as const },
+    ];
+
+    for (const { mode, expected } of cases) {
+      const sources = buildVerificationSources(createVerificationSourceContext({
+        hasSettings: false,
+        hasUnsupportedSignatures: false,
+        hasDecodedData: false,
+        hasOnchainPolicyProof: true,
+        hasSimulation: false,
+        hasConsensusProof: true,
+        consensusVerified: true,
+        consensusMode: mode,
+      }));
+      const consensusSource = sources.find((s) => s.id === VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF);
+      expect(consensusSource?.trust).toBe(expected);
+    }
+  });
 });

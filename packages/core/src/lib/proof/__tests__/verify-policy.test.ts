@@ -2,7 +2,7 @@
  * Policy proof verification tests.
  *
  * Uses a real eth_getProof response from Ethereum mainnet for the Safe at
- * 0x9fC3dc011b461664c835F2527fffb1169b3C213e — the same Safe used in
+ * 0x9fC3dc011b461664c835F2527fffb1169b3C213e, the same Safe used in
  * the CowSwap TWAP test fixture.
  */
 
@@ -309,6 +309,25 @@ describe("verifyPolicyProof end-to-end with real mainnet data", () => {
     );
     expect(modulesCheck?.passed).toBe(true);
     expect(modulesCheck?.detail).toContain("sentinel");
+  });
+
+  it("accepts compact quantity keys for direct storage slots", () => {
+    const proof = makeProof();
+    const compactSlotKeys = new Map<string, Hex>([
+      [slotToKey(SLOT_SINGLETON).toLowerCase(), "0x0" as Hex],
+      [slotToKey(SLOT_OWNER_COUNT).toLowerCase(), "0x3" as Hex],
+      [slotToKey(SLOT_THRESHOLD).toLowerCase(), "0x4" as Hex],
+      [slotToKey(SLOT_NONCE).toLowerCase(), "0x5" as Hex],
+    ]);
+
+    proof.accountProof.storageProof = proof.accountProof.storageProof.map((sp) => ({
+      ...sp,
+      key: compactSlotKeys.get(sp.key.toLowerCase()) ?? sp.key,
+    }));
+
+    const result = verifyPolicyProof(proof, fixtureJson.safeAddress as Address);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
   });
 });
 

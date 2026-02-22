@@ -3,6 +3,8 @@ import {
   DEFAULT_SETTINGS_CONFIG,
   CLEAR_SIGNING_REGISTRY_COMMIT,
   CLEAR_SIGNING_REGISTRY_URL,
+  COW_COMPOSABLE_COW_COMMIT,
+  COW_COMPOSABLE_COW_NETWORKS_URL,
 } from "../defaults";
 import type { ERC7730Descriptor } from "../../erc7730/types";
 
@@ -44,9 +46,15 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
       expect(entry.kind).toBe("contract");
       expect(entry.group === "Builtin Protocols" || entry.group === "Builtin Tokens").toBe(true);
       expect(entry.chainIds && entry.chainIds.length > 0).toBe(true);
-      expect(entry.note).toContain("Ledger ERC-7730 clear-signing registry");
-      expect(entry.note).toContain(CLEAR_SIGNING_REGISTRY_COMMIT);
-      expect(entry.sourceUrl).toBe(CLEAR_SIGNING_REGISTRY_URL);
+
+      if (entry.sourceUrl === COW_COMPOSABLE_COW_NETWORKS_URL) {
+        expect(entry.note).toContain("CoW Protocol composable-cow deployments");
+        expect(entry.note).toContain(COW_COMPOSABLE_COW_COMMIT);
+      } else {
+        expect(entry.note).toContain("Ledger ERC-7730 clear-signing registry");
+        expect(entry.note).toContain(CLEAR_SIGNING_REGISTRY_COMMIT);
+        expect(entry.sourceUrl).toBe(CLEAR_SIGNING_REGISTRY_URL);
+      }
     }
   });
 
@@ -57,5 +65,22 @@ describe("DEFAULT_SETTINGS_CONFIG", () => {
     expect(mainnetUsdt).toBeDefined();
     expect(mainnetUsdt?.chainIds).toContain(1);
     expect(mainnetUsdt?.chainIds).not.toContain(137);
+  });
+
+  it("includes CoW composable order aliases for mainnet", () => {
+    const composableCow = DEFAULT_SETTINGS_CONFIG.addressRegistry.find(
+      (e) => e.address.toLowerCase() === "0xfdafc9d1902f4e0b84f65f49f244b32b31013b74"
+    );
+    const currentBlockTimestampFactory = DEFAULT_SETTINGS_CONFIG.addressRegistry.find(
+      (e) => e.address.toLowerCase() === "0x52ed56da04309aca4c3fecc595298d80c2f16bac"
+    );
+
+    expect(composableCow?.name).toBe("CoW ComposableCoW");
+    expect(composableCow?.chainIds).toContain(1);
+    expect(composableCow?.sourceUrl).toBe(COW_COMPOSABLE_COW_NETWORKS_URL);
+
+    expect(currentBlockTimestampFactory?.name).toBe("CoW CurrentBlockTimestampFactory");
+    expect(currentBlockTimestampFactory?.chainIds).toContain(1);
+    expect(currentBlockTimestampFactory?.sourceUrl).toBe(COW_COMPOSABLE_COW_NETWORKS_URL);
   });
 });

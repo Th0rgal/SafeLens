@@ -184,4 +184,146 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.reasons).toContain("consensus-proof-fetch-failed");
     expect(finalized.exportContract?.reasons).toContain("missing-onchain-policy-proof");
   });
+
+  it("records unsupported consensus mode explicitly", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      consensusProofUnsupportedMode: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+  });
+
+  it("records feature-flag-disabled consensus mode explicitly", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: false,
+      consensusProofAttempted: true,
+      consensusProofFailed: true,
+      consensusProofDisabledByFeatureFlag: true,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: false,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.reasons).toContain("consensus-mode-disabled-by-feature-flag");
+    expect(finalized.exportContract?.reasons).not.toContain("unsupported-consensus-mode");
+    expect(finalized.exportContract?.reasons).not.toContain("consensus-proof-fetch-failed");
+  });
+
+  it.each([
+    {
+      chainId: 10,
+      consensusMode: "opstack" as const,
+      network: "optimism" as const,
+    },
+    {
+      chainId: 8453,
+      consensusMode: "opstack" as const,
+      network: "base" as const,
+    },
+    {
+      chainId: 59144,
+      consensusMode: "linea" as const,
+      network: "linea" as const,
+    },
+  ])(
+    "marks export partial when $consensusMode consensus artifact exists — only beacon is verifier-supported",
+    ({ chainId, consensusMode, network }) => {
+      const base = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
+      const evidence = {
+        ...base,
+        onchainPolicyProof: {
+          blockNumber: 1,
+          stateRoot:
+            "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+          accountProof: {
+            address: COWSWAP_TWAP_TX.safe,
+            balance: "0",
+            codeHash:
+              "0x1111111111111111111111111111111111111111111111111111111111111111",
+            nonce: 0,
+            storageHash:
+              "0x2222222222222222222222222222222222222222222222222222222222222222",
+            accountProof: [],
+            storageProof: [],
+          },
+          decodedPolicy: {
+            owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+            threshold: 1,
+            nonce: 0,
+            modules: [],
+            guard: "0x0000000000000000000000000000000000000000",
+            fallbackHandler: "0x0000000000000000000000000000000000000000",
+            singleton: "0x0000000000000000000000000000000000000000",
+          },
+          trust: "rpc-sourced" as const,
+        },
+        consensusProof: {
+          consensusMode,
+          network,
+          proofPayload: "{\"kind\":\"envelope-only\"}",
+          stateRoot:
+            "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+          blockNumber: 1,
+        },
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "1",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced" as const,
+        },
+      };
+
+      const finalized = finalizeEvidenceExport(evidence, {
+        rpcProvided: true,
+        consensusProofAttempted: true,
+        consensusProofFailed: false,
+        onchainPolicyProofAttempted: true,
+        onchainPolicyProofFailed: false,
+        simulationAttempted: true,
+        simulationFailed: false,
+      });
+
+      expect(finalized.exportContract?.mode).toBe("partial");
+      expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
+      expect(finalized.exportContract?.reasons).toContain("unsupported-consensus-mode");
+      expect(finalized.exportContract?.artifacts.consensusProof).toBe(true);
+    }
+  );
+
+  it.each([
+    { chainId: 10, label: "opstack" },
+    { chainId: 8453, label: "base-opstack" },
+    { chainId: 59144, label: "linea" },
+  ])(
+    "marks consensus fetch failure for $label chains when enrichment was attempted and failed",
+    ({ chainId }) => {
+      const evidence = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
+      const finalized = finalizeEvidenceExport(evidence, {
+        rpcProvided: false,
+        consensusProofAttempted: true,
+        consensusProofFailed: true,
+        onchainPolicyProofAttempted: false,
+        onchainPolicyProofFailed: false,
+        simulationAttempted: false,
+        simulationFailed: false,
+      });
+
+      expect(finalized.exportContract?.reasons).toContain("consensus-proof-fetch-failed");
+      expect(finalized.exportContract?.reasons).not.toContain("missing-consensus-proof");
+      expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
+    }
+  );
 });

@@ -15,6 +15,7 @@ import type { OnchainPolicyProof } from "../types";
 import {
   verifyAccountProof,
   verifyStorageProof,
+  normalizeStorageSlotKey,
   type AccountProofInput,
   type StorageProofInput,
 } from "./mpt";
@@ -79,8 +80,14 @@ function findStorageProof(
   proofs: StorageProofInput[],
   key: Hex
 ): StorageProofInput | undefined {
-  const normalizedKey = key.toLowerCase();
-  return proofs.find((p) => p.key.toLowerCase() === normalizedKey);
+  const normalizedKey = normalizeStorageSlotKey(key);
+  return proofs.find((proof) => {
+    try {
+      return normalizeStorageSlotKey(proof.key) === normalizedKey;
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -431,7 +438,7 @@ function verifyLinkedList(
   const sentinelProof = findStorageProof(storageProofs, sentinelSlot);
 
   if (!sentinelProof) {
-    // No proof for sentinel — can't verify the list
+    // No proof for sentinel, can't verify the list
     checks.push({
       id: `${name}-linked-list`,
       label: `${name} linked list`,
@@ -444,7 +451,7 @@ function verifyLinkedList(
 
   if (claimedItems.length === 0) {
     // Empty list: SENTINEL should point to SENTINEL (initialized) or
-    // ZERO_ADDRESS (uninitialized storage — slot was never written).
+    // ZERO_ADDRESS (uninitialized storage, slot was never written).
     const provenNext = storageValueToAddress(sentinelProof.value);
     const normalized = normalizeAddress(provenNext);
     const match =
@@ -455,7 +462,7 @@ function verifyLinkedList(
       label: `${name} linked list (empty)`,
       passed: match,
       detail: match
-        ? "Proven empty — sentinel points to sentinel"
+        ? "Proven empty: sentinel points to sentinel"
         : `Expected empty list but sentinel points to ${provenNext}`,
     });
     if (!match) {

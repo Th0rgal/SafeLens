@@ -1,5 +1,8 @@
 import { analyzeTarget, identifyProposer, type TransactionWarning } from "../warnings/analyze";
-import type { EvidencePackage } from "../types";
+import {
+  getLegacyPendingConsensusExportReasonForMode,
+  type EvidencePackage,
+} from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
 import { verifyPolicyProof, type PolicyProofVerificationResult } from "../proof";
@@ -7,12 +10,30 @@ import { verifySimulation, type SimulationVerificationResult } from "../simulati
 import type { SettingsConfig } from "../settings/types";
 import type { Address, Hash, Hex } from "viem";
 import { buildVerificationSources, createVerificationSourceContext } from "../trust";
-import type { ConsensusTrustDecisionReason } from "./consensus-trust";
+import {
+  mapConsensusVerifierErrorCodeToTrustReason,
+  type ConsensusTrustDecisionReason,
+} from "./consensus-trust";
 export {
+  CONSENSUS_VERIFIER_ERROR_CODES,
   CONSENSUS_TRUST_DECISION_SUMMARY_BY_REASON,
+  isConsensusVerifierErrorCode,
+  isWarningConsensusTrustDecisionReason,
+  mapConsensusVerifierErrorCodeToTrustReason,
   summarizeConsensusTrustDecisionReason,
 } from "./consensus-trust";
-export type { ConsensusTrustDecisionReason } from "./consensus-trust";
+export type {
+  ConsensusTrustDecisionReason,
+  ConsensusVerifierErrorCode,
+} from "./consensus-trust";
+export type {
+  CoreExecutionSafetyField,
+  CoreExecutionSafetyFieldId,
+} from "./execution-safety";
+export {
+  CORE_EXECUTION_SAFETY_FIELD_IDS,
+  buildCoreExecutionSafetyFields,
+} from "./execution-safety";
 
 export type SignatureCheckSummary = {
   total: number;
@@ -62,7 +83,8 @@ export type EvidenceVerificationReport = {
   consensusVerification?: ConsensusVerificationResult;
   /**
    * Deterministic reason why consensus trust did or did not upgrade.
-   * null means consensus trust upgraded to "consensus-verified".
+   * null means consensus trust upgraded to a mode-specific
+   * "consensus-verified-*" trust level.
    */
   consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
 };
@@ -84,21 +106,73 @@ type ConsensusTrustDecision = {
   reason: ConsensusTrustDecisionReason;
 };
 
+const NO_PROOF_EXPORT_REASONS = [
+  "consensus-mode-disabled-by-feature-flag",
+  "unsupported-consensus-mode",
+  "consensus-proof-fetch-failed",
+] as const satisfies readonly Exclude<ConsensusTrustDecisionReason, null>[];
+
 /**
  * Trust upgrade boundary for consensus verification.
  *
- * We only upgrade to "consensus-verified" when the local consensus verifier
- * proves the same execution payload root + block number that the independent
- * onchain policy proof is anchored to.
+ * We only upgrade to mode-specific "consensus-verified-*" trust when the
+ * local consensus verifier proves the same execution payload root + block
+ * number that the independent onchain policy proof is anchored to.
  */
 function evaluateConsensusTrustDecision(
   evidence: EvidencePackage,
   consensusVerification?: ConsensusVerificationResult
 ): ConsensusTrustDecision {
-  if (!evidence.consensusProof || !evidence.onchainPolicyProof) {
+  const consensusProof = evidence.consensusProof;
+  const exportReasons = evidence.exportContract?.reasons ?? [];
+
+  if (!consensusProof) {
+    const noProofReason = NO_PROOF_EXPORT_REASONS.find((reason) =>
+      exportReasons.includes(reason)
+    );
+    if (noProofReason) {
+      return {
+        trusted: false,
+        reason: noProofReason,
+      };
+    }
+  }
+
+  if (!consensusVerification && consensusProof) {
+    const pendingReason = getLegacyPendingConsensusExportReasonForMode(
+      consensusProof.consensusMode ?? "beacon"
+    );
+    if (pendingReason && exportReasons.includes(pendingReason)) {
+      return {
+        trusted: false,
+        reason: pendingReason,
+      };
+    }
+  }
+
+  if (!consensusProof || !evidence.onchainPolicyProof) {
     return {
       trusted: false,
       reason: "missing-consensus-or-policy-proof",
+    };
+  }
+  const mappedReason = mapConsensusVerifierErrorCodeToTrustReason(
+    consensusVerification?.error_code
+  );
+  if (mappedReason) {
+    return {
+      trusted: false,
+      reason: mappedReason,
+    };
+  }
+  if (
+    consensusVerification &&
+    !consensusVerification.state_root_matches &&
+    Boolean(consensusVerification.verified_state_root)
+  ) {
+    return {
+      trusted: false,
+      reason: "state-root-mismatch-flag",
     };
   }
   if (!consensusVerification?.valid) {
@@ -116,13 +190,6 @@ function evaluateConsensusTrustDecision(
       reason: "missing-verified-root-or-block",
     };
   }
-  if (!consensusVerification.state_root_matches) {
-    return {
-      trusted: false,
-      reason: "state-root-mismatch-flag",
-    };
-  }
-
   const expectedStateRoot = evidence.onchainPolicyProof.stateRoot;
   const expectedBlockNumber = evidence.onchainPolicyProof.blockNumber;
   const rootMatches =
@@ -160,7 +227,7 @@ function buildReportSources(
     hasSimulation: Boolean(options.evidence.simulation),
     hasConsensusProof: Boolean(options.evidence.consensusProof),
     // After successful local Merkle verification, upgrade trust from
-    // "rpc-sourced" to "proof-verified" — the proof was cryptographically
+    // "rpc-sourced" to "proof-verified", the proof was cryptographically
     // validated against the state root, not just fetched from an RPC.
     onchainPolicyProofTrust: options.policyProof?.valid
       ? "proof-verified"
@@ -168,6 +235,7 @@ function buildReportSources(
     simulationTrust: options.evidence.simulation?.trust,
     consensusVerified: consensusDecision.trusted,
     consensusTrustDecisionReason: consensusDecision.reason,
+    consensusMode: options.evidence.consensusProof?.consensusMode ?? "beacon",
   }));
 }
 
@@ -214,7 +282,7 @@ export async function verifyEvidencePackage(
     : [];
 
   // Recompute the safeTxHash from the transaction fields FIRST, so
-  // signatures are always verified against the locally-computed hash —
+  // signatures are always verified against the locally-computed hash,
   // not the one stored in the evidence JSON. This prevents a tampered
   // safeTxHash field from causing forged signatures to pass.
   const hashDetails = computeSafeTxHashDetailed({
@@ -297,7 +365,7 @@ export async function verifyEvidencePackage(
         `confirmationsRequired (${evidence.confirmationsRequired}) does not match proven threshold (${provenThreshold})`
       );
       // The proof is still structurally valid, but this is a data
-      // integrity issue — mark the overall proof as invalid so the
+      // integrity issue, mark the overall proof as invalid so the
       // trust level does not upgrade to "proof-verified".
       policyProof.valid = false;
     }
@@ -336,9 +404,7 @@ export async function verifyEvidencePackage(
     simulationVerification = verifySimulation(evidence.simulation);
   }
 
-  const consensusDecision = evidence.consensusProof
-    ? evaluateConsensusTrustDecision(evidence)
-    : { trusted: false, reason: undefined };
+  const consensusDecision = evaluateConsensusTrustDecision(evidence);
 
   return {
     proposer,

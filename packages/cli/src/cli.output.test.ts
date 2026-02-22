@@ -32,6 +32,17 @@ function readText(filePath: string) {
   return readFile(filePath, "utf-8");
 }
 
+const TRANSFER_TOPIC =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+function pad32(addr: string): string {
+  return "0x" + addr.replace("0x", "").padStart(64, "0");
+}
+
+function uint256Hex(n: bigint): string {
+  return "0x" + n.toString(16).padStart(64, "0");
+}
+
 describe("CLI verify output", () => {
   let tmpDir: string;
 
@@ -222,6 +233,67 @@ describe("CLI verify output", () => {
     // Sources of Truth section removed - not shown in app
   });
 
+  it("shows basic simulation preview fields in text output", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    evidence.simulation = {
+      success: true,
+      returnData: "0x",
+      gasUsed: "68000",
+      logs: [],
+      blockNumber: 19000000,
+      blockTimestamp: "2026-02-20T16:07:40.000Z",
+      trust: "rpc-sourced",
+    };
+    const evidencePath = path.join(tmpDir, "evidence-with-sim.json");
+
+    await writeFile(evidencePath, JSON.stringify(evidence, null, 2), "utf-8");
+    const result = runCli(["verify", "--file", evidencePath, "--no-settings"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Transaction Simulation");
+    expect(result.stdout).toContain("Simulation status");
+    expect(result.stdout).toContain("Simulation checks passed");
+    expect(result.stdout).toContain("Gas used");
+    expect(result.stdout).toContain("Block timestamp");
+  });
+
+  it("shows core execution safety fields and explicit transfer rows in text output", async () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    evidence.simulation = {
+      success: true,
+      returnData: "0x",
+      gasUsed: "68000",
+      logs: [
+        {
+          address: "0x6b175474e89094c44da98b954eedeac495271d0f",
+          topics: [
+            TRANSFER_TOPIC,
+            pad32(evidence.safeAddress),
+            pad32("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+          ],
+          data: uint256Hex(250n * 10n ** 18n),
+        },
+      ],
+      blockNumber: 19000000,
+      blockTimestamp: "2026-02-20T16:07:40.000Z",
+      trust: "rpc-sourced",
+    };
+    const evidencePath = path.join(tmpDir, "evidence-with-dai-sim.json");
+    await writeFile(evidencePath, JSON.stringify(evidence, null, 2), "utf-8");
+
+    const result = runCli(["verify", "--file", evidencePath, "--no-settings"]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("Execution Safety");
+    expect(result.stdout).toContain("Signatures");
+    expect(result.stdout).toContain("Method");
+    expect(result.stdout).toContain("Target");
+    expect(result.stdout).toContain("Value (wei)");
+    expect(result.stdout).toContain("Nonce");
+    expect(result.stdout).toContain("Sent 1");
+    expect(result.stdout).toContain("DAI");
+  });
+
   it("prints sources documentation command", async () => {
     const result = runCli(["sources"]);
     expect(result.code).toBe(0);
@@ -242,5 +314,11 @@ describe("CLI verify output", () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("Evidence package failed validation:");
     expect(result.stderr).toContain("Invalid JSON format");
+  });
+
+  it("documents the experimental Linea consensus analyze flag in help output", () => {
+    const result = runCli([]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("--enable-experimental-linea-consensus");
   });
 });

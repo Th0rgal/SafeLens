@@ -13,6 +13,7 @@ import {
   verifyMptProof,
   verifyAccountProof,
   verifyStorageProof,
+  normalizeStorageSlotKey,
 } from "../mpt";
 import type { Hex } from "viem";
 import {
@@ -59,7 +60,7 @@ function rlpEncodeNode(items: Hex[]): Hex {
 
 // ── Tests ────────────────────────────────────────────────────────
 
-describe("verifyMptProof — inline node handling", () => {
+describe("verifyMptProof: inline node handling", () => {
   it("verifies a proof where a branch child is an inlined leaf", () => {
     // We build a minimal trie:
     //   root = branch node with one child at nibble N pointing to an
@@ -193,7 +194,7 @@ describe("verifyMptProof — inline node handling", () => {
     // Rethink the split:
     //   branch → nibble[0]
     //   extension → nibbles[1..2] (2 nibbles)
-    //   leaf → nibbles[3..63] (61 nibbles) — too big to inline
+    //   leaf -> nibbles[3..63] (61 nibbles), too big to inline
 
     // For the extension to be inlined in the branch, the extension
     // node's total RLP must be < 32 bytes.  That means the extension's
@@ -208,7 +209,7 @@ describe("verifyMptProof — inline node handling", () => {
     //
     // Actually, an extension with 0-nibble path makes no sense.
     // The smallest real case is ext(1 nibble) → value.
-    // But extension nodes don't store values — only branch and leaf do.
+    // But extension nodes don't store values, only branch and leaf do.
     //
     // The correct scenario for an inline extension is rare but possible:
     //   ext(1-2 nibbles) pointing to a VERY short branch.
@@ -226,7 +227,7 @@ describe("verifyMptProof — inline node handling", () => {
     //   list prefix = 1 byte (short list)
     //   path item prefix = 1 byte
     //   hash item prefix = 1 byte
-    //   Total = 1 + 1 + 1 + 1 + 32 = 36 bytes — too big.
+    //   Total = 1 + 1 + 1 + 1 + 32 = 36 bytes, too big.
     //
     // Actually for exactly 32 bytes: 1(list_prefix) + 1(path_len) + 1(path_byte) + 1(hash_len) + 32(hash) = 36.
     // Still > 32.
@@ -373,7 +374,7 @@ describe("verifyMptProof — inline node handling", () => {
   });
 });
 
-describe("verifyMptProof — empty proof security", () => {
+describe("verifyMptProof: empty proof security", () => {
   it("rejects empty proof for zero value when storage trie is non-empty", () => {
     // An attacker could supply proof:[] to falsely claim a slot is zero
     // when the trie root is non-empty. This must be rejected because a
@@ -410,6 +411,23 @@ describe("verifyMptProof — empty proof security", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toContain("non-zero");
+  });
+});
+
+describe("normalizeStorageSlotKey", () => {
+  it("normalizes compact quantity slots to 32-byte keys", () => {
+    expect(normalizeStorageSlotKey("0x0")).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    expect(normalizeStorageSlotKey("0x4")).toBe(
+      "0x0000000000000000000000000000000000000000000000000000000000000004"
+    );
+  });
+
+  it("preserves already-padded 32-byte keys", () => {
+    const padded =
+      "0x00000000000000000000000000000000000000000000000000000000000000ff" as Hex;
+    expect(normalizeStorageSlotKey(padded)).toBe(padded);
   });
 });
 

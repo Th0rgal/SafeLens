@@ -2,7 +2,7 @@
  * Merkle Patricia Trie proof verification.
  *
  * Verifies eth_getProof storage proofs and account proofs against a
- * state root, using only RLP decoding and keccak256 — no external
+ * state root, using only RLP decoding and keccak256, no external
  * trie library required.
  *
  * References:
@@ -42,6 +42,26 @@ export interface StorageProofInput {
 export interface ProofVerificationResult {
   valid: boolean;
   errors: string[];
+}
+
+/**
+ * Normalize an eth_getProof storage key to a 32-byte slot word.
+ *
+ * RPC providers may return compact quantity keys (e.g. `0x0`) for simple
+ * storage slots, but trie paths are computed from the canonical 32-byte value.
+ */
+export function normalizeStorageSlotKey(rawKey: Hex): Hex {
+  const hex = rawKey.toLowerCase();
+  if (!hex.startsWith("0x") || hex.length < 3) {
+    throw new Error("Invalid storage slot key: expected 0x-prefixed hex");
+  }
+
+  const digits = hex.slice(2);
+  if (!/^[0-9a-f]+$/i.test(digits) || digits.length > 64) {
+    throw new Error("Invalid storage slot key: expected <=32 bytes of hex");
+  }
+
+  return `0x${digits.padStart(64, "0")}` as Hex;
 }
 
 // ── Nibble helpers ─────────────────────────────────────────────────
@@ -91,7 +111,7 @@ function rlpItemToBytes(item: RlpItem): Uint8Array {
   if (typeof item === "string") {
     return hexToBytes(item as Hex);
   }
-  // Nested list — encode it back to RLP to get the bytes.
+  // Nested list: encode it back to RLP to get the bytes.
   // RlpItem[] is structurally equivalent to viem's RecursiveArray<Hex>
   // but TypeScript can't unify separately-defined recursive types.
   return hexToBytes(toRlp(item as readonly Hex[]) as Hex);
@@ -123,17 +143,17 @@ function isZeroValue(value: Hex): boolean {
  */
 function decodeInlineChild(child: RlpItem): RlpItem[] {
   if (Array.isArray(child)) {
-    // Already a decoded list — it IS the node items
+    // Already a decoded list, it IS the node items
     return child as RlpItem[];
   }
-  // Raw hex string — decode it as an RLP node
+  // Raw hex string: decode it as an RLP node
   return rlpDecodeNode(child as Hex);
 }
 
 // ── Shared MPT trie walk ──────────────────────────────────────────
 
 /**
- * Leaf match strategy — controls how the proven leaf value is compared
+ * Leaf match strategy: controls how the proven leaf value is compared
  * against the expected value, and how missing keys are handled.
  */
 interface LeafMatcher {
@@ -202,7 +222,7 @@ function walkMptProof(
     let node: RlpItem[];
 
     if (nextNode !== null) {
-      // Process an inline node — no hash check needed since the
+      // Process an inline node, no hash check needed since the
       // parent node that contained it was already hash-verified.
       node = nextNode;
       nextNode = null;
@@ -248,7 +268,7 @@ function walkMptProof(
       if (childBytes.length === 32) {
         currentHash = bytesToHex(childBytes) as Hex;
       } else {
-        // Inlined node: child RLP < 32 bytes, embedded directly in the parent.
+        // inline node, no hash check needed since it was embedded in a verified parent.
         nextNode = decodeInlineChild(child);
       }
     } else if (node.length === 2) {
@@ -308,7 +328,7 @@ export function verifyMptProof(
   if (proof.length === 0) {
     // An empty proof is only valid for a zero value when the trie is
     // completely empty (rootHash equals the empty trie root).  A non-empty
-    // trie always provides proof nodes — even for absent keys (proof of
+    // trie always provides proof nodes, even for absent keys (proof of
     // non-inclusion).  Without this check an attacker could supply
     // proof:[] to falsely claim any slot is zero.
     const EMPTY_TRIE_ROOT: Hex =
@@ -317,12 +337,13 @@ export function verifyMptProof(
       return { valid: true, errors: [] };
     }
     const msg = isZeroValue(expectedValue)
-      ? "Empty proof for zero value but storage trie is non-empty — proof of non-inclusion required"
+      ? "Empty proof for zero value but storage trie is non-empty, proof of non-inclusion required"
       : "Empty proof but expected non-zero value";
     return { valid: false, errors: [msg] };
   }
 
-  const keyHash = keccak256(rawKey);
+  const canonicalKey = normalizeStorageSlotKey(rawKey);
+  const keyHash = keccak256(canonicalKey);
   const pathNibbles = bytesToNibbles(hexToBytes(keyHash));
   return walkMptProof(rootHash, pathNibbles, proof, storageMatcher(expectedValue));
 }

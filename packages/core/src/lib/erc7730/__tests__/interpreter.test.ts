@@ -367,7 +367,7 @@ describe("createERC7730Interpreter", () => {
     const index = buildIndex([descriptor]);
     const interpret = createERC7730Interpreter(index);
 
-    // No chainId — fallback shows raw value + token address
+    // No chainId, fallback shows raw value + token address
     const result = interpret(
       null,
       "0xe12E0f117d23a5ccc57f8935CD8c4E80cD91FF01",

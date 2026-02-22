@@ -6,6 +6,7 @@ import type {
 } from "../types";
 import type { Address } from "viem";
 import { getSafeApiUrl } from "../safe/url-parser";
+import { getNetworkCapability } from "../networks/capabilities";
 import {
   fetchOnchainPolicyProof,
   type FetchOnchainProofOptions,
@@ -109,10 +110,14 @@ export async function enrichWithOnchainProof(
   evidence: EvidencePackage,
   options: FetchOnchainProofOptions = {}
 ): Promise<EvidencePackage> {
+  const blockNumber = options.blockNumber ?? evidence.consensusProof?.blockNumber;
   const proof = await fetchOnchainPolicyProof(
     evidence.safeAddress as Address,
     evidence.chainId,
-    options
+    {
+      ...options,
+      blockNumber,
+    }
   );
 
   if (evidence.consensusProof) {
@@ -121,7 +126,7 @@ export async function enrichWithOnchainProof(
 
   return {
     ...evidence,
-    version: "1.1",
+    version: withEnrichmentVersion(evidence.version),
     onchainPolicyProof: proof,
   };
 }
@@ -146,7 +151,7 @@ export async function enrichWithSimulation(
 
   return {
     ...evidence,
-    version: "1.1",
+    version: withEnrichmentVersion(evidence.version),
     simulation,
   };
 }
@@ -196,6 +201,8 @@ export interface FinalizeExportContractOptions {
   rpcProvided: boolean;
   consensusProofAttempted: boolean;
   consensusProofFailed: boolean;
+  consensusProofUnsupportedMode?: boolean;
+  consensusProofDisabledByFeatureFlag?: boolean;
   onchainPolicyProofAttempted: boolean;
   onchainPolicyProofFailed: boolean;
   simulationAttempted: boolean;
@@ -211,14 +218,26 @@ export function finalizeEvidenceExport(
   evidence: EvidencePackage,
   options: FinalizeExportContractOptions
 ): EvidencePackage {
-  const hasConsensusProof = Boolean(evidence.consensusProof);
+  const consensusMode = getNetworkCapability(evidence.chainId)?.consensusMode;
+  const hasConsensusProofArtifact = Boolean(evidence.consensusProof);
+  const proofConsensusMode = evidence.consensusProof?.consensusMode ?? "beacon";
+  // Only beacon mode provides independent cryptographic verification (BLS
+  // sync committee signatures). OP Stack/Linea envelopes are RPC-sourced
+  // header reads without an independent trust boundary, so they must not
+  // promote packages to fully-verifiable.
+  const hasVerifierSupportedConsensusProof =
+    hasConsensusProofArtifact && proofConsensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
   const reasons = new Set<ExportContractReason>();
 
-  if (!hasConsensusProof) {
+  if (!hasConsensusProofArtifact) {
     if (!options.consensusProofAttempted) {
       reasons.add("missing-consensus-proof");
+    } else if (options.consensusProofDisabledByFeatureFlag) {
+      reasons.add("consensus-mode-disabled-by-feature-flag");
+    } else if (options.consensusProofUnsupportedMode) {
+      reasons.add("unsupported-consensus-mode");
     } else {
       reasons.add(
         options.consensusProofFailed
@@ -226,6 +245,8 @@ export function finalizeEvidenceExport(
           : "missing-consensus-proof"
       );
     }
+  } else if (!hasVerifierSupportedConsensusProof) {
+    reasons.add("unsupported-consensus-mode");
   }
 
   if (!hasOnchainPolicyProof) {
@@ -253,14 +274,14 @@ export function finalizeEvidenceExport(
   }
 
   const isFullyVerifiable =
-    hasConsensusProof && hasOnchainPolicyProof && hasSimulation;
+    hasVerifierSupportedConsensusProof && hasOnchainPolicyProof && hasSimulation;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",
     isFullyVerifiable,
     reasons: Array.from(reasons),
     artifacts: {
-      consensusProof: hasConsensusProof,
+      consensusProof: hasConsensusProofArtifact,
       onchainPolicyProof: hasOnchainPolicyProof,
       simulation: hasSimulation,
     },
@@ -292,4 +313,8 @@ function assertProofAlignment(
     consensusStateRoot,
     consensusBlockNumber,
   });
+}
+
+function withEnrichmentVersion(version: EvidencePackage["version"]): "1.1" | "1.2" {
+  return version === "1.2" ? "1.2" : "1.1";
 }

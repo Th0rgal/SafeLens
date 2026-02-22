@@ -11,15 +11,15 @@
  * instead of raw hex checks.
  */
 
-import type { SimulationLog } from "../types";
+import type { SimulationLog, NativeTransfer } from "../types";
 
 // ── Event signatures (keccak256 hashes) ──────────────────────────────
 
-/** Transfer(address indexed from, address indexed to, uint256 value)  — ERC-20 and ERC-721 */
+/** Transfer(address indexed from, address indexed to, uint256 value): ERC-20 and ERC-721 */
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-/** Approval(address indexed owner, address indexed spender, uint256 value) — ERC-20 */
+/** Approval(address indexed owner, address indexed spender, uint256 value): ERC-20 */
 const APPROVAL_TOPIC =
   "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
 
@@ -31,11 +31,11 @@ const TRANSFER_SINGLE_TOPIC =
 const TRANSFER_BATCH_TOPIC =
   "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb";
 
-/** Deposit(address indexed dst, uint256 wad) — WETH wrap */
+/** Deposit(address indexed dst, uint256 wad): WETH wrap */
 const DEPOSIT_TOPIC =
   "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c";
 
-/** Withdrawal(address indexed src, uint256 wad) — WETH unwrap */
+/** Withdrawal(address indexed src, uint256 wad): WETH unwrap */
 const WITHDRAWAL_TOPIC =
   "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65";
 
@@ -90,7 +90,8 @@ export type DecodedEventKind =
   | "nft-transfer"
   | "erc1155-transfer"
   | "wrap"
-  | "unwrap";
+  | "unwrap"
+  | "native-transfer";
 
 export interface DecodedEvent {
   /** What kind of token event this is. */
@@ -337,7 +338,7 @@ export function decodeSimulationEvents(
             });
           }
         } catch {
-          // Malformed batch data — skip silently
+          // Malformed batch data, skip silently
         }
         break;
       }
@@ -391,4 +392,36 @@ export function decodeSimulationEvents(
   }
 
   return events;
+}
+
+/**
+ * Decode native value transfers (ETH, xDAI, etc.) into DecodedEvent entries.
+ *
+ * These come from the `callTracer`'s call frames, each CALL/CREATE with
+ * a non-zero `value` represents a native token movement during execution.
+ *
+ * @param transfers    - Native transfers extracted from the call trace.
+ * @param safeAddress  - The Safe wallet address (for determining direction).
+ * @param nativeSymbol - Native token symbol (e.g. "ETH", "xDAI"). Defaults to "ETH".
+ */
+export function decodeNativeTransfers(
+  transfers: NativeTransfer[],
+  safeAddress?: string,
+  nativeSymbol: string = "ETH",
+): DecodedEvent[] {
+  return transfers.map((t) => {
+    const from = t.from.toLowerCase();
+    const to = t.to.toLowerCase();
+    return {
+      kind: "native-transfer" as const,
+      token: "0x0000000000000000000000000000000000000000",
+      tokenSymbol: nativeSymbol,
+      tokenDecimals: 18,
+      amountFormatted: formatAmount(t.value, 18, nativeSymbol),
+      amountRaw: t.value,
+      from,
+      to,
+      direction: getDirection(from, to, safeAddress),
+    };
+  });
 }

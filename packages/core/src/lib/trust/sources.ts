@@ -3,8 +3,39 @@ import {
   summarizeConsensusTrustDecisionReason,
   type ConsensusTrustDecisionReason,
 } from "../verify/consensus-trust";
+import type { ConsensusMode } from "../types";
 
 export type VerificationSourceStatus = "enabled" | "disabled";
+
+interface ConsensusSourceMetadata {
+  name: string;
+  verificationType: string;
+  verifiedTrust: TrustLevel;
+  assuranceBoundary?: string;
+}
+
+const CONSENSUS_SOURCE_METADATA_BY_MODE = {
+  beacon: {
+    name: "Beacon",
+    verificationType: "BLS sync committee signatures",
+    verifiedTrust: "consensus-verified-beacon",
+    assuranceBoundary: undefined,
+  },
+  opstack: {
+    name: "OP Stack",
+    verificationType: "rollup consensus commitments",
+    verifiedTrust: "consensus-verified-opstack",
+    assuranceBoundary:
+      "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+  },
+  linea: {
+    name: "Linea",
+    verificationType: "chain-specific consensus attestations",
+    verifiedTrust: "consensus-verified-linea",
+    assuranceBoundary:
+      "Assurance is chain-specific and not equivalent to Beacon light-client finality.",
+  },
+} satisfies Record<ConsensusMode, ConsensusSourceMetadata>;
 
 export const GENERATION_SOURCE_IDS = {
   SAFE_URL_INPUT: "safe-url-input",
@@ -54,6 +85,7 @@ export interface VerificationSourceContext {
   simulationTrust?: TrustLevel;
   consensusVerified?: boolean;
   consensusTrustDecisionReason?: ConsensusTrustDecisionReason;
+  consensusMode?: ConsensusMode;
 }
 
 export const DEFAULT_VERIFICATION_SOURCE_CONTEXT: VerificationSourceContext = {
@@ -128,6 +160,10 @@ export function buildVerificationSources(
   const consensusFailureReason = summarizeConsensusTrustDecisionReason(
     context.consensusTrustDecisionReason
   );
+  const consensusMode = context.consensusMode ?? "beacon";
+  const consensusMetadata = CONSENSUS_SOURCE_METADATA_BY_MODE[consensusMode];
+  const verifiedConsensusTrust = consensusMetadata.verifiedTrust;
+  const assuranceBoundary = consensusMetadata.assuranceBoundary;
 
   return [
     {
@@ -260,26 +296,33 @@ export function buildVerificationSources(
       ? {
           id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
           title: "Consensus verification",
-          trust: context.consensusVerified ? ("consensus-verified" as TrustLevel) : ("rpc-sourced" as TrustLevel),
+          trust: context.consensusVerified ? verifiedConsensusTrust : ("rpc-sourced" as TrustLevel),
           summary: context.consensusVerified
-            ? "State root verified against Ethereum consensus via BLS sync committee signatures."
+            ? assuranceBoundary
+              ? `State root verified against ${consensusMetadata.name} consensus via ${consensusMetadata.verificationType}. ${assuranceBoundary}`
+              : `State root verified against ${consensusMetadata.name} consensus via ${consensusMetadata.verificationType}.`
             : consensusFailureReason
               ? `Consensus proof included but not yet verified (${consensusFailureReason}).`
-              : "Consensus proof included but not yet verified (requires desktop app).",
+              : `Consensus proof (${consensusMetadata.name}) included but not yet verified (requires desktop app).`,
           detail: context.consensusVerified
-            ? "The state root used in policy proofs has been cryptographically verified against a finalized beacon block header signed by the Ethereum sync committee (512 validators)."
+            ? assuranceBoundary
+              ? `The state root used in policy proofs has been cryptographically verified against ${consensusMetadata.name} consensus data. ${assuranceBoundary}`
+              : `The state root used in policy proofs has been cryptographically verified against ${consensusMetadata.name} consensus data.`
             : consensusFailureReason
               ? `Consensus trust was not upgraded because ${consensusFailureReason}.`
-              : "The evidence package contains beacon chain light client data. Verification requires the desktop app's Helios-based verifier.",
+              : `The evidence package contains ${consensusMetadata.name} consensus data. Verification requires the desktop app's Helios-based verifier.`,
           status: "enabled" as VerificationSourceStatus,
         }
       : {
           id: VERIFICATION_SOURCE_IDS.CONSENSUS_PROOF,
           title: "Consensus verification",
           trust: "rpc-sourced" as TrustLevel,
-          summary: "No consensus proof included. State root is RPC-trusted.",
-          detail:
-            "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
+          summary: consensusFailureReason
+            ? `No consensus proof included (${consensusFailureReason}). State root is RPC-trusted.`
+            : "No consensus proof included. State root is RPC-trusted.",
+          detail: consensusFailureReason
+            ? `Consensus proof was omitted because ${consensusFailureReason}. State root in policy proofs remains trusted from the RPC provider.`
+            : "Without consensus verification, the state root in policy proofs is trusted from the RPC provider. Generate evidence with a beacon chain RPC to upgrade this.",
           status: "disabled" as VerificationSourceStatus,
         },
     context.hasSettings

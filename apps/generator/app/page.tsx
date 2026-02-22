@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,37 +17,263 @@ import {
   enrichWithSimulation,
   enrichWithConsensusProof,
   finalizeEvidenceExport,
+  UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
   decodeSimulationEvents,
+  decodeNativeTransfers,
+  computeRemainingApprovals,
+  DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
+  getExportContractReasonLabel,
   TRUST_CONFIG,
   SUPPORTED_CHAIN_IDS,
-  type ExportContractReason,
 } from "@safelens/core";
 import { downloadEvidencePackage } from "@/lib/download";
+import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
+import { summarizeConsensusProof } from "@/lib/consensus-proof-summary";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
 const generationSources = buildGenerationSources();
+const lineaConsensusEnabled = process.env.NEXT_PUBLIC_ENABLE_LINEA_CONSENSUS === "1";
 
 type PendingTx = SafeTransaction & { _chainId: number };
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
-const EXPORT_REASON_LABELS: Record<ExportContractReason, string> = {
-  "missing-consensus-proof": "Consensus proof was not included.",
-  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
-  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
-  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
-  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
-  "simulation-fetch-failed": "Simulation fetch failed.",
-  "missing-simulation": "Simulation result was not included.",
-};
-
 function extractAddress(input: string): string | null {
   const trimmed = input.trim();
   if (ADDRESS_RE.test(trimmed)) return trimmed;
   // Also match if user pasted with surrounding quotes or whitespace
   const match = trimmed.match(/0x[a-fA-F0-9]{40}/);
   return match && !trimmed.startsWith("http") ? match[0] : null;
+}
+
+function EvidenceDisplay({
+  evidence,
+  onDownload,
+  onCopy,
+  copied,
+}: {
+  evidence: EvidencePackage;
+  onDownload: () => void;
+  onCopy: () => void;
+  copied: boolean;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const isFullyVerifiable = evidence.exportContract?.mode === "fully-verifiable";
+
+  // Decode simulation events
+  const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
+  const sim = evidence.simulation;
+  const logEvents = sim
+    ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
+    : [];
+  const nativeEvents = sim?.nativeTransfers?.length
+    ? decodeNativeTransfers(sim.nativeTransfers, evidence.safeAddress, nativeSymbol)
+    : [];
+  const allEvents = [...nativeEvents, ...logEvents];
+  const transfers = allEvents.filter((e) => e.kind !== "approval");
+  const approvals = computeRemainingApprovals(allEvents);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>Evidence Package</CardTitle>
+          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
+            isFullyVerifiable
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+          }`}>
+            {isFullyVerifiable ? "Fully verifiable" : "Partial"}
+          </span>
+        </div>
+        <CardDescription>
+          {getChainName(evidence.chainId)} · Nonce #{evidence.transaction.nonce} · {evidence.confirmations.length}/{evidence.confirmationsRequired} signatures
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Partial export reasons */}
+        {evidence.exportContract?.mode === "partial" && (
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            {evidence.exportContract.reasons.map((reason) => (
+              <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
+            ))}
+          </div>
+        )}
+
+        {/* Simulation effects - the most important info, always visible */}
+        {sim ? (
+          <>
+            <div className={`rounded-md border px-3 py-2 text-xs font-medium ${
+              sim.success
+                ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-300"
+                : "border-red-500/20 bg-red-500/5 text-red-300"
+            }`}>
+              Simulation {sim.success ? "succeeded" : "reverted"} at block {sim.blockNumber}
+            </div>
+            {transfers.length > 0 && (
+              <div className="space-y-1.5">
+                {transfers.map((e, i) => {
+                  const colorClass =
+                    e.direction === "send" ? "text-red-400"
+                    : e.direction === "receive" ? "text-emerald-400"
+                    : "text-muted";
+                  const bgClass =
+                    e.direction === "send" ? "bg-red-500/5"
+                    : e.direction === "receive" ? "bg-emerald-500/5"
+                    : "bg-surface-2/30";
+                  const arrow =
+                    e.direction === "send" ? "↗" : e.direction === "receive" ? "↙" : "↔";
+                  const verb =
+                    e.direction === "send" ? "Send" : e.direction === "receive" ? "Receive" : "Transfer";
+                  const counterparty =
+                    e.direction === "send" ? e.to : e.direction === "receive" ? e.from : e.to;
+                  const preposition =
+                    e.direction === "send" ? "to" : e.direction === "receive" ? "from" : "at";
+
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
+                      <span className={`font-medium ${colorClass}`}>{arrow} {verb}</span>
+                      <span className="font-medium">{e.amountFormatted}</span>
+                      <span className="text-muted">{preposition}</span>
+                      <AddressDisplay address={counterparty} />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {transfers.length === 0 && sim.success && (
+              <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
+                No token movements detected.
+              </div>
+            )}
+            {approvals.length > 0 && (
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                <div className="text-xs font-medium text-amber-200">Remaining approvals</div>
+                <div className="mt-1.5 space-y-1">
+                  {approvals.map((a, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
+                      <span className={a.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
+                        {a.amountFormatted}
+                      </span>
+                      <span className="text-amber-400/70">to</span>
+                      <AddressDisplay address={a.spender} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sim.traceAvailable === false && (
+              <div className="text-xs text-amber-400">
+                Event details not available, the RPC does not support debug_traceCall on this chain.
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
+            No simulation included in this package.
+          </div>
+        )}
+
+        {/* Expandable details toggle */}
+        <button
+          onClick={() => setShowDetails((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-muted hover:text-fg transition-colors"
+        >
+          <ChevronRight className={`h-3 w-3 transition-transform ${showDetails ? "rotate-90" : ""}`} />
+          {showDetails ? "Hide details" : "Show details"}
+        </button>
+
+        {showDetails && (
+          <div className="space-y-2 border-t border-border/10 pt-3">
+            <DetailRow label="Safe Address">
+              <AddressDisplay address={evidence.safeAddress} />
+            </DetailRow>
+            <DetailRow label="Target">
+              <AddressDisplay address={evidence.transaction.to} />
+            </DetailRow>
+            <DetailRow label="Safe TX Hash">
+              <AddressDisplay address={evidence.safeTxHash} />
+            </DetailRow>
+            {evidence.onchainPolicyProof && (() => {
+              const policy = evidence.onchainPolicyProof.decodedPolicy;
+              const hasModules = policy.modules.length > 0;
+              const hasGuard = policy.guard !== "0x0000000000000000000000000000000000000000";
+              return (
+                <>
+                  <DetailRow label="Policy Proof">
+                    <span className="text-blue-400">
+                      Block {evidence.onchainPolicyProof.blockNumber}
+                    </span>
+                  </DetailRow>
+                  <DetailRow label="Threshold">
+                    <span>{policy.threshold} of {policy.owners.length}</span>
+                  </DetailRow>
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted">Owners</div>
+                    {policy.owners.map((owner) => (
+                      <div key={owner} className="ml-2">
+                        <AddressDisplay address={owner} />
+                      </div>
+                    ))}
+                  </div>
+                  {hasModules && (
+                    <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
+                      <span className="font-medium text-amber-200">Modules — can bypass signatures</span>
+                      <div className="mt-1 space-y-0.5">
+                        {policy.modules.map((mod) => (
+                          <div key={mod}>
+                            <AddressDisplay address={mod} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {hasGuard && (
+                    <DetailRow label="Guard">
+                      <AddressDisplay address={policy.guard} />
+                    </DetailRow>
+                  )}
+                </>
+              );
+            })()}
+            {evidence.consensusProof && (() => {
+              const summary = summarizeConsensusProof(evidence.consensusProof);
+              return (
+                <DetailRow label="Consensus Proof">
+                  <span className={summary.toneClassName}>{summary.text}</span>
+                </DetailRow>
+              );
+            })()}
+            {sim && (
+              <DetailRow label="Gas Used">
+                <span className="font-mono">{sim.gasUsed}</span>
+              </DetailRow>
+            )}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
+          <Button onClick={onDownload} className="flex-1">
+            {isFullyVerifiable ? "Download Fully Verifiable JSON" : "Download Partial JSON"}
+          </Button>
+          <Button onClick={onCopy} variant="outline" className="flex-1">
+            {copied ? "Copied!" : "Copy to Clipboard"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-3 text-xs">
+      <span className="shrink-0 text-muted">{label}</span>
+      <span className="text-right">{children}</span>
+    </div>
+  );
 }
 
 export default function AnalyzePage() {
@@ -68,7 +295,11 @@ export default function AnalyzePage() {
     let enriched = pkg;
     const trimmedRpc = rpcUrl.trim();
     const rpcProvided = Boolean(trimmedRpc);
+    const { consensusMode, shouldAttemptConsensusProof } = buildConsensusEnrichmentPlan(pkg.chainId);
+    let consensusProofAttempted = false;
     let consensusProofFailed = false;
+    let consensusProofUnsupportedMode = false;
+    let consensusProofDisabledByFeatureFlag = false;
     let onchainPolicyProofFailed = false;
     let simulationFailed = false;
     let onchainPolicyProofAttempted = false;
@@ -76,14 +307,36 @@ export default function AnalyzePage() {
 
     // Fetch consensus proof first so policy proof can be pinned to the same
     // finalized execution block.
-    try {
-      enriched = await enrichWithConsensusProof(enriched);
-    } catch (err) {
-      consensusProofFailed = true;
-      console.warn("Failed to fetch consensus proof:", err);
-      setConsensusWarning(
-        `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
-      );
+    if (shouldAttemptConsensusProof) {
+      consensusProofAttempted = true;
+      try {
+        enriched = await enrichWithConsensusProof(enriched, {
+          rpcUrl:
+            (consensusMode === "opstack" || consensusMode === "linea") &&
+            rpcProvided
+              ? trimmedRpc
+              : undefined,
+          enableExperimentalLineaConsensus: lineaConsensusEnabled,
+        });
+      } catch (err) {
+        consensusProofFailed = true;
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "code" in err &&
+          err.code === UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE
+        ) {
+          if ("reason" in err && err.reason === "disabled-by-feature-flag") {
+            consensusProofDisabledByFeatureFlag = true;
+          } else {
+            consensusProofUnsupportedMode = true;
+          }
+        }
+        console.warn("Failed to fetch consensus proof:", err);
+        setConsensusWarning(
+          `Consensus proof failed: ${err instanceof Error ? err.message : "Unknown error"}. Evidence created without consensus verification data.`
+        );
+      }
     }
 
     if (rpcProvided) {
@@ -115,8 +368,10 @@ export default function AnalyzePage() {
 
     return finalizeEvidenceExport(enriched, {
       rpcProvided,
-      consensusProofAttempted: true,
+      consensusProofAttempted,
       consensusProofFailed,
+      consensusProofUnsupportedMode,
+      consensusProofDisabledByFeatureFlag,
       onchainPolicyProofAttempted,
       onchainPolicyProofFailed,
       simulationAttempted,
@@ -139,7 +394,7 @@ export default function AnalyzePage() {
       const rawAddress = extractAddress(input);
 
       if (rawAddress) {
-        // Raw address — query all supported chains in parallel
+        // Raw address: query all supported chains in parallel
         const results = await Promise.allSettled(
           SUPPORTED_CHAIN_IDS.map(async (chainId) => {
             const txs = await fetchPendingTransactions(chainId, rawAddress);
@@ -266,7 +521,7 @@ export default function AnalyzePage() {
           <div>
             <Input
               type="text"
-              placeholder="RPC URL (optional — enables on-chain policy proof)"
+              placeholder="RPC URL (optional, enables on-chain policy proof)"
               value={rpcUrl}
               onChange={(e) => setRpcUrl(e.target.value)}
               className="text-xs"
@@ -391,124 +646,12 @@ export default function AnalyzePage() {
         </Alert>
       )}
 
-      {evidence && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evidence Package</CardTitle>
-            <CardDescription>
-              {evidence.exportContract?.mode === "fully-verifiable"
-                ? "Fully verifiable package created."
-                : "Partial package created with explicit limitations."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {evidence.exportContract?.mode === "partial" && (
-              <Alert className="border-amber-500/20 bg-amber-500/10 text-amber-200">
-                <AlertTitle>Partial Export</AlertTitle>
-                <AlertDescription>
-                  This package is not fully verifiable. Reasons:
-                  {evidence.exportContract.reasons.map((reason) => (
-                    <div key={reason}>- {EXPORT_REASON_LABELS[reason] ?? reason}</div>
-                  ))}
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <div className="font-medium text-muted">Export Mode</div>
-                <div className={evidence.exportContract?.mode === "fully-verifiable" ? "text-green-400" : "text-amber-300"}>
-                  {evidence.exportContract?.mode === "fully-verifiable" ? "Fully verifiable" : "Partial"}
-                </div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Chain</div>
-                <div className="font-mono">{getChainName(evidence.chainId)}</div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Nonce</div>
-                <div className="font-mono">{evidence.transaction.nonce}</div>
-              </div>
-              <div>
-                <div className="font-medium text-muted">Safe Address</div>
-                <AddressDisplay address={evidence.safeAddress} />
-              </div>
-              <div>
-                <div className="font-medium text-muted">Target</div>
-                <AddressDisplay address={evidence.transaction.to} />
-              </div>
-              <div>
-                <div className="font-medium text-muted">Signatures</div>
-                <div className="font-mono">
-                  {evidence.confirmations.length} / {evidence.confirmationsRequired}
-                </div>
-              </div>
-              <div className="col-span-2">
-                <div className="font-medium text-muted">Safe TX Hash</div>
-                <AddressDisplay address={evidence.safeTxHash} />
-              </div>
-              {evidence.onchainPolicyProof && (
-                <div className="col-span-2">
-                  <div className="font-medium text-muted">Policy Proof</div>
-                  <div className="text-xs text-blue-400">
-                    Included (block {evidence.onchainPolicyProof.blockNumber}, {evidence.onchainPolicyProof.decodedPolicy.owners.length} owners, threshold {evidence.onchainPolicyProof.decodedPolicy.threshold})
-                  </div>
-                </div>
-              )}
-              {evidence.simulation && (() => {
-                const events = decodeSimulationEvents(
-                  evidence.simulation.logs,
-                  evidence.safeAddress,
-                  evidence.chainId,
-                );
-                return (
-                  <div className="col-span-2">
-                    <div className="font-medium text-muted">Simulation</div>
-                    <div className={`text-xs ${evidence.simulation.success ? "text-green-400" : "text-red-400"}`}>
-                      {evidence.simulation.success ? "Success" : "Reverted"} (block {evidence.simulation.blockNumber}, gas {evidence.simulation.gasUsed})
-                    </div>
-                    {events.length > 0 && (
-                      <div className="mt-1.5 space-y-1">
-                        {events.map((e, i) => (
-                          <div key={i} className={`text-xs rounded px-2 py-1 ${
-                            e.direction === "send" ? "bg-red-500/10 text-red-400" :
-                            e.direction === "receive" ? "bg-green-500/10 text-green-400" :
-                            "bg-gray-500/10 text-gray-400"
-                          }`}>
-                            {e.direction === "send" ? "↗ Send" :
-                             e.direction === "receive" ? "↙ Receive" :
-                             e.kind === "approval" ? "🔑 Approve" :
-                             "↔ Internal"}{" "}
-                            <span className="font-medium">{e.amountFormatted}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-              {evidence.consensusProof && (
-                <div className="col-span-2">
-                  <div className="font-medium text-muted">Consensus Proof</div>
-                  <div className="text-xs text-green-400">
-                    Included ({evidence.consensusProof.network}, block {evidence.consensusProof.blockNumber}, {evidence.consensusProof.updates.length} sync committee update{evidence.consensusProof.updates.length !== 1 ? "s" : ""})
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleDownload} className="flex-1">
-                {evidence.exportContract?.mode === "fully-verifiable"
-                  ? "Download Fully Verifiable JSON"
-                  : "Download Partial JSON"}
-              </Button>
-              <Button onClick={handleCopy} variant="outline" className="flex-1">
-                {copied ? "Copied!" : "Copy to Clipboard"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {evidence && <EvidenceDisplay
+        evidence={evidence}
+        onDownload={handleDownload}
+        onCopy={handleCopy}
+        copied={copied}
+      />}
     </div>
   );
 }

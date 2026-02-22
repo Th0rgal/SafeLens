@@ -16,6 +16,19 @@ export const hexDataSchema = z
   .string()
   .regex(/^0x[a-fA-F0-9]*$/, "Invalid hex data");
 
+// Storage slot keys from eth_getProof may be compact quantities (e.g. 0x0)
+// or fully padded 32-byte words.
+export const storageSlotKeySchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]+$/, "Invalid storage slot key")
+  .refine((value) => value.length <= 66, "Invalid storage slot key");
+
+// Storage values in eth_getProof are quantities and may be compact.
+export const storageValueSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]*$/, "Invalid storage value")
+  .refine((value) => value.length <= 66, "Invalid storage value");
+
 // Safe transaction schema (from Safe API)
 export const safeTransactionSchema = z.object({
   safe: addressSchema,
@@ -63,7 +76,11 @@ export type SafeTransaction = z.infer<typeof safeTransactionSchema>;
 
 // Trust classification for evidence sections
 export const trustClassificationSchema = z.enum([
+  // Kept for backward compatibility with previously exported reports.
   "consensus-verified",
+  "consensus-verified-beacon",
+  "consensus-verified-opstack",
+  "consensus-verified-linea",
   "proof-verified",
   "self-verified",
   "rpc-sourced",
@@ -73,10 +90,14 @@ export const trustClassificationSchema = z.enum([
 
 export type TrustClassification = z.infer<typeof trustClassificationSchema>;
 
+// Consensus verifier mode used by desktop verification.
+export const consensusModeSchema = z.enum(["beacon", "opstack", "linea"]);
+export type ConsensusMode = z.infer<typeof consensusModeSchema>;
+
 // Storage proof for a single slot
 export const storageProofEntrySchema = z.object({
-  key: hashSchema,
-  value: hashSchema,
+  key: storageSlotKeySchema,
+  value: storageValueSchema,
   proof: z.array(hexDataSchema),
 });
 
@@ -123,6 +144,16 @@ export const simulationLogSchema = z.object({
 
 export type SimulationLog = z.infer<typeof simulationLogSchema>;
 
+// Native value transfer (ETH, xDAI, etc.) extracted from call trace
+export const nativeTransferSchema = z.object({
+  from: addressSchema,
+  to: addressSchema,
+  /** Decimal string in wei. */
+  value: z.string(),
+});
+
+export type NativeTransfer = z.infer<typeof nativeTransferSchema>;
+
 // State diff entry
 export const stateDiffEntrySchema = z.object({
   address: addressSchema,
@@ -133,38 +164,68 @@ export const stateDiffEntrySchema = z.object({
 
 export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
 
-// Consensus proof section (Phase 4 — Helios light client verification)
-// Contains beacon chain light client data that allows offline BLS verification
-// of the state root against Ethereum consensus.
-export const consensusProofSchema = z.object({
-  /** Beacon block root used as the bootstrap checkpoint */
-  checkpoint: hashSchema,
-  /** JSON-serialized light client bootstrap (sync committee + beacon header) */
-  bootstrap: z.string(),
-  /** JSON-serialized light client updates (sync committee period transitions) */
-  updates: z.array(z.string()),
-  /** JSON-serialized light client finality update (BLS-signed finalized header) */
-  finalityUpdate: z.string(),
-  /** Network identifier for selecting the correct fork config and genesis root */
-  network: z.enum(CONSENSUS_NETWORKS),
-  /** The EVM execution state root extracted from the finalized header */
+const consensusProofBaseSchema = z.object({
+  /** Consensus verifier mode. Beacon is currently implemented in desktop verifier. */
+  consensusMode: consensusModeSchema.optional(),
+  /** The EVM execution state root extracted from a finalized or verified execution payload. */
   stateRoot: hashSchema,
-  /** Block number of the finalized execution payload */
+  /** Block number for the execution payload associated with `stateRoot`. */
   blockNumber: z.number(),
+});
+
+// Beacon consensus proof section (Phase 4: Helios light client verification).
+// Contains beacon chain light client data that allows offline BLS verification.
+const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
+  consensusMode: z.literal("beacon").optional(),
+  /** Beacon block root used as the bootstrap checkpoint. */
+  checkpoint: hashSchema,
+  /** JSON-serialized light client bootstrap (sync committee + beacon header). */
+  bootstrap: z.string(),
+  /** JSON-serialized light client updates (sync committee period transitions). */
+  updates: z.array(z.string()),
+  /** JSON-serialized light client finality update (BLS-signed finalized header). */
+  finalityUpdate: z.string(),
+  /** Beacon network identifier for selecting the correct fork config and genesis root. */
+  network: z.enum(CONSENSUS_NETWORKS),
   /** Beacon slot of the finalized header in the finality update. */
   finalizedSlot: z.number(),
 });
 
+// Non-beacon proof envelope used by OP Stack and Linea integration paths.
+// Desktop verifier runs deterministic envelope integrity/root-linkage checks
+// for these modes and reports mode-specific consensus trust sources.
+const nonBeaconConsensusProofSchema = consensusProofBaseSchema
+  .extend({
+    consensusMode: z.union([z.literal("opstack"), z.literal("linea")]),
+    /** Chain/network identifier consumed by mode-specific verifiers. */
+    network: z.string().min(1),
+    /** Mode-specific serialized proof payload. */
+    proofPayload: z.string(),
+  })
+  .passthrough();
+
+export const consensusProofSchema = z.union([
+  beaconConsensusProofSchema,
+  nonBeaconConsensusProofSchema,
+]);
+
 export type ConsensusProof = z.infer<typeof consensusProofSchema>;
 
-// Simulation section (Phase 3 will populate these)
+// Simulation section
 export const simulationSchema = z.object({
   success: z.boolean(),
   returnData: hexDataSchema.nullable(),
   gasUsed: z.string(),
   logs: z.array(simulationLogSchema),
+  nativeTransfers: z.array(nativeTransferSchema).optional(),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
   blockNumber: z.number(),
+  /** RFC3339 timestamp for the block used during simulation, when available. */
+  blockTimestamp: z.string().datetime({ offset: true }).optional(),
+  /** Whether debug_traceCall was available for this simulation. */
+  /** Whether debug_traceCall was available on the RPC. When false, logs and
+   *  nativeTransfers are unavailable (not just empty). */
+  traceAvailable: z.boolean().optional(),
   trust: trustClassificationSchema,
 });
 
@@ -173,6 +234,10 @@ export type Simulation = z.infer<typeof simulationSchema>;
 // Generator export contract status (explicit full vs partial package mode)
 export const exportContractReasonSchema = z.enum([
   "missing-consensus-proof",
+  "unsupported-consensus-mode",
+  "consensus-mode-disabled-by-feature-flag",
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
   "missing-onchain-policy-proof",
   "missing-rpc-url",
   "consensus-proof-fetch-failed",
@@ -182,6 +247,67 @@ export const exportContractReasonSchema = z.enum([
 ]);
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
+
+export const EXPORT_CONTRACT_REASON_LABELS: Record<ExportContractReason, string> = {
+  "missing-consensus-proof": "Consensus proof was not included.",
+  "unsupported-consensus-mode":
+    "Consensus verification mode for this network is not implemented yet.",
+  "consensus-mode-disabled-by-feature-flag":
+    "Consensus verification mode for this network is currently disabled by rollout feature flag.",
+  "opstack-consensus-verifier-pending":
+    "OP Stack envelope checks are included, but full cryptographic consensus verification is still pending.",
+  "linea-consensus-verifier-pending":
+    "Linea envelope checks are included, but full cryptographic consensus verification is still pending.",
+  "missing-onchain-policy-proof": "On-chain policy proof was not included.",
+  "missing-rpc-url": "No RPC URL was provided, so proof/simulation enrichment was skipped.",
+  "consensus-proof-fetch-failed": "Consensus proof fetch failed.",
+  "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
+  "simulation-fetch-failed": "Simulation fetch failed.",
+  "missing-simulation": "Simulation result was not included.",
+};
+
+export function getExportContractReasonLabel(reason: ExportContractReason): string {
+  return EXPORT_CONTRACT_REASON_LABELS[reason];
+}
+
+export const LEGACY_PENDING_CONSENSUS_EXPORT_REASONS = [
+  "opstack-consensus-verifier-pending",
+  "linea-consensus-verifier-pending",
+] as const satisfies readonly ExportContractReason[];
+
+export type LegacyPendingConsensusExportReason =
+  (typeof LEGACY_PENDING_CONSENSUS_EXPORT_REASONS)[number];
+
+export const LEGACY_PENDING_CONSENSUS_EXPORT_REASON_BY_MODE = {
+  opstack: "opstack-consensus-verifier-pending",
+  linea: "linea-consensus-verifier-pending",
+} as const satisfies Record<
+  Exclude<ConsensusMode, "beacon">,
+  LegacyPendingConsensusExportReason
+>;
+
+export function findLegacyPendingConsensusExportReason(
+  reasons: readonly ExportContractReason[] | null | undefined
+): LegacyPendingConsensusExportReason | null {
+  if (!reasons || reasons.length === 0) {
+    return null;
+  }
+
+  const matched = LEGACY_PENDING_CONSENSUS_EXPORT_REASONS.find((reasonCode) =>
+    reasons.includes(reasonCode)
+  );
+  return matched ?? null;
+}
+
+export function getLegacyPendingConsensusExportReasonForMode(
+  mode: ConsensusMode | null | undefined
+): LegacyPendingConsensusExportReason | null {
+  if (!mode || mode === "beacon") {
+    return null;
+  }
+
+  return LEGACY_PENDING_CONSENSUS_EXPORT_REASON_BY_MODE[mode];
+}
 
 export const evidenceExportContractSchema = z.object({
   mode: z.enum(["fully-verifiable", "partial"]),

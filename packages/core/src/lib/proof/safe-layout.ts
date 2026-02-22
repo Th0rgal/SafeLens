@@ -95,9 +95,9 @@ export interface SafePolicyStorageKeys {
   nonce: Hex;
   guard: Hex;
   fallbackHandler: Hex;
-  /** Sentinel slot in the modules mapping — modules[SENTINEL] */
+  /** Sentinel slot in the modules mapping: modules[SENTINEL] */
   modulesSentinel: Hex;
-  /** Sentinel slot in the owners mapping — owners[SENTINEL] */
+  /** Sentinel slot in the owners mapping: owners[SENTINEL] */
   ownersSentinel: Hex;
 }
 

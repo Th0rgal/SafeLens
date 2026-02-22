@@ -1,4 +1,10 @@
-export const CONSENSUS_NETWORKS = ["mainnet", "sepolia", "gnosis"] as const;
+export const CONSENSUS_NETWORKS = [
+  "mainnet",
+  "sepolia",
+  "holesky",
+  "hoodi",
+  "gnosis",
+] as const;
 
 export type ConsensusNetwork = (typeof CONSENSUS_NETWORKS)[number];
 
@@ -12,7 +18,9 @@ export interface BeaconConsensusConfig {
   defaultBeaconRpcUrl: string;
 }
 
-export interface NetworkCapability {
+export type ConsensusVerifierMode = "beacon" | "opstack" | "linea";
+
+export interface NetworkCapabilityBase {
   chainId: number;
   chainPrefix: string;
   chainName: string;
@@ -20,9 +28,32 @@ export interface NetworkCapability {
   defaultRpcUrl?: string;
   supportsOnchainPolicyProof: boolean;
   supportsSimulation: boolean;
-  consensus?: BeaconConsensusConfig;
   enabledInSafeAddressSearch: boolean;
 }
+
+export interface BeaconNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "beacon";
+  consensus: BeaconConsensusConfig;
+}
+
+export interface OpStackNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "opstack";
+}
+
+export interface LineaNetworkCapability extends NetworkCapabilityBase {
+  consensusMode: "linea";
+}
+
+export interface NoConsensusModeCapability extends NetworkCapabilityBase {
+  consensusMode?: undefined;
+  consensus?: undefined;
+}
+
+export type NetworkCapability =
+  | BeaconNetworkCapability
+  | OpStackNetworkCapability
+  | LineaNetworkCapability
+  | NoConsensusModeCapability;
 
 const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
   {
@@ -33,6 +64,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "mainnet",
       genesisRoot:
@@ -53,6 +85,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://ethereum-sepolia-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "sepolia",
       genesisRoot:
@@ -64,6 +97,48 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
       defaultBeaconRpcUrl: "https://lodestar-sepolia.chainsafe.io",
     },
     enabledInSafeAddressSearch: true,
+  },
+  {
+    chainId: 17000,
+    chainPrefix: "hol",
+    chainName: "Holesky",
+    safeApiUrl: "https://safe-transaction-holesky.safe.global",
+    defaultRpcUrl: "https://ethereum-holesky-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    consensusMode: "beacon",
+    consensus: {
+      network: "holesky",
+      genesisRoot:
+        "0x9143aa7c615a7f7115e2b6aac319c03529df8242ae705fba9df39b79c59fa8b1",
+      genesisTime: 1695902400,
+      secondsPerSlot: 12,
+      slotsPerEpoch: 32,
+      epochsPerSyncCommitteePeriod: 256,
+      defaultBeaconRpcUrl: "https://ethereum-holesky-beacon-api.publicnode.com",
+    },
+    enabledInSafeAddressSearch: false,
+  },
+  {
+    chainId: 560048,
+    chainPrefix: "hdi",
+    chainName: "Hoodi",
+    safeApiUrl: "https://safe-transaction-hoodi.safe.global",
+    defaultRpcUrl: "https://ethereum-hoodi-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    consensusMode: "beacon",
+    consensus: {
+      network: "hoodi",
+      genesisRoot:
+        "0x212f13fc4df078b6cb7db228f1c8307566dcecf900867401a92023d7ba99cb5f",
+      genesisTime: 1742213400,
+      secondsPerSlot: 12,
+      slotsPerEpoch: 32,
+      epochsPerSyncCommitteePeriod: 256,
+      defaultBeaconRpcUrl: "https://ethereum-hoodi-beacon-api.publicnode.com",
+    },
+    enabledInSafeAddressSearch: false,
   },
   {
     chainId: 137,
@@ -93,6 +168,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://optimism-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "opstack",
     enabledInSafeAddressSearch: true,
   },
   {
@@ -103,6 +179,7 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://gnosis-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "beacon",
     consensus: {
       network: "gnosis",
       genesisRoot:
@@ -123,6 +200,18 @@ const NETWORK_CAPABILITIES_LIST: readonly NetworkCapability[] = [
     defaultRpcUrl: "https://base-rpc.publicnode.com",
     supportsOnchainPolicyProof: true,
     supportsSimulation: true,
+    consensusMode: "opstack",
+    enabledInSafeAddressSearch: true,
+  },
+  {
+    chainId: 59144,
+    chainPrefix: "linea",
+    chainName: "Linea",
+    safeApiUrl: "https://safe-transaction-linea.safe.global",
+    defaultRpcUrl: "https://linea-rpc.publicnode.com",
+    supportsOnchainPolicyProof: true,
+    supportsSimulation: true,
+    consensusMode: "linea",
     enabledInSafeAddressSearch: true,
   },
   // Legacy Safe chain prefix retained for URL parsing compatibility.
@@ -151,8 +240,18 @@ export const SAFE_ADDRESS_SEARCH_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
   (network) => network.enabledInSafeAddressSearch
 ).map((network) => network.chainId) as readonly number[];
 
+export const BEACON_CONSENSUS_SUPPORTED_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
+  (network) => network.consensusMode === "beacon" && Boolean(network.consensus)
+).map((network) => network.chainId) as readonly number[];
+
+export const EXECUTION_ENVELOPE_CONSENSUS_SUPPORTED_CHAIN_IDS =
+  NETWORK_CAPABILITIES_LIST.filter(
+    (network) =>
+      network.consensusMode === "opstack" || network.consensusMode === "linea"
+  ).map((network) => network.chainId) as readonly number[];
+
 export const CONSENSUS_SUPPORTED_CHAIN_IDS = NETWORK_CAPABILITIES_LIST.filter(
-  (network) => Boolean(network.consensus)
+  (network) => Boolean(network.consensusMode)
 ).map((network) => network.chainId) as readonly number[];
 
 export function getNetworkCapability(chainId: number): NetworkCapability | null {

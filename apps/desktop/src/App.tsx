@@ -10,7 +10,7 @@ const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 const ERC7730Screen = lazy(() => import("./screens/ERC7730Screen"));
 
 /*
- * Window dragging — DO NOT remove or replace with data-tauri-drag-region.
+ * Window dragging - DO NOT remove or replace with data-tauri-drag-region.
  *
  * Tauri's native data-tauri-drag-region attribute is unreliable with
  * overlay titlebars (titleBarStyle: "Overlay") on macOS: clicks pass
@@ -84,7 +84,7 @@ export default function App() {
     <SettingsConfigProvider>
       <ToastProvider>
         <div className={`relative flex h-screen w-full overflow-hidden ${debugDrag ? "debug-drag" : ""}`}>
-          {/* Drag strip — must span full window width and sit above all content
+          {/* Drag strip - must span full window width and sit above all content
               (z-50) so the programmatic mousedown handler can detect it.
               Height matches the macOS traffic-light inset. See block comment above. */}
           <div className="drag-region absolute inset-x-0 top-0 z-50 h-[52px]" />

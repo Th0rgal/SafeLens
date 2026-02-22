@@ -81,7 +81,7 @@ describe("verifySignature", () => {
 
   it("handles eth_sign style signatures (v=31)", async () => {
     // v=31 signature won't match the owner since the fixture uses v=27,
-    // but it should not throw — just return invalid or valid
+    // but it should not throw, just return invalid or valid
     const ethSignSig = `${signature.slice(0, 130)}1f` as Hex; // 0x1f = 31
     const result = await verifySignature(safeTxHash, ethSignSig, owner);
 

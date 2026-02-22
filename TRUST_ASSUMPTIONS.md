@@ -11,7 +11,7 @@ SafeLens classifies each source as:
 - `user-provided`: accepted from local operator input or local files
 
 Each section of the evidence package carries its own trust classification,
-allowing progressive trust upgrades (e.g., `api-sourced` → `proof-verified`)
+allowing progressive trust upgrades (e.g., `api-sourced` to `proof-verified`)
 as proof infrastructure is added.
 
 ## Evidence Generation (`apps/generator`, CLI `analyze`)
@@ -43,7 +43,7 @@ The evidence package (v1.1) supports optional sections, each with an embedded tr
 
 | Section | Trust field | Description |
 |---|---|---|
-| Core transaction data | — (always present) | EIP-712 fields, confirmations, hash — self-verified on parse |
+| Core transaction data | - (always present) | EIP-712 fields, confirmations, hash, self-verified on parse |
 | `onchainPolicyProof` | `.trust` | Merkle storage proofs for Safe policy state (Phase 2) |
 | `simulation` | `.trust` | Transaction simulation results with state diffs and logs (Phase 3) |
 
@@ -54,11 +54,11 @@ without these sections is fully supported and behaves identically to before.
 
 From highest to lowest assurance:
 
-1. **proof-verified** — Validated against cryptographic proofs (Merkle storage proofs, consensus proofs)
-2. **self-verified** — Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
-3. **rpc-sourced** — Accepted from an RPC endpoint (simulation results without consensus backing)
-4. **api-sourced** — Accepted from a remote API (Safe Transaction Service)
-5. **user-provided** — Accepted from local operator input (URLs, settings, timestamps)
+1. **proof-verified**: Validated against cryptographic proofs (Merkle storage proofs, consensus proofs)
+2. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
+3. **rpc-sourced**: Accepted from an RPC endpoint (simulation results without consensus backing)
+4. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
+5. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
 
 ## Desktop Airgap Scope
 
