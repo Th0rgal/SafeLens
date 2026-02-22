@@ -65,9 +65,9 @@ function ChainSupportInfoButton({ support }: { support: ChainSupportStatus }) {
 
   const description =
     support === "full"
-      ? "This chain uses the beacon light-client path. It is hardcoded in the verifier and cannot be removed from settings."
+      ? "This chain has built-in support for on-chain transaction simulation and Safe policy verification, fully verified locally."
       : support === "partial"
-        ? "This chain uses execution-envelope checks (`opstack`/`linea`). It is not equivalent to full beacon light-client verification."
+        ? "This chain has built-in partial support. Simulation and policy checks run locally, but consensus envelope data can be spoofed by a malicious RPC, so it is not equivalent to full light-client verification."
         : "No consensus verification path is hardcoded for this chain, so Helios-backed on-chain consensus verification is unavailable.";
 
   return (
