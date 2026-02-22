@@ -1,17 +1,30 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, CheckCircle2, AlertTriangle, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/toast";
 import {
   settingsConfigSchema,
   type SettingsConfig,
   type ChainConfig,
+  getNetworkCapability,
 } from "@safelens/core";
 import { useSettingsConfig } from "@/lib/settings/hooks";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
+
+type ChainSupportStatus = "full" | "partial" | "none";
+
+function getChainSupportStatus(chainIdRaw: string): ChainSupportStatus {
+  const parsed = Number.parseInt(chainIdRaw, 10);
+  if (!Number.isFinite(parsed)) return "none";
+  const capability = getNetworkCapability(parsed);
+  if (capability?.consensusMode === "beacon") return "full";
+  if (capability?.consensusMode === "opstack" || capability?.consensusMode === "linea") return "partial";
+  return "none";
+}
 
 export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
@@ -29,6 +42,7 @@ export default function SettingsScreen() {
   const [newChainId, setNewChainId] = useState("");
   const [newChainName, setNewChainName] = useState("");
   const [newChainNativeSymbol, setNewChainNativeSymbol] = useState("");
+  const [expandedSupportRows, setExpandedSupportRows] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
@@ -116,6 +130,9 @@ export default function SettingsScreen() {
     setNewChainNativeSymbol("");
   };
 
+  const toggleSupportRow = (key: string) =>
+    setExpandedSupportRows((prev) => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -148,30 +165,100 @@ export default function SettingsScreen() {
           </CardHeader>
           <CardContent className="space-y-2">
             {chainEntries.map(([chainId, chain], index) => (
-              <div key={index} className="flex items-start gap-2">
-                <div className="grid flex-1 grid-cols-3 gap-2">
-                  <Input
-                    value={chainId}
-                    onChange={(e) => renameChain(index, e.target.value)}
-                    className="text-xs"
-                  />
-                  <Input
-                    value={chain.name}
-                    onChange={(e) => updateChain(index, { name: e.target.value })}
-                    placeholder="Name"
-                    className="text-xs"
-                  />
-                  <Input
-                    value={chain.nativeTokenSymbol ?? ""}
-                    onChange={(e) => updateChain(index, { nativeTokenSymbol: e.target.value || undefined })}
-                    placeholder="Native token symbol"
-                    className="text-xs"
-                  />
+              <div key={index} className="space-y-2">
+                {(() => {
+                  const support = getChainSupportStatus(chainId);
+                  const rowKey = `${index}:${chainId}`;
+                  const isExpanded = expandedSupportRows[rowKey] ?? false;
+                  const removeDisabled = support === "full";
+
+                  return (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleSupportRow(rowKey)}
+                          className={`mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                            support === "full"
+                              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/20"
+                              : support === "partial"
+                                ? "border-amber-500/30 bg-amber-500/15 text-amber-300 hover:bg-amber-500/20"
+                                : "border-border/20 bg-surface-2/40 text-muted hover:bg-surface-2/60"
+                          }`}
+                          title={
+                            support === "full"
+                              ? "Full Helios support"
+                              : support === "partial"
+                                ? "Partial consensus support"
+                                : "No Helios support"
+                          }
+                        >
+                          {support === "full" ? (
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          ) : support === "partial" ? (
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                          ) : (
+                            <Circle className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+
+                        <div className="grid flex-1 grid-cols-3 gap-2">
+                          <Input
+                            value={chainId}
+                            onChange={(e) => renameChain(index, e.target.value)}
+                            className="text-xs"
+                          />
+                          <Input
+                            value={chain.name}
+                            onChange={(e) => updateChain(index, { name: e.target.value })}
+                            placeholder="Name"
+                            className="text-xs"
+                          />
+                          <Input
+                            value={chain.nativeTokenSymbol ?? ""}
+                            onChange={(e) => updateChain(index, { nativeTokenSymbol: e.target.value || undefined })}
+                            placeholder="Native token symbol"
+                            className="text-xs"
+                          />
+                        </div>
+
+                        {!removeDisabled && (
+                          <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+
+                      {isExpanded && support === "full" && (
+                        <Alert variant="success">
+                          <AlertTitle>Full Helios Support</AlertTitle>
+                          <AlertDescription>
+                            This chain uses the beacon light-client path. It is hardcoded in the verifier and cannot be removed from settings.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {isExpanded && support === "partial" && (
+                        <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+                          <AlertTitle>Partial Consensus Support</AlertTitle>
+                          <AlertDescription>
+                            This chain uses execution-envelope checks (`opstack`/`linea`). It is not equivalent to full beacon light-client verification.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      {isExpanded && support === "none" && (
+                        <Alert>
+                          <AlertTitle>No Helios Support</AlertTitle>
+                          <AlertDescription>
+                            No consensus verification path is hardcoded for this chain, so Helios-backed on-chain consensus verification is unavailable.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </>
+                  );
+                })()}
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => removeChain(index)} className="h-9 w-9 shrink-0">
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              </div>
             ))}
             <div className="flex items-start gap-2 border-t border-border/15 pt-2">
               <div className="grid flex-1 grid-cols-3 gap-2">
