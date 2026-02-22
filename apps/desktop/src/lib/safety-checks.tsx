@@ -10,6 +10,7 @@ import {
   type EvidencePackage,
   type PolicyProofVerificationResult,
   type SimulationVerificationResult,
+  type SimulationReplayVerificationResult,
   summarizeSimulationEvents,
 } from "@safelens/core";
 import {
@@ -290,7 +291,8 @@ export function classifyConsensusStatus(
 
 export function classifySimulationStatus(
   evidence: EvidencePackage,
-  simulationVerification: SimulationVerificationResult | undefined
+  simulationVerification: SimulationVerificationResult | undefined,
+  simulationReplayVerification?: SimulationReplayVerificationResult
 ): SafetyCheck {
   if (!simulationVerification || !evidence.simulation) {
     const reasonCode = getSimulationUnavailableReasonCode(evidence);
@@ -327,12 +329,59 @@ export function classifySimulationStatus(
 
   const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
   if (witnessOnlySimulation) {
+    if (!simulationReplayVerification) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "warning",
+        detail: "Local replay verification is still running for this witness-only package.",
+        reasonCode: "simulation-replay-pending",
+      };
+    }
+
+    if (
+      simulationReplayVerification.executed !== true ||
+      simulationReplayVerification.success !== true
+    ) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "error",
+        detail:
+          simulationReplayVerification.error ??
+          "Local replay verification failed for this witness-only package.",
+        reasonCode: simulationReplayVerification.reason,
+      };
+    }
+
+    const replaySummary = summarizeSimulationEvents(
+      simulationReplayVerification.replayLogs ?? [],
+      evidence.safeAddress,
+      evidence.chainId,
+      {
+        maxTransferPreviews: 3,
+      },
+    );
+    const parts: string[] = ["Simulation ran successfully."];
+    if (replaySummary.transfersOut > 0 || replaySummary.transfersIn > 0) {
+      parts.push(
+        `${replaySummary.transfersOut + replaySummary.transfersIn} transfer${replaySummary.transfersOut + replaySummary.transfersIn !== 1 ? "s" : ""} detected.`
+      );
+    }
+    if (replaySummary.approvals > 0) {
+      const unlimitedSuffix = replaySummary.unlimitedApprovals > 0
+        ? ` (${replaySummary.unlimitedApprovals} unlimited)`
+        : "";
+      parts.push(
+        `${replaySummary.approvals} approval${replaySummary.approvals !== 1 ? "s" : ""}${unlimitedSuffix}.`
+      );
+    }
+
     return {
       id: "simulation-outcome",
       label: "Simulation outcome",
       status: "check",
-      detail:
-        "Simulation ran successfully. This package is witness-only, effects are derived from local replay.",
+      detail: parts.join(" "),
     };
   }
 

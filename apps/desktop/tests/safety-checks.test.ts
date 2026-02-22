@@ -4,6 +4,7 @@ import type {
   ConsensusVerificationResult,
   EvidencePackage,
   PolicyProofVerificationResult,
+  SimulationReplayVerificationResult,
   SimulationVerificationResult,
 } from "@safelens/core";
 import {
@@ -420,6 +421,70 @@ describe("classifySimulationStatus", () => {
     expect(status.status).toBe("warning");
     expect(status.reasonCode).toBe("simulation-execution-reverted");
     expect(status.detail).toBe("Simulation ran but the transaction reverted.");
+  });
+
+  it("returns warning for witness-only simulation while replay is pending", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      undefined
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("simulation-replay-pending");
+  });
+
+  it("returns error for witness-only simulation when replay fails", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        executed: true,
+        success: false,
+        reason: "simulation-replay-exec-error",
+        error: "replay failed",
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("simulation-replay-exec-error");
+    expect(status.detail).toBe("replay failed");
   });
 });
 

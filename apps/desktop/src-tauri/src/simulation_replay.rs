@@ -33,6 +33,7 @@ pub struct ReplayTransaction {
     pub to: String,
     pub value: String,
     pub data: Option<String>,
+    pub operation: u8,
     pub safe_tx_gas: Option<String>,
 }
 
@@ -260,9 +261,24 @@ fn execute_replay(
         },
     };
 
+    let tx_kind = match input.transaction.operation {
+        0 => TxKind::Call(to),
+        1 => {
+            return Err(
+                "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
+                    .to_string(),
+            )
+        }
+        value => {
+            return Err(format!(
+                "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
+            ))
+        }
+    };
+
     let tx = TxEnv::builder()
         .caller(caller)
-        .kind(TxKind::Call(to))
+        .kind(tx_kind)
         .gas_limit(gas_limit)
         .chain_id(Some(input.chain_id))
         .value(value)
@@ -416,6 +432,7 @@ mod tests {
                 to: "0x2000000000000000000000000000000000000002".to_string(),
                 value: "0".to_string(),
                 data: Some("0x".to_string()),
+                operation: 0,
                 safe_tx_gas: Some("500000".to_string()),
             },
             simulation: ReplaySimulation {
@@ -450,6 +467,7 @@ mod tests {
                 to: target.to_string(),
                 value: "0".to_string(),
                 data: Some("0x".to_string()),
+                operation: 0,
                 safe_tx_gas: Some("500000".to_string()),
             },
             simulation: ReplaySimulation {
@@ -485,6 +503,7 @@ mod tests {
                 to: target.to_string(),
                 value: "0".to_string(),
                 data: Some("0x".to_string()),
+                operation: 0,
                 safe_tx_gas: Some("500000".to_string()),
             },
             simulation: ReplaySimulation {
@@ -503,6 +522,47 @@ mod tests {
 
         assert!(result.executed);
         assert!(result.success);
+    }
+
+    #[test]
+    fn returns_exec_error_for_delegatecall_operation() {
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 1,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 1,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: None,
+            },
+        });
+
+        assert!(result.executed);
+        assert!(!result.success);
+        assert_eq!(result.reason, REASON_REPLAY_EXEC_ERROR);
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap_or("")
+                .contains("DELEGATECALL")
+        );
     }
 
     fn percentile(sorted: &[u128], p: f64) -> u128 {
@@ -538,6 +598,7 @@ mod tests {
                         to: target.to_string(),
                         value: "0".to_string(),
                         data: Some("0x".to_string()),
+                        operation: 0,
                         safe_tx_gas: Some("500000".to_string()),
                     },
                     simulation: ReplaySimulation {

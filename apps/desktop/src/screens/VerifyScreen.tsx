@@ -39,6 +39,7 @@ import { useEvidenceVerification } from "@/lib/use-evidence-verification";
 import { ShieldCheck, AlertTriangle, HelpCircle, Upload, ChevronRight } from "lucide-react";
 import type {
   EvidencePackage,
+  SignatureCheckResult,
   TransactionWarning,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
@@ -145,9 +146,9 @@ export default function VerifyScreen() {
     return [
       classifyPolicyStatus(evidence, policyProof),
       classifyConsensusStatus(evidence, consensusVerification, consensusSourceSummary),
-      classifySimulationStatus(evidence, simulationVerification),
+      classifySimulationStatus(evidence, simulationVerification, simulationReplayVerification),
     ];
-  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification]);
+  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification, simulationReplayVerification]);
   const decodedCallsSummary = useMemo(() => {
     if (!evidence?.dataDecoded) return null;
     const steps = normalizeCallSteps(
@@ -378,6 +379,7 @@ export default function VerifyScreen() {
             policyProof={policyProof}
             simulationVerification={simulationVerification}
             simulationReplayVerification={simulationReplayVerification}
+            sigResults={sigResults}
             showDetails={showSafetyDetails}
             onToggleDetails={() => setShowSafetyDetails((value) => !value)}
           />
@@ -577,6 +579,7 @@ function ExecutionSafetyPanel({
   policyProof,
   simulationVerification,
   simulationReplayVerification,
+  sigResults,
   showDetails,
   onToggleDetails,
 }: {
@@ -588,6 +591,7 @@ function ExecutionSafetyPanel({
   policyProof: PolicyProofVerificationResult | undefined;
   simulationVerification: SimulationVerificationResult | undefined;
   simulationReplayVerification: SimulationReplayVerificationResult | undefined;
+  sigResults: Record<string, SignatureCheckResult>;
   showDetails: boolean;
   onToggleDetails: () => void;
 }) {
@@ -690,6 +694,12 @@ function ExecutionSafetyPanel({
     simulationReplayVerification.success === true;
   const replayFailed = replayRequired && replayResultAvailable && !replayPassed;
   const replayPending = replayRequired && !replayResultAvailable;
+  const signatureStatuses = evidence.confirmations.map(
+    (confirmation) => sigResults[confirmation.owner]?.status
+  );
+  const signaturesPending = signatureStatuses.some((status) => status === undefined);
+  const signaturesInvalid = signatureStatuses.some((status) => status === "invalid");
+  const signaturesUnsupported = signatureStatuses.some((status) => status === "unsupported");
 
   const freshnessDescription = (() => {
     const sim = evidence.simulation;
@@ -717,22 +727,28 @@ function ExecutionSafetyPanel({
     (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
   );
 
-  const verification = hasError || replayFailed
+  const verification = hasError || replayFailed || signaturesInvalid
     ? {
         label: "Verification Failed",
-        description: replayFailed
-          ? simulationReplayVerification?.error ?? "Local replay verification failed. Do not sign."
-          : "One or more safety checks failed. Do not sign.",
+        description: signaturesInvalid
+          ? "One or more signatures are invalid."
+          : replayFailed
+            ? simulationReplayVerification?.error ?? "Local replay verification failed. Do not sign."
+            : "One or more safety checks failed. Do not sign.",
         status: "error" as const,
       }
     : hasWarning && allDataAbsent
       ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
-      : hasWarning || replayPending
+      : hasWarning || replayPending || signaturesPending || signaturesUnsupported
         ? {
             label: "Partially Verified",
-            description: replayPending
-              ? "Local replay verification is still running."
-              : "Some checks are partial or unavailable.",
+            description: signaturesPending
+              ? "Signature verification is still running."
+              : signaturesUnsupported
+                ? "Some signatures use unsupported schemes and cannot be fully verified."
+                : replayPending
+                  ? "Local replay verification is still running."
+                  : "Some checks are partial or unavailable.",
             status: "warning" as const,
           }
         : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
@@ -848,6 +864,27 @@ function ExecutionSafetyPanel({
                       (check) => check.status !== "check"
                     );
                     if (nonCheckWarnings.length === 0) {
+                      if (signaturesInvalid) {
+                        return (
+                          <div className="text-red-300">
+                            One or more signatures are invalid.
+                          </div>
+                        );
+                      }
+                      if (signaturesUnsupported) {
+                        return (
+                          <div className="text-amber-300">
+                            Some signatures use unsupported schemes and cannot be fully verified.
+                          </div>
+                        );
+                      }
+                      if (signaturesPending) {
+                        return (
+                          <div className="text-muted">
+                            Signature verification is still running.
+                          </div>
+                        );
+                      }
                       return (
                         <div className="text-muted">
                           Simulation reverted. See the Simulation section for details.

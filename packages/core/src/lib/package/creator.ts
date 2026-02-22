@@ -165,10 +165,15 @@ export async function enrichWithSimulation(
     simulationWitness = undefined;
   }
 
+  const hasReplayAccounts =
+    Array.isArray(simulationWitness?.replayAccounts) &&
+    simulationWitness.replayAccounts.length > 0;
+  const useWitnessOnlySimulation = hasReplayAccounts;
+
   return {
     ...evidence,
     version: withEnrichmentVersion(evidence.version),
-    simulation: simulationWitness
+    simulation: useWitnessOnlySimulation
       ? {
           ...simulation,
           // Witness-only mode: do not ship decoded effects from RPC output.
@@ -176,9 +181,9 @@ export async function enrichWithSimulation(
           nativeTransfers: undefined,
         }
       : simulation,
-    simulationWitness: simulationWitness
+    simulationWitness: useWitnessOnlySimulation
       ? {
-          ...simulationWitness,
+          ...simulationWitness!,
           witnessOnly: true,
         }
       : simulationWitness,
