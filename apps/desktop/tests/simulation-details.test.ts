@@ -150,6 +150,68 @@ describe("buildSimulationDetailRows", () => {
     expect(transferRow!.value).toContain("DAI");
   });
 
+  it("shows native transfers from call trace", () => {
+    const rows = buildSimulationDetailRows(
+      {
+        chainId: 1,
+        safeAddress: SAFE,
+        simulation: {
+          logs: [],
+          nativeTransfers: [
+            {
+              from: SAFE,
+              to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              value: "1000000000000000000",
+            },
+          ],
+        } as EvidencePackage["simulation"],
+      },
+      makeVerification({
+        checks: [{ id: "s1", label: "Has logs", passed: true }],
+      }),
+      "unavailable"
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { id: "simulation-events-detected", label: "Token events", value: "1" },
+        { id: "simulation-transfers", label: "Token transfers", value: "1 out, 0 in" },
+      ])
+    );
+    const transferRow = rows.find((row) => row.id === "simulation-transfer-1");
+    expect(transferRow).toBeDefined();
+    expect(transferRow!.label).toContain("Sent");
+    expect(transferRow!.value).toContain("ETH");
+  });
+
+  it("uses custom native token symbol", () => {
+    const rows = buildSimulationDetailRows(
+      {
+        chainId: 100,
+        safeAddress: SAFE,
+        simulation: {
+          logs: [],
+          nativeTransfers: [
+            {
+              from: SAFE,
+              to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              value: "2000000000000000000",
+            },
+          ],
+        } as EvidencePackage["simulation"],
+      },
+      makeVerification({
+        checks: [{ id: "s1", label: "Has logs", passed: true }],
+      }),
+      "unavailable",
+      "xDAI",
+    );
+
+    const transferRow = rows.find((row) => row.id === "simulation-transfer-1");
+    expect(transferRow).toBeDefined();
+    expect(transferRow!.value).toContain("xDAI");
+  });
+
   it("emits only supported simulation detail row ids", () => {
     const rows = buildSimulationDetailRows(
       {

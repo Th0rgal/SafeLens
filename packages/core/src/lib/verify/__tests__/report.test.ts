@@ -60,7 +60,7 @@ describe("verifyEvidencePackage", () => {
       originalHash.toLowerCase()
     );
 
-    // Signatures should STILL be valid — they are verified against the
+    // Signatures should STILL be valid, they are verified against the
     // recomputed hash, not the tampered evidence.safeTxHash
     expect(result.signatures.summary.valid).toBe(evidence.confirmations.length);
     expect(result.signatures.summary.invalid).toBe(0);

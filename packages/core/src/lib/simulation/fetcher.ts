@@ -8,7 +8,7 @@
  *
  * Optionally fetches event logs via `debug_traceCall` when the RPC node
  * supports it. Note: state diffs require `prestateTracer` with diffMode,
- * which is not yet implemented — the `stateDiffs` field in the schema
+ * which is not yet implemented, the `stateDiffs` field in the schema
  * will be undefined for now.
  */
 
@@ -38,13 +38,13 @@ import {
   moduleSlot,
   slotToKey,
 } from "../proof/safe-layout";
-import type { Simulation, TrustClassification } from "../types";
+import type { Simulation, NativeTransfer, TrustClassification } from "../types";
 
 // ── Fake owner for state-override simulation ──────────────────────
 
 /**
  * A deterministic private key used only for state-override simulation.
- * This is Hardhat/Anvil account #0 — universally known and never used
+ * This is Hardhat/Anvil account #0, universally known and never used
  * to control real funds. It is safe here because we only call eth_call
  * (a read-only RPC method), never eth_sendRawTransaction.
  */
@@ -155,7 +155,7 @@ export async function fetchSimulation(
   });
 
   // ── Step 2: Sign with simulation account ────────────────────────
-  // IMPORTANT: Use sign({hash}) — NOT signMessage — because Safe's
+  // IMPORTANT: Use sign({hash}), NOT signMessage, because Safe's
   // checkNSignatures calls ecrecover on the raw safeTxHash.
   // signMessage would apply an EIP-191 prefix, producing a different
   // hash and causing the signature to always be rejected (GS026).
@@ -279,14 +279,18 @@ export async function fetchSimulation(
 
   // ── Build result ────────────────────────────────────────────────
 
+  const { nativeTransfers } = traceResult;
+
   const simulation: Simulation = {
     success,
     returnData,
     gasUsed,
     logs: traceResult.logs,
+    nativeTransfers: nativeTransfers.length > 0 ? nativeTransfers : undefined,
     blockNumber,
     blockTimestamp: new Date(Number(block.timestamp) * 1000).toISOString(),
     trust: "rpc-sourced" as TrustClassification,
+    traceAvailable: traceResult.available,
   };
 
   return simulation;
@@ -321,7 +325,9 @@ function extractRevertData(err: unknown): Hex | null {
 
 interface TraceResult {
   logs: Simulation["logs"];
+  nativeTransfers: NativeTransfer[];
   gasUsed: string | null;
+  available: boolean;
 }
 
 async function tryTraceCall(
@@ -372,8 +378,16 @@ async function tryTraceCall(
     // Each frame has an optional `logs` array and an optional `calls`
     // array of child frames. We recursively collect all logs.
     // The top-level frame also has `gasUsed` (hex string).
+    //
+    // We also collect native value transfers: any CALL/CREATE frame
+    // with a non-zero `value` represents an ETH movement.
     interface CallFrame {
+      type?: string;
+      from?: string;
+      to?: string;
+      value?: string;
       gasUsed?: string;
+      error?: string;
       logs?: Array<{ address: string; topics: string[]; data: string }>;
       calls?: CallFrame[];
     }
@@ -397,8 +411,35 @@ async function tryTraceCall(
       return collected;
     }
 
+    function collectNativeTransfers(frame: CallFrame): NativeTransfer[] {
+      const transfers: NativeTransfer[] = [];
+      // Value-carrying call types (STATICCALL and DELEGATECALL cannot carry value)
+      const valueTypes = new Set(["CALL", "CREATE", "CREATE2"]);
+      if (
+        frame.from && frame.to && frame.value &&
+        !frame.error &&
+        valueTypes.has((frame.type ?? "").toUpperCase())
+      ) {
+        const valueBn = BigInt(frame.value);
+        if (valueBn > 0n) {
+          transfers.push({
+            from: normalizeHex(frame.from).toLowerCase() as Address,
+            to: normalizeHex(frame.to).toLowerCase() as Address,
+            value: valueBn.toString(),
+          });
+        }
+      }
+      if (frame.calls && Array.isArray(frame.calls)) {
+        for (const child of frame.calls) {
+          transfers.push(...collectNativeTransfers(child));
+        }
+      }
+      return transfers;
+    }
+
     const frame = result as unknown as CallFrame;
     const logs = collectLogs(frame);
+    const nativeTransfers = collectNativeTransfers(frame);
 
     // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
     let gasUsed: string | null = null;
@@ -407,9 +448,9 @@ async function tryTraceCall(
       if (isNaN(Number(gasUsed))) gasUsed = null;
     }
 
-    return { logs, gasUsed };
+    return { logs, nativeTransfers, gasUsed, available: true };
   } catch {
-    // debug_traceCall is not supported by all RPCs — silently fall back
-    return { logs: [], gasUsed: null };
+    // debug_traceCall is not supported by all RPCs, silently fall back
+    return { logs: [], nativeTransfers: [], gasUsed: null, available: false };
   }
 }

@@ -206,6 +206,49 @@ describe("verifySimulation", () => {
     expect(result.checks.find((c) => c.id === "state-diffs")).toBeUndefined();
   });
 
+  it("validates native transfers when present", () => {
+    const result = verifySimulation(
+      makeValidSimulation({
+        nativeTransfers: [
+          {
+            from: "0x1234567890abcdef1234567890abcdef12345678" as `0x${string}`,
+            to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as `0x${string}`,
+            value: "1000000000000000000",
+          },
+        ],
+      })
+    );
+    expect(result.valid).toBe(true);
+    const check = result.checks.find((c) => c.id === "native-transfers");
+    expect(check?.passed).toBe(true);
+    expect(check?.detail).toBe("1 transfer(s)");
+  });
+
+  it("fails for native transfers with invalid address", () => {
+    const result = verifySimulation(
+      makeValidSimulation({
+        nativeTransfers: [
+          {
+            from: "0xshort" as `0x${string}`,
+            to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" as `0x${string}`,
+            value: "1000000000000000000",
+          },
+        ],
+      })
+    );
+    expect(result.valid).toBe(false);
+    const check = result.checks.find((c) => c.id === "native-transfers");
+    expect(check?.passed).toBe(false);
+  });
+
+  it("does not include native-transfers check when nativeTransfers is undefined", () => {
+    const result = verifySimulation(
+      makeValidSimulation({ nativeTransfers: undefined })
+    );
+    expect(result.valid).toBe(true);
+    expect(result.checks.find((c) => c.id === "native-transfers")).toBeUndefined();
+  });
+
   it("fails for missing trust classification", () => {
     const result = verifySimulation(
       makeValidSimulation({ trust: "" as "rpc-sourced" })
@@ -338,7 +381,7 @@ describe("verifySimulation", () => {
   });
 
   it("passes consistency check when success=true and long returnData is not a revert", () => {
-    // 66+ chars but doesn't start with revert selector — e.g. some custom return value
+    // 66+ chars but doesn't start with revert selector, e.g. some custom return value
     const customReturn =
       "0x" +
       "0000000000000000000000000000000000000000000000000000000000000042" +

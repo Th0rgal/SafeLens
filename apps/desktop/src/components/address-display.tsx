@@ -86,7 +86,7 @@ export function AddressDisplay({ address, className, chainId }: AddressDisplayPr
         ],
       });
     } catch {
-      // Store write may fail in dev mode — state update still applied by provider
+      // Store write may fail in dev mode, state update still applied by provider
     }
     setAdding(false);
     setNameInput("");

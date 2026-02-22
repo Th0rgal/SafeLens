@@ -3,7 +3,7 @@
  *
  * Maps each interpretation `id` to its card component and provides
  * severity-driven styling. TypeScript enforces that every id in the
- * Interpretation union has a renderer — adding a new protocol variant
+ * Interpretation union has a renderer, adding a new protocol variant
  * without registering a component here is a compile error.
  *
  * To add a new protocol's card:
@@ -13,7 +13,7 @@
 
 import type { ComponentType } from "react";
 import type { Interpretation, Severity } from "@safelens/core";
-import { ERC20TransferCard } from "./token-transfer-card";
+import { TokenTransferCard } from "./token-transfer-card";
 import { CowSwapTwapCard } from "./cowswap-twap-card";
 import { CowSwapPreSignCard } from "./cowswap-presign-card";
 import { SafePolicyCard } from "./safe-policy-card";
@@ -37,7 +37,7 @@ export interface EvidenceContext {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RENDERERS: Record<Interpretation["id"], ComponentType<{ details: any; context?: EvidenceContext }>> = {
-  "erc20-transfer": ERC20TransferCard,
+  "token-transfer": TokenTransferCard,
   "cowswap-twap": CowSwapTwapCard,
   "cowswap-presign": CowSwapPreSignCard,
   "safe-policy": SafePolicyCard,
@@ -50,7 +50,7 @@ export function getRenderer(id: Interpretation["id"]): ComponentType<{ details: 
 
 // ── Severity-driven styling ─────────────────────────────────────────
 // The interpreter sets severity; the UI just looks it up. No per-protocol
-// style logic needed — any future protocol gets correct styling from its
+// style logic needed, any future protocol gets correct styling from its
 // severity alone.
 
 export const SEVERITY_STYLES: Record<Severity, {

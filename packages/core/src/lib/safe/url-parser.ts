@@ -67,7 +67,7 @@ export function parseSafeUrl(urlString: string): SafeUrlData {
 }
 
 /**
- * Parse a Safe URL flexibly — returns either a full transaction reference
+ * Parse a Safe URL flexibly: returns either a full transaction reference
  * or just the queue (chain + address) when no `id` param is present.
  */
 export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {

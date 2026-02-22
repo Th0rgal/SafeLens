@@ -113,7 +113,7 @@ a {
 }
 
 /*
- * Sidebar — translucent overlay on top of native macOS vibrancy.
+ * Sidebar - translucent overlay on top of native macOS vibrancy.
  *
  * DO NOT replace this with CSS backdrop-filter: blur(). It causes
  * persistent compositor glitches (flicker, white flashes, dropout
@@ -134,7 +134,7 @@ a {
   color: rgb(var(--foreground-secondary));
 }
 
-/* Debug drag regions — toggle with Cmd+Shift+D */
+/* Debug drag regions - toggle with Cmd+Shift+D */
 .debug-drag .drag-region {
   background: rgba(255, 0, 0, 0.25) !important;
   outline: 2px dashed red;

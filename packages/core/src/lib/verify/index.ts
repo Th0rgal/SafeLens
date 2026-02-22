@@ -227,7 +227,7 @@ function buildReportSources(
     hasSimulation: Boolean(options.evidence.simulation),
     hasConsensusProof: Boolean(options.evidence.consensusProof),
     // After successful local Merkle verification, upgrade trust from
-    // "rpc-sourced" to "proof-verified" — the proof was cryptographically
+    // "rpc-sourced" to "proof-verified", the proof was cryptographically
     // validated against the state root, not just fetched from an RPC.
     onchainPolicyProofTrust: options.policyProof?.valid
       ? "proof-verified"
@@ -282,7 +282,7 @@ export async function verifyEvidencePackage(
     : [];
 
   // Recompute the safeTxHash from the transaction fields FIRST, so
-  // signatures are always verified against the locally-computed hash —
+  // signatures are always verified against the locally-computed hash,
   // not the one stored in the evidence JSON. This prevents a tampered
   // safeTxHash field from causing forged signatures to pass.
   const hashDetails = computeSafeTxHashDetailed({
@@ -365,7 +365,7 @@ export async function verifyEvidencePackage(
         `confirmationsRequired (${evidence.confirmationsRequired}) does not match proven threshold (${provenThreshold})`
       );
       // The proof is still structurally valid, but this is a data
-      // integrity issue — mark the overall proof as invalid so the
+      // integrity issue, mark the overall proof as invalid so the
       // trust level does not upgrade to "proof-verified".
       policyProof.valid = false;
     }

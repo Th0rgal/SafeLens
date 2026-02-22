@@ -436,7 +436,7 @@ async function runAnalyze(args: string[]) {
   const parsed = parseSafeUrlFlexible(url);
 
   if (parsed.type === "queue") {
-    // Queue URL — list pending transactions instead of analyzing one
+    // Queue URL: list pending transactions instead of analyzing one
     const pending = await fetchPendingTransactions(parsed.data.chainId, parsed.data.safeAddress);
     if (pending.length === 0) {
       console.log("No pending transactions for this Safe.");

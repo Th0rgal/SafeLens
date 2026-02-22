@@ -1,11 +1,11 @@
-import type { ERC20TransferDetails } from "@safelens/core";
+import type { TokenTransferDetails } from "@safelens/core";
 import { AddressDisplay } from "@/components/address-display";
 
-interface ERC20TransferCardProps {
-  details: ERC20TransferDetails;
+interface TokenTransferCardProps {
+  details: TokenTransferDetails;
 }
 
-export function ERC20TransferCard({ details }: ERC20TransferCardProps) {
+export function TokenTransferCard({ details }: TokenTransferCardProps) {
   return (
     <div className="space-y-3 text-sm">
       <div className="grid grid-cols-2 gap-x-4 gap-y-2">
@@ -24,7 +24,7 @@ export function ERC20TransferCard({ details }: ERC20TransferCardProps) {
           <div className="font-mono">{details.amountFormatted}</div>
         </div>
 
-        {details.actionType === "transfer" && details.to && (
+        {(details.actionType === "transfer" || details.actionType === "nativeTransfer") && details.to && (
           <div className="col-span-2">
             <span className="font-medium text-muted">Recipient</span>
             <div><AddressDisplay address={details.to} /></div>

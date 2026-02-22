@@ -104,15 +104,15 @@ export interface SafePolicyChangeDetails {
   }>;
 }
 
-/** ERC-20 transfer details. */
-export interface ERC20TransferDetails {
-  /** The type of ERC-20 action detected. */
-  actionType: "transfer" | "approve" | "transferFrom";
-  /** The token contract address. */
+/** Token transfer details (ERC-20 and native transfers). */
+export interface TokenTransferDetails {
+  /** The type of token action detected. */
+  actionType: "transfer" | "approve" | "transferFrom" | "nativeTransfer";
+  /** The token contract address (zero address for native tokens). */
   token: TokenInfo;
   /** Sender address (for transfer / transferFrom). */
   from?: string;
-  /** Recipient address (for transfer / transferFrom). */
+  /** Recipient address (for transfer / transferFrom / nativeTransfer). */
   to?: string;
   /** Spender address (for approve). */
   spender?: string;
@@ -122,6 +122,8 @@ export interface ERC20TransferDetails {
   amountFormatted: string;
   /** Whether this is an unlimited approval (max uint256). */
   isUnlimitedApproval?: boolean;
+  /** Whether this is a native token transfer (ETH, xDAI, etc.). */
+  isNative?: boolean;
 }
 
 /** CoW Protocol setPreSignature details. */
@@ -155,7 +157,7 @@ export interface ERC7730Details {
 //
 // Each variant has a unique `id` string that TypeScript uses to narrow
 // the `details` type automatically. The UI uses `id` to pick the right
-// card component — no string-matching on protocol/action needed.
+// card component, no string-matching on protocol/action needed.
 //
 // To add a new protocol, add a new variant here. TypeScript will then
 // error in every place that needs to handle it (interpreter registry,
@@ -163,12 +165,12 @@ export interface ERC7730Details {
 
 export type Interpretation =
   | {
-      id: "erc20-transfer";
-      protocol: "ERC-20";
+      id: "token-transfer";
+      protocol: "ERC-20" | "Native";
       action: "Transfer" | "Approve" | "TransferFrom";
       severity: Severity;
       summary: string;
-      details: ERC20TransferDetails;
+      details: TokenTransferDetails;
     }
   | {
       id: "cowswap-twap";

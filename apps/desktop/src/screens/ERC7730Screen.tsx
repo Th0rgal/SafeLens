@@ -114,10 +114,10 @@ function ExpandableSignature({ sig }: { sig: string }) {
 
 const BUILT_IN_INTERPRETERS = [
   {
-    id: "erc20-transfer",
-    protocol: "ERC-20",
+    id: "token-transfer",
+    protocol: "ERC-20 / Native",
     action: "Transfer",
-    description: "Decodes standard ERC-20 transfers, approvals, and transferFrom calls with human-readable token amounts.",
+    description: "Decodes ERC-20 transfers, approvals, transferFrom calls, and native token transfers (ETH, xDAI, etc.) with human-readable amounts.",
   },
   {
     id: "cowswap-twap",

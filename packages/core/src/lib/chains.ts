@@ -1,7 +1,7 @@
 /**
  * Shared chain configuration: viem chain objects and default public RPC URLs.
  *
- * Both the proof fetcher and the simulation fetcher need these —
+ * Both the proof fetcher and the simulation fetcher need these,
  * keeping them in one place prevents drift.
  */
 

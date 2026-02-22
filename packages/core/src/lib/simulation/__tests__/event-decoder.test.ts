@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   decodeSimulationEvents,
   decodeNativeTransfers,
-  computeRemainingApprovals,
   type DecodedEvent,
 } from "../event-decoder";
+import { computeRemainingApprovals } from "../summary";
 import type { SimulationLog } from "../../types";
 
 const SAFE = "0x1234567890abcdef1234567890abcdef12345678";
@@ -236,7 +236,7 @@ describe("decodeNativeTransfers", () => {
     );
 
     expect(events).toHaveLength(1);
-    expect(events[0].kind).toBe("transfer");
+    expect(events[0].kind).toBe("native-transfer");
     expect(events[0].direction).toBe("send");
     expect(events[0].tokenSymbol).toBe("ETH");
     expect(events[0].tokenDecimals).toBe(18);
@@ -351,11 +351,12 @@ describe("computeRemainingApprovals", () => {
   });
 
   it("skips non-approval events and returns only approvals", () => {
+    const SPENDER_2 = "0xdddddddddddddddddddddddddddddddddddddddd";
     const events = [
       makeEvent({ kind: "transfer" }),
       makeEvent({ kind: "approval" }),
       makeEvent({ kind: "wrap" }),
-      makeEvent({ kind: "approval", amountFormatted: "Unlimited WETH" }),
+      makeEvent({ kind: "approval", to: SPENDER_2, amountFormatted: "Unlimited WETH" }),
     ];
     const approvals = computeRemainingApprovals(events);
 

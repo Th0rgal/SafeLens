@@ -9,6 +9,7 @@ export const SIMULATION_DETAIL_FIXED_ROW_IDS = [
   "simulation-transfers",
   "simulation-approvals",
   "simulation-first-error",
+  "simulation-trace-unavailable",
 ] as const;
 
 type SimulationDetailFixedRowId =
@@ -34,7 +35,7 @@ export function buildSimulationDetailRows(
   evidence: SimulationEvidence,
   simulationVerification: SimulationVerificationResult | undefined,
   unavailableReason: string,
-  nativeTokenSymbol?: string | null,
+  nativeTokenSymbol?: string,
 ): SimulationDetailRow[] {
   if (!simulationVerification || !evidence.simulation) {
     return [
@@ -67,10 +68,10 @@ export function buildSimulationDetailRows(
     evidence.safeAddress,
     evidence.chainId,
     {
-      nativeTransfers: evidence.simulation.nativeTransfers,
-      nativeSymbol: nativeTokenSymbol ?? undefined,
       maxTransferPreviews: 5,
-    },
+      nativeTransfers: evidence.simulation.nativeTransfers,
+      nativeTokenSymbol,
+    }
   );
 
   if (summary.totalEvents > 0) {
@@ -113,6 +114,14 @@ export function buildSimulationDetailRows(
         summary.unlimitedApprovals > 0
           ? `${summary.approvals} (${summary.unlimitedApprovals} unlimited)`
           : `${summary.approvals}`,
+    });
+  }
+
+  if (evidence.simulation.traceAvailable === false && summary.totalEvents === 0) {
+    rows.push({
+      id: "simulation-trace-unavailable",
+      label: "Event details",
+      value: "Not available, the RPC does not support debug_traceCall on this chain",
     });
   }
 

@@ -49,12 +49,12 @@ export function canonicalizeSignature(sig: string): string {
 
   // Parse the params, stripping variable names and keeping only types.
   // In ERC-7730 signatures, each parameter is "type [name]" where name is optional.
-  // Tuples are "(type1 name1, type2 name2) tupleName" — the tuple itself is the type.
+  // Tuples are "(type1 name1, type2 name2) tupleName", the tuple itself is the type.
   let result = "";
   let i = 0;
   let tokenStart = -1;
   let lastType = "";
-  // After closing a tuple ")", the tuple itself is the type — any following
+  // After closing a tuple ")", the tuple itself is the type, any following
   // token before "," or ")" is just a variable name to discard.
   let afterTupleClose = false;
 
@@ -105,7 +105,7 @@ export function canonicalizeSignature(sig: string): string {
       result += ",";
       afterTupleClose = false;
     } else if (ch === " ") {
-      // Space separates type from name — keep the first token (type)
+      // Space separates type from name, keep the first token (type)
       if (tokenStart !== -1) {
         flushPendingToken(i);
         tokenStart = -1;

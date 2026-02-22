@@ -340,7 +340,7 @@ export function formatAddressForTable(address: string, availableWidth: number): 
 }
 
 /**
- * Format a URL for display — always shows the full URL.
+ * Format a URL for display, always shows the full URL.
  * The table renderer handles wrapping onto multiple lines.
  */
 export function formatUrl(url: string): string {

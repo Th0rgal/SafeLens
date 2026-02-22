@@ -62,6 +62,7 @@ export function InterpretationCard({
     <Card className={style.card}>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
+          <CardTitle>Clear Signing</CardTitle>
           <span className={`rounded px-2 py-0.5 text-xs font-medium ${style.protocolBadge}`}>
             {interpretation.protocol}
           </span>

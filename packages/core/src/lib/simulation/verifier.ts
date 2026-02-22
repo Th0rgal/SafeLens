@@ -1,5 +1,5 @@
 /**
- * Simulation verification — structural consistency checks.
+ * Simulation verification: structural consistency checks.
  *
  * Since we cannot re-run the simulation without an RPC, verification
  * is limited to structural integrity: valid hex formats, consistent
@@ -110,7 +110,29 @@ export function verifySimulation(
     errors.push("One or more simulation logs have invalid structure");
   }
 
-  // 5. State diffs (optional)
+  // 5. Native transfers (optional)
+  if (simulation.nativeTransfers) {
+    const ntValid = simulation.nativeTransfers.every(
+      (nt) =>
+        /^0x[0-9a-fA-F]{40}$/i.test(nt.from) &&
+        /^0x[0-9a-fA-F]{40}$/i.test(nt.to) &&
+        /^\d+$/.test(nt.value) &&
+        BigInt(nt.value) > 0n
+    );
+    checks.push({
+      id: "native-transfers",
+      label: "Native transfers",
+      passed: ntValid,
+      detail: ntValid
+        ? `${simulation.nativeTransfers.length} transfer(s)`
+        : "One or more native transfers have invalid structure",
+    });
+    if (!ntValid) {
+      errors.push("One or more native transfers have invalid structure");
+    }
+  }
+
+  // 6. State diffs (optional)
   if (simulation.stateDiffs) {
     const diffsValid = simulation.stateDiffs.every(
       (diff) =>
@@ -141,7 +163,7 @@ export function verifySimulation(
   });
 
   // 6b. Cross-validate success flag against returnData content.
-  // Safe's execTransaction returns abi.encode(bool) — 32 bytes where
+  // Safe's execTransaction returns abi.encode(bool), 32 bytes where
   // the last byte is 0x01 for true. If success=true but returnData
   // decodes to false (or contains a revert selector), the package
   // may have been tampered with.
@@ -152,7 +174,7 @@ export function verifySimulation(
     // Standard revert selector: Error(string) = 0x08c379a0
     const REVERT_SELECTOR = "0x08c379a0";
 
-    // Short return data — can't meaningfully decode, skip check
+    // Short return data, can't meaningfully decode, skip check
     if (rd.length >= 66) {
       // Safe's execTransaction returns abi.encode(bool): 32 bytes.
       // 0x0000...0001 = true (success), 0x0000...0000 = false (inner revert).
@@ -165,17 +187,17 @@ export function verifySimulation(
       let detail: string;
 
       if (rd === EXEC_TX_TRUE) {
-        // Perfect match — no check needed, skip entirely
+        // Perfect match, no check needed, skip entirely
         consistencyPassed = true;
         detail = "Return data is consistent with success flag";
       } else if (isFalseBool) {
         consistencyPassed = false;
         detail =
-          "Return data encodes false but success=true — possible tampering";
+          "Return data encodes false but success=true, possible tampering";
       } else if (isRevertPayload) {
         consistencyPassed = false;
         detail =
-          "Return data contains a revert payload but success=true — possible tampering";
+          "Return data contains a revert payload but success=true, possible tampering";
       } else {
         consistencyPassed = true;
         detail = "Return data is consistent with success flag";

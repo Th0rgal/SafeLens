@@ -35,7 +35,7 @@ export function normalizeCallSteps(
 
   if (!decoded.method) return [];
 
-  // multiSend — extract inner transactions from valueDecoded
+  // multiSend - extract inner transactions from valueDecoded
   if (decoded.method === "multiSend") {
     const txsParam = decoded.parameters?.find((p) => p.name === "transactions");
     const inner = txsParam?.valueDecoded;

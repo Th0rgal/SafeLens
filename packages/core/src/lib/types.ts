@@ -144,6 +144,16 @@ export const simulationLogSchema = z.object({
 
 export type SimulationLog = z.infer<typeof simulationLogSchema>;
 
+// Native value transfer (ETH, xDAI, etc.) extracted from call trace
+export const nativeTransferSchema = z.object({
+  from: addressSchema,
+  to: addressSchema,
+  /** Decimal string in wei. */
+  value: z.string(),
+});
+
+export type NativeTransfer = z.infer<typeof nativeTransferSchema>;
+
 // State diff entry
 export const stateDiffEntrySchema = z.object({
   address: addressSchema,
@@ -163,7 +173,7 @@ const consensusProofBaseSchema = z.object({
   blockNumber: z.number(),
 });
 
-// Beacon consensus proof section (Phase 4 — Helios light client verification).
+// Beacon consensus proof section (Phase 4: Helios light client verification).
 // Contains beacon chain light client data that allows offline BLS verification.
 const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
   consensusMode: z.literal("beacon").optional(),
@@ -201,28 +211,20 @@ export const consensusProofSchema = z.union([
 
 export type ConsensusProof = z.infer<typeof consensusProofSchema>;
 
-// Native transfer entry from debug_traceCall value transfers
-export const nativeTransferSchema = z.object({
-  from: addressSchema,
-  to: addressSchema,
-  value: z.string(),
-});
-
-export type NativeTransferEntry = z.infer<typeof nativeTransferSchema>;
-
 // Simulation section
 export const simulationSchema = z.object({
   success: z.boolean(),
   returnData: hexDataSchema.nullable(),
   gasUsed: z.string(),
   logs: z.array(simulationLogSchema),
-  stateDiffs: z.array(stateDiffEntrySchema).optional(),
-  /** Native ETH/gas-token transfers extracted from trace data. */
   nativeTransfers: z.array(nativeTransferSchema).optional(),
+  stateDiffs: z.array(stateDiffEntrySchema).optional(),
   blockNumber: z.number(),
   /** RFC3339 timestamp for the block used during simulation, when available. */
   blockTimestamp: z.string().datetime({ offset: true }).optional(),
   /** Whether debug_traceCall was available for this simulation. */
+  /** Whether debug_traceCall was available on the RPC. When false, logs and
+   *  nativeTransfers are unavailable (not just empty). */
   traceAvailable: z.boolean().optional(),
   trust: trustClassificationSchema,
 });

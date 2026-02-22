@@ -28,11 +28,11 @@ interface DataDecoded {
  * Extract a value from dataDecoded using a JSONPath-like expression.
  *
  * Supported paths:
- * - #.paramName — calldata parameter
- * - @.value — transaction ETH value
- * - @.from — transaction sender
- * - @.to — transaction recipient
- * - $.metadata.constants.X — metadata constant (resolved before this)
+ * - #.paramName: calldata parameter
+ * - @.value: transaction ETH value
+ * - @.from: transaction sender
+ * - @.to: transaction recipient
+ * - $.metadata.constants.X: metadata constant (resolved before this)
  */
 function extractValue(
   path: string,
@@ -76,7 +76,7 @@ function extractValue(
     return txTo ?? null;
   }
 
-  // Bare path (e.g. "makerOrder.takingAmount", "_value", "amount") — used by ERC-7730 descriptors.
+  // Bare path (e.g. "makerOrder.takingAmount", "_value", "amount"), used by ERC-7730 descriptors.
   // These reference calldata parameters by their ERC-7730 name, not by #. prefix.
   if (!path.startsWith("$")) {
     const parts = path.split(".");
@@ -209,7 +209,7 @@ function formatValue(
       return toAddress(value);
 
     case "amount":
-      // Native currency amount — 18 decimals.
+      // Native currency amount, 18 decimals.
       try {
         const formatted = formatUnits(BigInt(value), 18);
         return `${formatted} ${nativeTokenSymbol}`;
@@ -229,7 +229,7 @@ function formatValue(
         }
       }
 
-      // No static token metadata — resolve tokenPath/token and look up token list
+      // No static token metadata, resolve tokenPath/token and look up token list
       const tokenPath = (field.params?.tokenPath as string) ?? field.tokenPath;
       const tokenRef = field.params?.token as string | undefined;
 
@@ -372,7 +372,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
         // Try by method name first (most descriptors use human-readable signatures)
         let entry = lookupFormatByMethodName(index, chainId, txTo, decoded.method);
 
-        // Fall back to selector lookup — some descriptors (e.g. Uniswap V3 Router)
+        // Fall back to selector lookup, some descriptors (e.g. Uniswap V3 Router)
         // use raw 4-byte selectors as format keys, so method name lookup won't match.
         if (!entry && txData && txData.length >= 10) {
           const selector = txData.slice(0, 10).toLowerCase();
@@ -385,7 +385,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
       }
     }
 
-    // Fallback: no dataDecoded — extract 4-byte selector from raw calldata and decode it
+    // Fallback: no dataDecoded, extract 4-byte selector from raw calldata and decode it
     if (txData && txData.length >= 10) {
       const selector = txData.slice(0, 10).toLowerCase();
 
@@ -398,7 +398,7 @@ export function createERC7730Interpreter(index: DescriptorIndex) {
             return buildInterpretation(entry, decoded, txTo, txChainId, txValue, txFrom, nativeTokenSymbol);
           }
 
-          // Decoding failed — return interpretation with intent only
+          // Decoding failed, return interpretation with intent only
           const intent = entry.formatEntry.intent ?? "Transaction";
           return {
             id: "erc7730",

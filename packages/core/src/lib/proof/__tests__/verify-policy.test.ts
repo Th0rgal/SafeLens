@@ -2,7 +2,7 @@
  * Policy proof verification tests.
  *
  * Uses a real eth_getProof response from Ethereum mainnet for the Safe at
- * 0x9fC3dc011b461664c835F2527fffb1169b3C213e — the same Safe used in
+ * 0x9fC3dc011b461664c835F2527fffb1169b3C213e, the same Safe used in
  * the CowSwap TWAP test fixture.
  */
 

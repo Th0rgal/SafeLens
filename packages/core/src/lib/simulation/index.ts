@@ -12,15 +12,14 @@ export {
 export {
   decodeSimulationEvents,
   decodeNativeTransfers,
-  computeRemainingApprovals,
   type DecodedEvent,
   type DecodedEventKind,
-  type NativeTransfer,
-  type RemainingApproval,
 } from "./event-decoder";
 
 export {
   summarizeSimulationEvents,
+  computeRemainingApprovals,
   type SimulationEventsSummary,
   type SimulationTransferPreview,
+  type RemainingApproval,
 } from "./summary";

@@ -4,9 +4,9 @@
  * ┌─────────────────────────────────────────────────────────────────┐
  * │  SUPPORTED PROTOCOLS                                           │
  * │                                                                 │
- * │  id              │ protocol  │ action        │ severity         │
- * │  ────────────────┼───────────┼───────────────┼─────────────     │
- * │  erc20-transfer  │ ERC-20       │ Transfer/…     │ info/warning  │
+ * │  id              │ protocol     │ action         │ severity      │
+ * │  ────────────────┼──────────────┼────────────────┼─────────────  │
+ * │  token-transfer  │ ERC-20/Native│ Transfer/…     │ info/warning  │
  * │  cowswap-twap    │ CoW Swap     │ TWAP Order     │ info          │
  * │  cowswap-presign │ CoW Protocol │ Pre-Sign Order │ info          │
  * │  safe-policy     │ Safe         │ Policy Change  │ critical      │
@@ -17,7 +17,7 @@
  */
 
 import type { Interpretation, Interpreter } from "./types";
-import { interpretERC20Transfer } from "./token-transfer";
+import { interpretTokenTransfer } from "./token-transfer";
 import { interpretCowSwapTwap } from "./cowswap-twap";
 import { interpretCowSwapPreSign } from "./cowswap-presign";
 import { interpretSafePolicy } from "./safe-policy";
@@ -28,7 +28,7 @@ import { getGlobalIndex } from "../erc7730/global-index";
 // Each interpreter is tried in order; the first non-null result wins.
 // Hand-coded interpreters (CowSwap, Safe) run first, ERC-7730 as fallback.
 
-// Lazy ERC-7730 interpreter — caches the inner interpreter and rebuilds
+// Lazy ERC-7730 interpreter: caches the inner interpreter and rebuilds
 // only when the global index identity changes (after setGlobalDescriptors).
 let cachedIndex: ReturnType<typeof getGlobalIndex> | null = null;
 let cachedInterpreter: ReturnType<typeof createERC7730Interpreter> | null = null;
@@ -61,7 +61,7 @@ const erc7730Interpreter: Interpreter = (
 };
 
 const INTERPRETERS: Interpreter[] = [
-  interpretERC20Transfer,
+  interpretTokenTransfer,
   interpretCowSwapTwap,
   interpretCowSwapPreSign,
   interpretSafePolicy,
@@ -109,7 +109,7 @@ export type {
   CowSwapTwapDetails,
   CowSwapPreSignDetails,
   SafePolicyChangeDetails,
-  ERC20TransferDetails,
+  TokenTransferDetails,
   ERC7730Details,
   TokenInfo,
 } from "./types";
