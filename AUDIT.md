@@ -157,14 +157,16 @@ Evidence packages may contain sensitive pre-execution transaction details. Airga
 | System clock trust for `packagedAt` | Operator responsibility; no independent time source available |
 | OP Stack/Linea envelope forgery by compromised RPC | Explicitly labeled as partial trust; cannot reach fully-verifiable |
 | Contract signatures (v=0) not verified offline | Require on-chain call; flagged as warning in verification report |
+| Beacon API responses not Zod-validated (generation only) | Malformed beacon data causes runtime errors during generation, not during verification. Verification uses the Rust Helios path which has its own SSZ validation. Fixing requires defining schemas for all beacon light-client API response shapes |
 
 ### Open Issues (this PR)
 
 | Issue | Severity | Location |
 |---|---|---|
 | `fail_result()` drops accumulated checks in non-beacon envelope verifier | Medium | `consensus.rs:1258` |
+| `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:213` |
 | Future-dated envelope timestamps bypass staleness check (clamped to 0) | Low | `consensus.rs:885` |
-| Attention summary dedupe uses label+detail as key; conceptually-same but textually-different items won't dedupe | Low | `safety-checks.tsx:386` |
+| Unnormalized state root comparison may cause false rejection in envelope verifier | Low | `consensus.rs` |
 | No Rust toolchain in CI for desktop build verification | Process | CI config |
 
 ## External Dependencies
