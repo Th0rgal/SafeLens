@@ -9,8 +9,8 @@ Four components in a monorepo:
 | Component | Role | Network access |
 |---|---|---|
 | `packages/core` | Shared crypto verification library (TS) | None during verify |
-| `apps/generator` | Next.js web app — creates evidence packages | Yes (Safe API, RPC, Beacon) |
-| `apps/desktop` | Tauri app — airgapped verification | None (`connect-src 'none'` CSP) |
+| `apps/generator` | Next.js web app, creates evidence packages | Yes (Safe API, RPC, Beacon) |
+| `apps/desktop` | Tauri app, airgapped verification | None (`connect-src 'none'` CSP) |
 | `packages/cli` | CLI wrapper over core | Yes for creation, none for verify |
 
 ### Data Flow
@@ -63,7 +63,7 @@ Any failure → stays `rpc-sourced`. See `evaluateConsensusTrustDecision()` in `
 
 ### OP Stack / Linea Trust Boundary
 
-OP Stack and Linea consensus proofs are RPC-sourced execution header reads — **not** independent consensus verification. A compromised RPC can forge both sides.
+OP Stack and Linea consensus proofs are RPC-sourced execution header reads, **not** independent consensus verification. A compromised RPC can forge both sides.
 
 **Defense**: These modes cannot promote packages to `fully-verifiable`. The creator enforces `hasVerifierSupportedConsensusProof = hasConsensusProofArtifact && proofConsensusMode === "beacon"` (`creator.ts:228-229`).
 
@@ -133,18 +133,18 @@ Defense against **hash substitution**: A malicious generator could provide valid
 
 ### Why a known private key for simulation?
 
-Simulation uses Hardhat account #0 (`0xac09...ff80`) — universally known and never controls real funds. Safe here because:
+Simulation uses Hardhat account #0 (`0xac09...ff80`), universally known and never controls real funds. Safe here because:
 - Only used in `eth_call` (read-only RPC method)
 - State overrides plant this as the sole 1-of-1 owner
 - Never used with `eth_sendRawTransaction`
 
 ### Why separate beacon vs non-beacon trust paths?
 
-Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads — a compromised RPC can forge them. Different trust levels reflect this.
+Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads, a compromised RPC can forge them. Different trust levels reflect this.
 
 ### Why offline verification?
 
-The app is intended to be installed on a computer you trust. Even if your main computer where you received the signing request is compromised — as well as the RPC node you are using, the Gnosis Safe API and frontend — you will never sign something you don't intend to. It becomes impossible for a compromised attacker to know when, where, and what you signed.
+The app is intended to be installed on a computer you trust. Even if your main computer where you received the signing request is compromised, as well as the RPC node you are using, the Gnosis Safe API and frontend, you will never sign something you don't intend to. It becomes impossible for a compromised attacker to know when, where, and what you signed.
 
 ## Known Risks
 
@@ -164,7 +164,6 @@ The app is intended to be installed on a computer you trust. Even if your main c
 | Issue | Severity | Location |
 |---|---|---|
 | `fail_result()` drops accumulated checks in non-beacon envelope verifier | Medium | `consensus.rs:1258` |
-| `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:213` |
 | Future-dated envelope timestamps bypass staleness check (clamped to 0) | Low | `consensus.rs:885` |
 | Unnormalized state root comparison may cause false rejection in envelope verifier | Low | `consensus.rs` |
 | No Rust toolchain in CI for desktop build verification | Process | CI config |
