@@ -54,6 +54,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+          components: rustfmt
 
       - name: Rust formatting check
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
@@ -67,6 +70,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
 
       - name: Install Linux dependencies
         run: |
