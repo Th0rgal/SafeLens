@@ -223,28 +223,6 @@ fn execute_replay(
     let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
     let mut db = CacheDB::new(EmptyDB::default());
 
-    for account in accounts {
-        let address = parse_address(&account.address, "replay account address")?;
-        let balance = parse_u256(&account.balance)
-            .map_err(|err| format!("invalid replay account balance for {address:#x}: {err}"))?;
-        let code = parse_bytes(&account.code)
-            .map_err(|err| format!("invalid replay account code for {address:#x}: {err}"))?;
-
-        db.insert_account_info(
-            address,
-            AccountInfo::new(balance, account.nonce, B256::ZERO, Bytecode::new_raw(code)),
-        );
-
-        for (slot, value) in &account.storage {
-            let slot_key = parse_u256(slot)
-                .map_err(|err| format!("invalid storage key for {address:#x}: {err}"))?;
-            let slot_value = parse_u256(value)
-                .map_err(|err| format!("invalid storage value for {address:#x}: {err}"))?;
-            db.insert_account_storage(address, slot_key, slot_value)
-                .map_err(|err| format!("failed to seed storage for {address:#x}: {err}"))?;
-        }
-    }
-
     let caller = match input.simulation_witness.replay_caller.as_deref() {
         Some(raw) => parse_address(raw, "simulationWitness.replayCaller")?,
         None => parse_address(&input.safe_address, "safeAddress")?,
@@ -296,24 +274,41 @@ fn execute_replay(
 
     let gas_price = resolve_replay_gas_price(input)?;
     let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
-    let caller_code = caller_account
-        .map(|account| parse_bytes(&account.code))
-        .transpose()
-        .map_err(|err| format!("invalid replay caller code for {caller:#x}: {err}"))?
-        .unwrap_or_default();
-    let caller_balance = caller_account
-        .map(|account| parse_u256(&account.balance))
-        .transpose()
-        .map_err(|err| format!("invalid replay caller balance for {caller:#x}: {err}"))?
-        .unwrap_or(U256::ZERO);
-    if caller_balance < required_caller_balance {
+
+    for account in accounts {
+        let address = parse_address(&account.address, "replay account address")?;
+        let mut balance = parse_u256(&account.balance)
+            .map_err(|err| format!("invalid replay account balance for {address:#x}: {err}"))?;
+        let code = parse_bytes(&account.code)
+            .map_err(|err| format!("invalid replay account code for {address:#x}: {err}"))?;
+
+        if address == caller && balance < required_caller_balance {
+            balance = required_caller_balance;
+        }
+
+        db.insert_account_info(
+            address,
+            AccountInfo::new(balance, account.nonce, B256::ZERO, Bytecode::new_raw(code)),
+        );
+
+        for (slot, value) in &account.storage {
+            let slot_key = parse_u256(slot)
+                .map_err(|err| format!("invalid storage key for {address:#x}: {err}"))?;
+            let slot_value = parse_u256(value)
+                .map_err(|err| format!("invalid storage value for {address:#x}: {err}"))?;
+            db.insert_account_storage(address, slot_key, slot_value)
+                .map_err(|err| format!("failed to seed storage for {address:#x}: {err}"))?;
+        }
+    }
+
+    if caller_account.is_none() {
         db.insert_account_info(
             caller,
             AccountInfo::new(
                 required_caller_balance,
                 caller_nonce,
                 B256::ZERO,
-                Bytecode::new_raw(caller_code),
+                Bytecode::new_raw(Bytes::new()),
             ),
         );
     }
