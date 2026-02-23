@@ -146,11 +146,15 @@ function EvidenceDisplay({
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Partial export reasons */}
-        {evidence.exportContract?.mode === "partial" && displayExportReasons.length > 0 && (
+        {evidence.exportContract?.mode === "partial" && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            {displayExportReasons.map((reason) => (
-              <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
-            ))}
+            {displayExportReasons.length > 0 ? (
+              displayExportReasons.map((reason) => (
+                <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
+              ))
+            ) : (
+              <div>· This package has partial verification coverage for this environment.</div>
+            )}
           </div>
         )}
 

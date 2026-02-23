@@ -249,13 +249,10 @@ fn execute_replay(
         Some(raw) => parse_address(raw, "simulationWitness.replayCaller")?,
         None => parse_address(&input.safe_address, "safeAddress")?,
     };
-    let caller_nonce = accounts
-        .iter()
-        .find(|account| {
-            parse_address(&account.address, "replay account address").ok() == Some(caller)
-        })
-        .map(|account| account.nonce)
-        .unwrap_or(0);
+    let caller_account = accounts.iter().find(|account| {
+        parse_address(&account.address, "replay account address").ok() == Some(caller)
+    });
+    let caller_nonce = caller_account.map(|account| account.nonce).unwrap_or(0);
 
     let to = parse_address(&input.transaction.to, "transaction.to")?;
     let inner_value = parse_u256(&input.transaction.value)
@@ -299,20 +296,12 @@ fn execute_replay(
 
     let gas_price = resolve_replay_gas_price(input)?;
     let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
-    let caller_code = accounts
-        .iter()
-        .find(|account| {
-            parse_address(&account.address, "replay account address").ok() == Some(caller)
-        })
+    let caller_code = caller_account
         .map(|account| parse_bytes(&account.code))
         .transpose()
         .map_err(|err| format!("invalid replay caller code for {caller:#x}: {err}"))?
         .unwrap_or_default();
-    let caller_balance = accounts
-        .iter()
-        .find(|account| {
-            parse_address(&account.address, "replay account address").ok() == Some(caller)
-        })
+    let caller_balance = caller_account
         .map(|account| parse_u256(&account.balance))
         .transpose()
         .map_err(|err| format!("invalid replay caller balance for {caller:#x}: {err}"))?
