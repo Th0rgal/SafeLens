@@ -97,6 +97,7 @@ pub struct SimulationReplayVerificationResult {
     pub success: bool,
     pub reason: String,
     pub error: Option<String>,
+    #[serde(rename = "replayLogs")]
     pub replay_logs: Option<Vec<ReplaySimulationLog>>,
 }
 
