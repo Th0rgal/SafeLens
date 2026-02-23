@@ -251,12 +251,14 @@ fn execute_replay(
     };
     let caller_nonce = accounts
         .iter()
-        .find(|account| parse_address(&account.address, "replay account address").ok() == Some(caller))
+        .find(|account| {
+            parse_address(&account.address, "replay account address").ok() == Some(caller)
+        })
         .map(|account| account.nonce)
         .unwrap_or(0);
 
     let to = parse_address(&input.transaction.to, "transaction.to")?;
-    let _inner_value = parse_u256(&input.transaction.value)
+    let inner_value = parse_u256(&input.transaction.value)
         .map_err(|err| format!("invalid transaction.value: {err}"))?;
 
     let data = match input.transaction.data.as_deref() {
@@ -296,17 +298,21 @@ fn execute_replay(
     };
 
     let gas_price = resolve_replay_gas_price(input)?;
-    let required_caller_balance = U256::from(gas_limit) * U256::from(gas_price);
+    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
     let caller_code = accounts
         .iter()
-        .find(|account| parse_address(&account.address, "replay account address").ok() == Some(caller))
+        .find(|account| {
+            parse_address(&account.address, "replay account address").ok() == Some(caller)
+        })
         .map(|account| parse_bytes(&account.code))
         .transpose()
         .map_err(|err| format!("invalid replay caller code for {caller:#x}: {err}"))?
         .unwrap_or_default();
     let caller_balance = accounts
         .iter()
-        .find(|account| parse_address(&account.address, "replay account address").ok() == Some(caller))
+        .find(|account| {
+            parse_address(&account.address, "replay account address").ok() == Some(caller)
+        })
         .map(|account| parse_u256(&account.balance))
         .transpose()
         .map_err(|err| format!("invalid replay caller balance for {caller:#x}: {err}"))?
@@ -329,7 +335,7 @@ fn execute_replay(
         .gas_price(gas_price)
         .nonce(caller_nonce)
         .chain_id(Some(input.chain_id))
-        .value(U256::ZERO)
+        .value(inner_value)
         .data(data)
         .build()
         .map_err(|err| format!("failed to build replay tx: {err:?}"))?;
@@ -1042,9 +1048,6 @@ mod tests {
             result.executed,
             "expected replay to execute, got: {result:?}"
         );
-        assert!(
-            result.success,
-            "expected replay success, got: {result:?}"
-        );
+        assert!(result.success, "expected replay success, got: {result:?}");
     }
 }
