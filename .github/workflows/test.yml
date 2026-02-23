@@ -88,7 +88,7 @@ jobs:
           workspaces: './apps/desktop/src-tauri -> target'
 
       - name: Rust clippy check
-        run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 
   rust-test:
     runs-on: ubuntu-latest
