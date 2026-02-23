@@ -13,6 +13,7 @@ import type {
   SafeTxHashDetails,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
+  SimulationWitnessVerificationResult,
   SimulationReplayVerificationResult,
   ConsensusVerificationResult,
   SettingsConfig,
@@ -46,6 +47,7 @@ type EvidenceVerificationState = {
   hashMatch: boolean;
   policyProof: PolicyProofVerificationResult | undefined;
   simulationVerification: SimulationVerificationResult | undefined;
+  simulationWitnessVerification: SimulationWitnessVerificationResult | undefined;
   simulationReplayVerification: SimulationReplayVerificationResult | undefined;
   consensusVerification: ConsensusVerificationResult | undefined;
   consensusSourceSummary: string;
@@ -61,6 +63,7 @@ const EMPTY_STATE: EvidenceVerificationState = {
   hashMatch: true,
   policyProof: undefined,
   simulationVerification: undefined,
+  simulationWitnessVerification: undefined,
   simulationReplayVerification: undefined,
   consensusVerification: undefined,
   consensusSourceSummary: "",
@@ -116,6 +119,7 @@ export function useEvidenceVerification(
       hashMatch: true,
       policyProof: undefined,
       simulationVerification: undefined,
+      simulationWitnessVerification: undefined,
       simulationReplayVerification: undefined,
       consensusVerification: undefined,
       consensusSourceSummary: currentEvidence.consensusProof
@@ -146,6 +150,7 @@ export function useEvidenceVerification(
           hashMatch: report.hashMatch,
           policyProof: report.policyProof,
           simulationVerification: report.simulationVerification,
+          simulationWitnessVerification: report.simulationWitnessVerification,
           simulationReplayVerification: undefined,
           consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
           consensusTrustDecisionReason:

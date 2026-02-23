@@ -96,6 +96,7 @@ export default function VerifyScreen() {
     hashMatch,
     policyProof,
     simulationVerification,
+    simulationWitnessVerification,
     simulationReplayVerification,
     consensusVerification,
     consensusSourceSummary,
@@ -156,7 +157,12 @@ export default function VerifyScreen() {
         consensusSourceSummary,
         consensusTrustDecisionReason
       ),
-      classifySimulationStatus(evidence, simulationVerification, simulationReplayVerification),
+      classifySimulationStatus(
+        evidence,
+        simulationVerification,
+        simulationWitnessVerification,
+        simulationReplayVerification
+      ),
     ];
   }, [
     evidence,
@@ -165,6 +171,7 @@ export default function VerifyScreen() {
     consensusSourceSummary,
     consensusTrustDecisionReason,
     simulationVerification,
+    simulationWitnessVerification,
     simulationReplayVerification,
   ]);
   const decodedCallsSummary = useMemo(() => {

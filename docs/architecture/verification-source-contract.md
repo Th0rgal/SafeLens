@@ -81,6 +81,9 @@ Notes:
 
 - In witness-only packages, simulation effects are intentionally omitted from
   packaged RPC output and are derived from local replay during verification.
+- Desktop `Simulation outcome` must not return a success/check state for
+  witness-only packages unless both witness verification and replay verification
+  succeed.
 - Witness-only replay requires complete replay inputs: world-state accounts and
   pinned block environment (timestamp/gas/basefee/beneficiary, plus optional
   prevrandao/difficulty). If block context is missing, replay must fail closed.

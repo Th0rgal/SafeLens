@@ -5,6 +5,7 @@ import type {
   EvidencePackage,
   PolicyProofVerificationResult,
   SimulationReplayVerificationResult,
+  SimulationWitnessVerificationResult,
   SimulationVerificationResult,
 } from "@safelens/core";
 import {
@@ -497,6 +498,11 @@ describe("classifySimulationStatus", () => {
         errors: [],
       } as SimulationVerificationResult,
       {
+        valid: true,
+        errors: [],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
         executed: true,
         success: false,
         reason: "simulation-replay-exec-error",
@@ -507,6 +513,45 @@ describe("classifySimulationStatus", () => {
     expect(status.status).toBe("error");
     expect(status.reasonCode).toBe("simulation-replay-exec-error");
     expect(status.detail).toBe("replay failed");
+  });
+
+  it("returns error for witness-only simulation when witness proof is invalid even if replay passes", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: false,
+        errors: ["witness digest mismatch"],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-matched",
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("simulation-witness-proof-failed");
+    expect(status.detail).toBe("witness digest mismatch");
   });
 });
 

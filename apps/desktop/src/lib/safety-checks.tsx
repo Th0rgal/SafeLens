@@ -11,6 +11,7 @@ import {
   type ConsensusVerifierErrorCode,
   type EvidencePackage,
   type PolicyProofVerificationResult,
+  type SimulationWitnessVerificationResult,
   type SimulationVerificationResult,
   type SimulationReplayVerificationResult,
   summarizeSimulationEvents,
@@ -325,6 +326,7 @@ export function classifyConsensusStatus(
 export function classifySimulationStatus(
   evidence: EvidencePackage,
   simulationVerification: SimulationVerificationResult | undefined,
+  simulationWitnessVerification?: SimulationWitnessVerificationResult,
   simulationReplayVerification?: SimulationReplayVerificationResult
 ): SafetyCheck {
   if (!simulationVerification || !evidence.simulation) {
@@ -362,6 +364,18 @@ export function classifySimulationStatus(
 
   const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
   if (witnessOnlySimulation) {
+    if (simulationWitnessVerification && simulationWitnessVerification.valid !== true) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "error",
+        detail:
+          simulationWitnessVerification.errors?.[0] ??
+          "Simulation witness verification failed for this witness-only package.",
+        reasonCode: "simulation-witness-proof-failed",
+      };
+    }
+
     if (!simulationReplayVerification) {
       return {
         id: "simulation-outcome",
