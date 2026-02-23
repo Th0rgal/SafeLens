@@ -5,7 +5,9 @@ import { getSafeApiUrl } from "./url-parser";
 // Minimal schema for the Safe info endpoint — only the fields we need.
 // Validates nonce at the trust boundary to prevent a malicious API from
 // injecting arbitrary values that would affect pending-transaction filtering.
-const safeInfoNonceSchema = z.object({ nonce: z.number().int().nonnegative() });
+const safeInfoNonceSchema = z.object({
+  nonce: z.coerce.number().int().nonnegative(),
+});
 
 /**
  * Fetch a Safe transaction by its safe tx hash

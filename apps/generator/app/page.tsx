@@ -104,6 +104,14 @@ function EvidenceDisplay({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const isFullyVerifiable = evidence.exportContract?.mode === "fully-verifiable";
+  const displayExportReasons =
+    evidence.exportContract?.reasons.filter((reason) => {
+      if (reason !== "missing-simulation-witness") return true;
+      // Only surface this when the package is explicitly witness-only.
+      // Otherwise simulation effects are still included and desktop can
+      // validate execution without requiring replay-derived effects.
+      return evidence.simulationWitness?.witnessOnly === true;
+    }) ?? [];
 
   // Decode simulation events
   const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
@@ -138,9 +146,9 @@ function EvidenceDisplay({
       </CardHeader>
       <CardContent className="space-y-3">
         {/* Partial export reasons */}
-        {evidence.exportContract?.mode === "partial" && (
+        {evidence.exportContract?.mode === "partial" && displayExportReasons.length > 0 && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            {evidence.exportContract.reasons.map((reason) => (
+            {displayExportReasons.map((reason) => (
               <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
             ))}
           </div>
