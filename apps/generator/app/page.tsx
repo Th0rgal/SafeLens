@@ -206,7 +206,7 @@ function EvidenceDisplay({
             )}
             {transfers.length === 0 && sim.success && witnessOnlySimulation && (
               <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                This is a witness-only package. Token movements are intentionally omitted here and will be derived during local replay verification in Desktop/CLI.
+                This is a witness-only package. No token movements were detected for this simulation.
               </div>
             )}
             {approvals.length > 0 && (
@@ -338,6 +338,27 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+function redactRpcUrl(value?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value);
+    if (parsed.username || parsed.password) {
+      parsed.username = parsed.username ? "***" : "";
+      parsed.password = parsed.password ? "***" : "";
+    }
+
+    const sensitiveKeys = ["api-key", "apikey", "key", "token", "auth", "access_token"];
+    for (const key of sensitiveKeys) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, "***");
+      }
+    }
+    return parsed.toString();
+  } catch {
+    return value;
+  }
+}
+
 const SAFE_MULTISIG_TX_TOPIC =
   "0x66753cd2356569ee081232e3be8909b950e0a76c1f8460c3a5e3c2be32b11bed";
 const SAFE_EXECUTION_SUCCESS_TOPIC =
@@ -377,6 +398,10 @@ function logEvidenceDebugSnapshot(
     console.info(
       "[SafeLens debug] Keep this diagnostics block. It is intentionally verbose for bug reports and should not be removed."
     );
+    const contextForLog = {
+      ...context,
+      rpcUrl: redactRpcUrl(context.rpcUrl),
+    };
     console.debug("[SafeLens debug] Bug-report identifiers:", {
       safeTxHash: evidence.safeTxHash,
       safeAddress: evidence.safeAddress,
@@ -384,7 +409,7 @@ function logEvidenceDebugSnapshot(
       txNonce: evidence.transaction.nonce,
       packagedAt: evidence.packagedAt,
     });
-    console.debug("[SafeLens debug] Enrichment context:", context);
+    console.debug("[SafeLens debug] Enrichment context:", contextForLog);
 
     if (sim) {
       console.debug("[SafeLens debug] Simulation result:", {
