@@ -324,6 +324,7 @@ describe("export contract schema", () => {
       "simulation-fetch-failed",
       "missing-simulation",
       "missing-simulation-witness",
+      "simulation-replay-unsupported-operation",
     ] as const;
 
     for (const reason of reasons) {

@@ -89,6 +89,9 @@ Notes:
 - Witness-only replay requires complete replay inputs: world-state accounts and
   pinned block environment (timestamp/gas/basefee/beneficiary, plus optional
   prevrandao/difficulty). If block context is missing, replay must fail closed.
+- Replay currently supports `operation=0` (`CALL`) only. For
+  `operation=1` (`DELEGATECALL`), generator must keep packaged simulation
+  effects and export cannot be labeled `fully-verifiable`.
 - Log equality checks apply when packaged logs are present; witness-only replay
   still enforces success/return-data/gas policy checks.
 - Replay success currently proves deterministic consistency against provided

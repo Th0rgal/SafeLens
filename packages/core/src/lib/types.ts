@@ -302,6 +302,7 @@ export const exportContractReasonSchema = z.enum([
   "simulation-fetch-failed",
   "missing-simulation",
   "missing-simulation-witness",
+  "simulation-replay-unsupported-operation",
 ]);
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
@@ -324,6 +325,8 @@ export const EXPORT_CONTRACT_REASON_LABELS: Record<ExportContractReason, string>
   "missing-simulation": "Simulation result was not included.",
   "missing-simulation-witness":
     "Simulation witness/replay inputs were not included, so simulation cannot be fully verified offline.",
+  "simulation-replay-unsupported-operation":
+    "Simulation replay currently supports CALL (operation=0) only; DELEGATECALL evidence cannot be fully replay-verified offline.",
 };
 
 export function getExportContractReasonLabel(reason: ExportContractReason): string {

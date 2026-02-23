@@ -48,6 +48,8 @@ The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capab
 
 The generator/CLI can attach optional `onchainPolicyProof`, `simulation`, and `consensusProof` sections. Desktop/CLI verify consume these sections when present.
 
+Simulation replay note: witness-only replay currently supports `CALL` (`operation=0`) paths. `DELEGATECALL` (`operation=1`) packages remain partial and keep packaged simulation effects.
+
 ### Desktop vs CLI
 
 - **Desktop**: full verification path, including local simulation replay (`revm`) and consensus-proof verification.

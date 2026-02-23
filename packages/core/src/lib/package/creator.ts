@@ -170,7 +170,9 @@ export async function enrichWithSimulation(
     Array.isArray(simulationWitness?.replayAccounts) &&
     simulationWitness.replayAccounts.length > 0;
   const hasReplayBlockContext = Boolean(simulationWitness?.replayBlock);
-  const useWitnessOnlySimulation = hasReplayAccounts && hasReplayBlockContext;
+  const hasReplaySupportedOperation = evidence.transaction.operation === 0;
+  const useWitnessOnlySimulation =
+    hasReplaySupportedOperation && hasReplayAccounts && hasReplayBlockContext;
   const packagedSimulation = useWitnessOnlySimulation
     ? {
         ...simulation,
@@ -275,6 +277,9 @@ export function finalizeEvidenceExport(
     Array.isArray(evidence.simulationWitness?.replayAccounts) &&
     evidence.simulationWitness.replayAccounts.length > 0 &&
     Boolean(evidence.simulationWitness.replayBlock);
+  const hasReplaySupportedOperation = evidence.transaction.operation === 0;
+  const hasReplayCapableSimulationWitnessInputs =
+    hasReplaySupportedOperation && hasSimulationWitnessReplayInputs;
   const reasons = new Set<ExportContractReason>();
 
   if (!hasConsensusProofArtifact) {
@@ -317,6 +322,8 @@ export function finalizeEvidenceExport(
     } else {
       reasons.add("missing-simulation");
     }
+  } else if (!hasReplaySupportedOperation) {
+    reasons.add("simulation-replay-unsupported-operation");
   } else if (!hasSimulationWitnessReplayInputs) {
     reasons.add("missing-simulation-witness");
   }
@@ -325,7 +332,7 @@ export function finalizeEvidenceExport(
     hasVerifierSupportedConsensusProof &&
     hasOnchainPolicyProof &&
     hasSimulation &&
-    hasSimulationWitnessReplayInputs;
+    hasReplayCapableSimulationWitnessInputs;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",
