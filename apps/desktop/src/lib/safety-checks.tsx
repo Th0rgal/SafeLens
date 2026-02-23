@@ -4,7 +4,9 @@ import {
   findLegacyPendingConsensusExportReason,
   isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
+  summarizeConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
+  type ConsensusTrustDecisionReason,
   type ConsensusVerificationResult,
   type ConsensusVerifierErrorCode,
   type EvidencePackage,
@@ -190,6 +192,21 @@ function assertUnreachableConsensusMode(mode: never): never {
   throw new Error(`Unhandled consensus mode: ${String(mode)}`);
 }
 
+function getConsensusTrustDecisionDetail(
+  reason: Exclude<ConsensusTrustDecisionReason, null>,
+  fallbackSummary: string
+): string {
+  const normalizedFallback = fallbackSummary.trim();
+  if (normalizedFallback.length > 0) {
+    return normalizedFallback;
+  }
+
+  const summarized = summarizeConsensusTrustDecisionReason(reason);
+  return summarized
+    ? `Consensus trust did not upgrade: ${summarized}.`
+    : "Consensus trust did not upgrade.";
+}
+
 export function classifyPolicyStatus(
   evidence: EvidencePackage,
   policyProof: PolicyProofVerificationResult | undefined
@@ -238,7 +255,8 @@ export function classifyPolicyStatus(
 export function classifyConsensusStatus(
   evidence: EvidencePackage,
   consensusVerification: ConsensusVerificationResult | undefined,
-  fallbackSummary: string
+  fallbackSummary: string,
+  consensusTrustDecisionReason?: ConsensusTrustDecisionReason
 ): SafetyCheck {
   if (!evidence.consensusProof) {
     const reasonCode = getNoProofConsensusReasonCode(evidence);
@@ -269,6 +287,21 @@ export function classifyConsensusStatus(
   }
 
   if (consensusVerification.valid) {
+    if (consensusTrustDecisionReason) {
+      return {
+        id: "chain-state-finalized",
+        label: "Chain state is finalized",
+        status: isWarningConsensusTrustDecisionReason(consensusTrustDecisionReason)
+          ? "warning"
+          : "error",
+        detail: getConsensusTrustDecisionDetail(
+          consensusTrustDecisionReason,
+          fallbackSummary
+        ),
+        reasonCode: consensusTrustDecisionReason,
+      };
+    }
+
     return {
       id: "chain-state-finalized",
       label: "Chain state is finalized",

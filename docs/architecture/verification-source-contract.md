@@ -50,6 +50,14 @@ Rules:
 
 For OP Stack and Linea, summary/detail must preserve the non-equivalence boundary to Beacon light-client finality.
 
+Desktop UI rule:
+
+- `Chain state is finalized` must consume the core `consensusTrustDecisionReason`.
+- Even when `consensusVerification.valid === true`, any non-null trust decision reason
+  (for example `state-root-mismatch-policy-proof` or
+  `block-number-mismatch-policy-proof`) must downgrade the safety check from `check`
+  to warning/error according to `isWarningConsensusTrustDecisionReason(...)`.
+
 ## Decoded calldata trust matrix
 
 `decoded-calldata` trust is derived from `decodedCalldataVerification`:

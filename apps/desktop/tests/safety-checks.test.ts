@@ -324,6 +324,28 @@ describe("classifyConsensusStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toBe("Verified at block 999.");
   });
+
+  it("returns error when consensus trust decision stays downgraded despite verifier success", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("beacon"),
+      makeConsensusVerification({
+        valid: true,
+        state_root_matches: true,
+        verified_state_root: `0x${"a".repeat(64)}`,
+        verified_block_number: 1001,
+        error: null,
+        error_code: null,
+      }),
+      "Consensus proof included, but trust did not upgrade: verified block does not match on-chain policy proof block.",
+      "block-number-mismatch-policy-proof"
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("block-number-mismatch-policy-proof");
+    expect(status.detail).toBe(
+      "Consensus proof included, but trust did not upgrade: verified block does not match on-chain policy proof block."
+    );
+  });
 });
 
 describe("classifyPolicyStatus", () => {

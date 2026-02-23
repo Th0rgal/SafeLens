@@ -6,6 +6,7 @@ import {
   VERIFICATION_SOURCE_IDS,
 } from "@safelens/core";
 import type {
+  ConsensusTrustDecisionReason,
   EvidencePackage,
   SignatureCheckResult,
   TransactionWarning,
@@ -48,6 +49,7 @@ type EvidenceVerificationState = {
   simulationReplayVerification: SimulationReplayVerificationResult | undefined;
   consensusVerification: ConsensusVerificationResult | undefined;
   consensusSourceSummary: string;
+  consensusTrustDecisionReason: ConsensusTrustDecisionReason | undefined;
 };
 
 const EMPTY_STATE: EvidenceVerificationState = {
@@ -62,6 +64,7 @@ const EMPTY_STATE: EvidenceVerificationState = {
   simulationReplayVerification: undefined,
   consensusVerification: undefined,
   consensusSourceSummary: "",
+  consensusTrustDecisionReason: undefined,
 };
 
 function createConsensusFailureResult(error: string, errorCode: string): ConsensusVerificationResult {
@@ -118,6 +121,7 @@ export function useEvidenceVerification(
       consensusSourceSummary: currentEvidence.consensusProof
         ? "Consensus proof included but not yet verified (requires desktop app)."
         : "",
+      consensusTrustDecisionReason: undefined,
     }));
 
     async function verifyAll() {
@@ -144,6 +148,8 @@ export function useEvidenceVerification(
           simulationVerification: report.simulationVerification,
           simulationReplayVerification: undefined,
           consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
+          consensusTrustDecisionReason:
+            report.consensusTrustDecisionReason ?? undefined,
         }));
 
         const replayResult =
@@ -215,6 +221,8 @@ export function useEvidenceVerification(
             ...prev,
             consensusVerification: consensusResult,
             consensusSourceSummary: consensusSource?.summary ?? prev.consensusSourceSummary,
+            consensusTrustDecisionReason:
+              upgradedReport.consensusTrustDecisionReason ?? undefined,
           }));
         }
       } catch (err) {

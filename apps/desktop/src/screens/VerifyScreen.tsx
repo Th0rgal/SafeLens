@@ -95,6 +95,7 @@ export default function VerifyScreen() {
     simulationReplayVerification,
     consensusVerification,
     consensusSourceSummary,
+    consensusTrustDecisionReason,
   } = useEvidenceVerification(evidence, config ?? null);
   const errors = [...parseErrors, ...verificationErrors];
 
@@ -145,10 +146,23 @@ export default function VerifyScreen() {
     if (!evidence) return [];
     return [
       classifyPolicyStatus(evidence, policyProof),
-      classifyConsensusStatus(evidence, consensusVerification, consensusSourceSummary),
+      classifyConsensusStatus(
+        evidence,
+        consensusVerification,
+        consensusSourceSummary,
+        consensusTrustDecisionReason
+      ),
       classifySimulationStatus(evidence, simulationVerification, simulationReplayVerification),
     ];
-  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification, simulationReplayVerification]);
+  }, [
+    evidence,
+    policyProof,
+    consensusVerification,
+    consensusSourceSummary,
+    consensusTrustDecisionReason,
+    simulationVerification,
+    simulationReplayVerification,
+  ]);
   const decodedCallsSummary = useMemo(() => {
     if (!evidence?.dataDecoded) return null;
     const steps = normalizeCallSteps(
