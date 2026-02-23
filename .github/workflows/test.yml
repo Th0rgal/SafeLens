@@ -61,9 +61,38 @@ jobs:
       - name: Rust formatting check
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
 
-  rust-test:
+  rust-clippy:
     runs-on: ubuntu-latest
     needs: [rust-fmt]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.93.1
+          components: clippy
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './apps/desktop/src-tauri -> target'
+
+      - name: Rust clippy check
+        run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  rust-test:
+    runs-on: ubuntu-latest
+    needs: [rust-clippy]
     timeout-minutes: 30
 
     steps:

@@ -240,7 +240,7 @@ fn execute_replay(
                 .map_err(|err| format!("invalid storage key for {address:#x}: {err}"))?;
             let slot_value = parse_u256(value)
                 .map_err(|err| format!("invalid storage value for {address:#x}: {err}"))?;
-            db.insert_account_storage(address, slot_key.into(), slot_value)
+            db.insert_account_storage(address, slot_key, slot_value)
                 .map_err(|err| format!("failed to seed storage for {address:#x}: {err}"))?;
         }
     }
@@ -369,22 +369,23 @@ fn build_replay_block_env(block: &ReplayBlock, block_number: u64) -> Result<Bloc
         None => U256::ZERO,
     };
 
-    let mut replay_block = BlockEnv::default();
-    replay_block.number = U256::from(block_number);
-    replay_block.beneficiary = beneficiary;
-    replay_block.timestamp = timestamp;
-    replay_block.gas_limit = gas_limit;
-    replay_block.basefee = basefee;
-    replay_block.difficulty = difficulty;
-    replay_block.prevrandao = prevrandao;
-
-    Ok(replay_block)
+    Ok(BlockEnv {
+        number: U256::from(block_number),
+        beneficiary,
+        timestamp,
+        gas_limit,
+        basefee,
+        difficulty,
+        prevrandao,
+        ..Default::default()
+    })
 }
 
 fn default_replay_block(block_number: u64) -> BlockEnv {
-    let mut block = BlockEnv::default();
-    block.number = U256::from(block_number);
-    block
+    BlockEnv {
+        number: U256::from(block_number),
+        ..Default::default()
+    }
 }
 
 fn extract_execution(result: ExecutionResult) -> ReplayExecution {
@@ -453,7 +454,7 @@ fn parse_address(raw: &str, field: &str) -> Result<Address, String> {
 fn parse_bytes(raw: &str) -> Result<Bytes, String> {
     let normalized = raw.trim();
     let stripped = normalized.strip_prefix("0x").unwrap_or(normalized);
-    if stripped.len() % 2 != 0 {
+    if !stripped.len().is_multiple_of(2) {
         return Err("hex string has odd length".to_string());
     }
     let decoded = hex::decode(stripped).map_err(|err| err.to_string())?;
