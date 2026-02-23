@@ -151,6 +151,10 @@ Beacon light client provides independent cryptographic verification (BLS aggrega
 
 Evidence packages may contain sensitive pre-execution transaction details. Airgapped verification ensures no data leaks. The desktop app's CSP enforcement and Tauri allowlist prevent any network access during verification.
 
+### Why does Settings keep `chainEntries` as a non-null array?
+
+Settings import/export is a local trust boundary (user-supplied JSON parsed by `settingsConfigSchema`). The UI now derives `chainEntries` directly from `savedConfig` and never uses a transient `null` state, so the Settings view cannot briefly disappear between renders. This keeps the operator-visible state deterministic while editing trusted local config.
+
 ## Known Risks
 
 ### Accepted

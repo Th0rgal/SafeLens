@@ -16,6 +16,10 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 type ChainSupportStatus = "full" | "partial" | "none";
 
+function getChainEntries(config: SettingsConfig | null): [string, ChainConfig][] {
+  return config ? Object.entries(config.chains) : [];
+}
+
 function getChainSupportStatus(chainIdRaw: string): ChainSupportStatus {
   const parsed = Number.parseInt(chainIdRaw, 10);
   if (!Number.isFinite(parsed)) return "none";
@@ -160,11 +164,10 @@ export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
-  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][] | null>(null);
+  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>(() => getChainEntries(savedConfig));
 
   useEffect(() => {
-    if (!savedConfig) return;
-    setChainEntries(Object.entries(savedConfig.chains));
+    setChainEntries(getChainEntries(savedConfig));
   }, [savedConfig]);
 
   const [newChainId, setNewChainId] = useState("");
@@ -173,11 +176,7 @@ export default function SettingsScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
-    () => (
-      savedConfig && chainEntries !== null
-        ? { ...savedConfig, chains: Object.fromEntries(chainEntries) }
-        : null
-    ),
+    () => (savedConfig ? { ...savedConfig, chains: Object.fromEntries(chainEntries) } : null),
     [savedConfig, chainEntries],
   );
   const isModified = useMemo(
@@ -189,20 +188,20 @@ export default function SettingsScreen() {
     [fullDraft, savedConfig],
   );
 
-  if (!savedConfig || !fullDraft || chainEntries === null) return null;
+  if (!savedConfig || !fullDraft) return null;
 
   const updateChain = (index: number, updates: Partial<ChainConfig>) =>
     setChainEntries((prev) =>
-      (prev ?? []).map((entry, i) => (i === index ? [entry[0], { ...entry[1], ...updates }] : entry))
+      prev.map((entry, i) => (i === index ? [entry[0], { ...entry[1], ...updates }] : entry))
     );
 
   const renameChain = (index: number, newId: string) =>
     setChainEntries((prev) =>
-      (prev ?? []).map((entry, i) => (i === index ? [newId, entry[1]] : entry))
+      prev.map((entry, i) => (i === index ? [newId, entry[1]] : entry))
     );
 
   const removeChain = (index: number) =>
-    setChainEntries((prev) => (prev ?? []).filter((_, i) => i !== index));
+    setChainEntries((prev) => prev.filter((_, i) => i !== index));
 
   const handleSave = async () => {
     try {
@@ -214,7 +213,7 @@ export default function SettingsScreen() {
   };
 
   const handleDiscard = () => {
-    setChainEntries(Object.entries(savedConfig.chains));
+    setChainEntries(getChainEntries(savedConfig));
   };
 
   const handleReset = async () => {
@@ -256,7 +255,7 @@ export default function SettingsScreen() {
   const handleAddChain = () => {
     if (!newChainId || !newChainName) return;
     setChainEntries((prev) => [
-      ...(prev ?? []),
+      ...prev,
       [newChainId, { name: newChainName, ...(newChainNativeSymbol ? { nativeTokenSymbol: newChainNativeSymbol } : {}) }],
     ]);
     setNewChainId("");
