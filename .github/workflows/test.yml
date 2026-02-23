@@ -43,8 +43,21 @@ jobs:
       - name: TypeScript type-check
         run: bun run type-check
 
+  rust-fmt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust formatting check
+        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
+
   rust-test:
     runs-on: ubuntu-latest
+    needs: [rust-fmt]
     timeout-minutes: 30
 
     steps:
