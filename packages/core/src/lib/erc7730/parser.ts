@@ -31,8 +31,10 @@ const MetadataSchema = z.object({
     })
     .optional(),
   token: TokenMetadataSchema.optional(),
-  constants: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
-  enums: z.record(z.record(z.string())).optional(),
+  constants: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
+  enums: z.record(z.string(), z.record(z.string(), z.string())).optional(),
 });
 
 const FieldFormatSchema = z.enum([
@@ -56,7 +58,7 @@ const FieldDefinitionSchema: z.ZodType<any> = z.lazy(() =>
     unit: z.string().optional(),
     enum: z.string().optional(),
     $ref: z.string().optional(),
-    params: z.record(z.unknown()).optional().nullable(),
+    params: z.record(z.string(), z.unknown()).optional().nullable(),
     fields: z.array(z.unknown()).optional(),
     value: z.unknown().optional(),
   })
@@ -68,8 +70,8 @@ const FormatEntrySchema = z.object({
 });
 
 const DisplaySchema = z.object({
-  formats: z.record(FormatEntrySchema),
-  definitions: z.record(FieldDefinitionSchema).optional(),
+  formats: z.record(z.string(), FormatEntrySchema),
+  definitions: z.record(z.string(), FieldDefinitionSchema).optional(),
 });
 
 const ContractContextSchema = z.object({

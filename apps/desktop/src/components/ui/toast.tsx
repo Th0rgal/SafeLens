@@ -108,7 +108,7 @@ function ToastItem({
   const cfg = severityConfig[toast.severity];
   const Icon = cfg.icon;
   const [exiting, setExiting] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismiss = useCallback(() => {
     setExiting(true);
@@ -120,7 +120,9 @@ function ToastItem({
     if (dur > 0) {
       timerRef.current = setTimeout(dismiss, dur);
     }
-    return () => clearTimeout(timerRef.current);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
   }, [toast, dismiss]);
 
   return (
@@ -133,7 +135,9 @@ function ToastItem({
         exiting ? "translate-x-full opacity-0" : "translate-x-0 opacity-100"
       )}
       onClick={() => onExpand(toast)}
-      onMouseEnter={() => clearTimeout(timerRef.current)}
+      onMouseEnter={() => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      }}
       onMouseLeave={() => {
         const dur = toast.duration ?? DEFAULT_DURATION[toast.severity];
         if (dur > 0) timerRef.current = setTimeout(dismiss, dur);
