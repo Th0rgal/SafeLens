@@ -27,7 +27,7 @@ import {
   type SafetyCheck,
   type SafetyStatus,
 } from "@/lib/safety-checks";
-import { buildSimulationFreshnessDetail, formatRelativeTime } from "@/lib/simulation-freshness";
+import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
 import { buildConsensusDetailRows } from "@/lib/consensus-details";
 import { buildPolicyDetailRows } from "@/lib/policy-details";
@@ -35,6 +35,10 @@ import { buildSimulationDetailRows } from "@/lib/simulation-details";
 import {
   getSimulationUnavailableReason,
 } from "@/lib/simulation-unavailable";
+import {
+  buildFullyVerifiedDescription,
+  buildFullyVerifiedPopoverDetail,
+} from "@/lib/verification-copy";
 import { useEvidenceVerification } from "@/lib/use-evidence-verification";
 import { ShieldCheck, AlertTriangle, HelpCircle, Upload, ChevronRight } from "lucide-react";
 import type {
@@ -716,18 +720,7 @@ function ExecutionSafetyPanel({
   const signaturesInvalid = signatureStatuses.some((status) => status === "invalid");
   const signaturesUnsupported = signatureStatuses.some((status) => status === "unsupported");
 
-  const freshnessDescription = (() => {
-    const sim = evidence.simulation;
-    if (!sim) return "Simulation not available for this package.";
-    const blockPart = `block ${sim.blockNumber}`;
-    if (sim.blockTimestamp) {
-      const relative = formatRelativeTime(sim.blockTimestamp);
-      return relative
-        ? `Verified at ${blockPart}, ${relative}.`
-        : `Verified at ${blockPart}.`;
-    }
-    return `Verified at ${blockPart}.`;
-  })();
+  const freshnessDescription = buildFullyVerifiedDescription(evidence, consensusVerification);
 
   const DATA_ABSENT_REASON_CODES = new Set([
     "missing-onchain-policy-proof",
@@ -863,11 +856,9 @@ function ExecutionSafetyPanel({
               >
                 {verification.status === "check" ? (
                   <div className="text-muted">
-                    This evidence includes a locally replayed simulation revm using
-                    RPC-derived witness/state inputs, then verified locally against
-                    finalized chain state using an embedded Helios light client.
-                    On-chain conditions may change before execution, so the actual
-                    outcome could differ from the simulated result.
+                    {buildFullyVerifiedPopoverDetail(evidence)} On-chain conditions may
+                    change before execution, so the actual outcome could differ from
+                    the simulated result.
                   </div>
                 ) : (
                   (() => {

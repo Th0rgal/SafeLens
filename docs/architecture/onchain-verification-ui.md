@@ -36,3 +36,14 @@ in normal desktop verification flows.
 
 Keep those two sections visible by default, and keep technical verification
 internals in `Show details`.
+
+## Trust wording rules
+
+When the badge is `Fully Verified`:
+
+- The subtitle must be anchored to consensus-verified context (for example
+  consensus verified block number), not simulation freshness metadata.
+- Badge popover copy must be consensus-mode aware:
+  - `beacon`: Helios/finalized Beacon wording is valid.
+  - `opstack` / `linea`: wording must explicitly keep the non-equivalence
+    boundary versus Beacon finality.
