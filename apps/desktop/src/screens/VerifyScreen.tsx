@@ -777,6 +777,24 @@ function ExecutionSafetyPanel({
       if (!replayPassed) {
         return [];
       }
+      const packagedLogEvents = evidence.simulation?.logs
+        ? decodeSimulationEvents(
+            evidence.simulation.logs,
+            evidence.safeAddress,
+            evidence.chainId
+          )
+        : [];
+      const packagedNativeEvents = evidence.simulation?.nativeTransfers?.length
+        ? decodeNativeTransfers(
+            evidence.simulation.nativeTransfers,
+            evidence.safeAddress,
+            nativeTokenSymbol ?? "ETH",
+          )
+        : [];
+      if (packagedLogEvents.length > 0 || packagedNativeEvents.length > 0) {
+        return [...packagedNativeEvents, ...packagedLogEvents];
+      }
+
       const replayLogs = (simulationReplayVerification?.replayLogs ?? []).map((log: {
         address: string;
         topics: string[];
@@ -859,7 +877,7 @@ function ExecutionSafetyPanel({
               <div
                 ref={badgePopupRef}
                 style={badgePopupStyle}
-                className="absolute z-50 w-72 space-y-2 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg"
+                className="absolute z-50 w-80 max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto space-y-2 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg"
               >
                 {verification.status === "check" ? (
                   <div className="text-muted">
@@ -927,7 +945,7 @@ function ExecutionSafetyPanel({
                               {check.status === "warning" ? "Warning" : "Error"}
                             </span>
                           </div>
-                          <div className={`mt-0.5 ${s.text}`}>{check.detail}</div>
+                          <div className={`mt-0.5 break-all ${s.text}`}>{check.detail}</div>
                         </div>
                       );
                     });

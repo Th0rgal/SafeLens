@@ -263,7 +263,7 @@ describe("proof alignment in package enrichment", () => {
       rpcUrl: "https://rpc.example",
     });
 
-    expect(enriched.simulation?.logs).toEqual([]);
+    expect(enriched.simulation?.logs).toEqual([simulationLog]);
     expect(enriched.simulationWitness?.witnessOnly).toBe(true);
     expect(enriched.simulationWitness?.simulationDigest).toBe(
       computeSimulationDigest(enriched.simulation!)

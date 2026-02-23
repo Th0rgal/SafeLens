@@ -160,13 +160,11 @@ export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
-  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>([]);
+  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][] | null>(null);
 
   useEffect(() => {
     if (!savedConfig) return;
-    setChainEntries((prev) =>
-      prev.length === 0 ? Object.entries(savedConfig.chains) : prev
-    );
+    setChainEntries((prev) => (prev === null ? Object.entries(savedConfig.chains) : prev));
   }, [savedConfig]);
 
   const [newChainId, setNewChainId] = useState("");
@@ -175,28 +173,36 @@ export default function SettingsScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
-    () => savedConfig ? { ...savedConfig, chains: Object.fromEntries(chainEntries) } : null,
+    () => (
+      savedConfig && chainEntries !== null
+        ? { ...savedConfig, chains: Object.fromEntries(chainEntries) }
+        : null
+    ),
     [savedConfig, chainEntries],
   );
   const isModified = useMemo(
-    () => fullDraft !== null && savedConfig !== null && JSON.stringify(fullDraft) !== JSON.stringify(savedConfig),
+    () => (
+      fullDraft !== null &&
+      savedConfig !== null &&
+      JSON.stringify(fullDraft) !== JSON.stringify(savedConfig)
+    ),
     [fullDraft, savedConfig],
   );
 
-  if (!savedConfig || !fullDraft) return null;
+  if (!savedConfig || !fullDraft || chainEntries === null) return null;
 
   const updateChain = (index: number, updates: Partial<ChainConfig>) =>
     setChainEntries((prev) =>
-      prev.map((entry, i) => (i === index ? [entry[0], { ...entry[1], ...updates }] : entry))
+      (prev ?? []).map((entry, i) => (i === index ? [entry[0], { ...entry[1], ...updates }] : entry))
     );
 
   const renameChain = (index: number, newId: string) =>
     setChainEntries((prev) =>
-      prev.map((entry, i) => (i === index ? [newId, entry[1]] : entry))
+      (prev ?? []).map((entry, i) => (i === index ? [newId, entry[1]] : entry))
     );
 
   const removeChain = (index: number) =>
-    setChainEntries((prev) => prev.filter((_, i) => i !== index));
+    setChainEntries((prev) => (prev ?? []).filter((_, i) => i !== index));
 
   const handleSave = async () => {
     try {
@@ -213,7 +219,7 @@ export default function SettingsScreen() {
 
   const handleReset = async () => {
     await resetConfig();
-    setChainEntries([]);
+    setChainEntries(null);
   };
 
   const handleExport = async () => {
@@ -251,7 +257,7 @@ export default function SettingsScreen() {
   const handleAddChain = () => {
     if (!newChainId || !newChainName) return;
     setChainEntries((prev) => [
-      ...prev,
+      ...(prev ?? []),
       [newChainId, { name: newChainName, ...(newChainNativeSymbol ? { nativeTokenSymbol: newChainNativeSymbol } : {}) }],
     ]);
     setNewChainId("");

@@ -72,6 +72,8 @@ export interface FetchSimulationOptions {
   rpcUrl?: string;
   /** Block tag to simulate at. Defaults to "latest". */
   blockTag?: "latest" | "finalized" | "safe";
+  /** Optional explicit block number to pin simulation/witness context. */
+  blockNumber?: number;
 }
 
 // ── Transaction shape (matches EvidencePackage.transaction) ───────
@@ -158,8 +160,9 @@ export async function fetchSimulation(
     transport: http(rpcUrl),
   });
 
-  const blockTag = options.blockTag ?? "latest";
-  const block = await client.getBlock({ blockTag });
+  const block = options.blockNumber !== undefined
+    ? await client.getBlock({ blockNumber: BigInt(options.blockNumber) })
+    : await client.getBlock({ blockTag: options.blockTag ?? "latest" });
   if (block.number == null) {
     throw new Error(
       "Block number is null (pending block). Use a finalized block tag."
@@ -401,8 +404,18 @@ export async function fetchSimulationWitness(
         stateDiff,
       },
     ],
-    [safeAddress, transaction.to as Address, SIMULATION_ACCOUNT.address]
+    // Prestate traces often omit untouched EOAs (recipient/caller). The only
+    // replay-critical account we must always capture is the Safe itself.
+    [safeAddress]
   );
+
+  const fallbackReplayAccounts = await tryCollectSimpleTransferReplayAccounts(
+    client,
+    safeAddress,
+    transaction,
+    blockNumber
+  );
+  const resolvedReplayAccounts = replayAccounts ?? fallbackReplayAccounts;
 
   return {
     chainId,
@@ -435,7 +448,7 @@ export async function fetchSimulationWitness(
       prevRandao: block.mixHash ?? undefined,
       difficulty: block.difficulty.toString(),
     },
-    replayAccounts,
+    replayAccounts: resolvedReplayAccounts,
     replayCaller: SIMULATION_ACCOUNT.address,
     replayGasLimit: normalizeReplayGasLimit(transaction.safeTxGas),
   };
@@ -579,25 +592,51 @@ async function tryTraceCall(
       stateOverrideObj[override.address] = { stateDiff: diffs };
     }
 
-    const result = await client.request({
-      method: "debug_traceCall" as "eth_call",
-      params: [
-        {
-          to: safeAddress,
-          data: calldata,
-        },
-        `0x${blockNumber.toString(16)}`,
-        {
-          tracer: "callTracer",
-          tracerConfig: { withLog: true },
-          stateOverrides: stateOverrideObj,
-        },
-      ] as unknown as [
-        { to: Address; data: Hex },
-        string,
-        Record<string, unknown>,
-      ],
-    });
+    const callTracerConfig = {
+      tracer: "callTracer",
+      tracerConfig: { withLog: true },
+    } as const;
+    const paramsBase = [
+      {
+        to: safeAddress,
+        data: calldata,
+      },
+      `0x${blockNumber.toString(16)}`,
+    ] as const;
+    let result: unknown;
+    try {
+      // Gnosis-style RPCs expect `stateOverrides` (plural) for callTracer.
+      result = await client.request({
+        method: "debug_traceCall" as "eth_call",
+        params: [
+          ...paramsBase,
+          {
+            ...callTracerConfig,
+            stateOverrides: stateOverrideObj,
+          },
+        ] as unknown as [
+          { to: Address; data: Hex },
+          string,
+          Record<string, unknown>,
+        ],
+      });
+    } catch {
+      // Fallback for clients that expect `stateOverride` (singular).
+      result = await client.request({
+        method: "debug_traceCall" as "eth_call",
+        params: [
+          ...paramsBase,
+          {
+            ...callTracerConfig,
+            stateOverride: stateOverrideObj,
+          },
+        ] as unknown as [
+          { to: Address; data: Hex },
+          string,
+          Record<string, unknown>,
+        ],
+      });
+    }
 
     // callTracer with withLog:true nests logs inside call frames.
     // Each frame has an optional `logs` array and an optional `calls`
@@ -704,25 +743,49 @@ async function tryCollectReplayAccounts(
       stateOverrideObj[override.address] = { stateDiff: diffs };
     }
 
-    const result = await client.request({
-      method: "debug_traceCall" as "eth_call",
-      params: [
-        {
-          to: safeAddress,
-          data: calldata,
-        },
-        `0x${blockNumber.toString(16)}`,
-        {
-          tracer: "prestateTracer",
-          tracerConfig: { diffMode: true },
-          stateOverrides: stateOverrideObj,
-        },
-      ] as unknown as [
-        { to: Address; data: Hex },
-        string,
-        Record<string, unknown>,
-      ],
-    });
+    const prestateConfig = {
+      tracer: "prestateTracer",
+      tracerConfig: { diffMode: true },
+    } as const;
+    const paramsBase = [
+      {
+        to: safeAddress,
+        data: calldata,
+      },
+      `0x${blockNumber.toString(16)}`,
+    ] as const;
+    let result: unknown;
+    try {
+      result = await client.request({
+        method: "debug_traceCall" as "eth_call",
+        params: [
+          ...paramsBase,
+          {
+            ...prestateConfig,
+            stateOverride: stateOverrideObj,
+          },
+        ] as unknown as [
+          { to: Address; data: Hex },
+          string,
+          Record<string, unknown>,
+        ],
+      });
+    } catch {
+      result = await client.request({
+        method: "debug_traceCall" as "eth_call",
+        params: [
+          ...paramsBase,
+          {
+            ...prestateConfig,
+            stateOverrides: stateOverrideObj,
+          },
+        ] as unknown as [
+          { to: Address; data: Hex },
+          string,
+          Record<string, unknown>,
+        ],
+      });
+    }
 
     const raw = result as unknown;
     if (!raw || typeof raw !== "object") {
@@ -737,6 +800,62 @@ async function tryCollectReplayAccounts(
         : (raw as PrestateTrace);
 
     return traceToReplayAccounts(trace, requiredAddresses);
+  } catch {
+    return undefined;
+  }
+}
+
+async function tryCollectSimpleTransferReplayAccounts(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  transaction: TransactionFields,
+  blockNumber: bigint
+): Promise<SimulationWitness["replayAccounts"]> {
+  // Fallback only for plain native transfers (CALL with empty calldata) to an EOA.
+  // Contract calls may require rich storage snapshots from prestateTracer.
+  const isCall = transaction.operation === 0;
+  const dataHex = (transaction.data ?? "0x").toLowerCase();
+  const isEmptyCalldata = dataHex === "0x";
+  if (!isCall || !isEmptyCalldata) {
+    return undefined;
+  }
+
+  const recipient = transaction.to as Address;
+  try {
+    const recipientCode = await client.getCode({ address: recipient, blockNumber });
+    if (recipientCode && recipientCode !== "0x") {
+      return undefined;
+    }
+
+    const safeOverrideStorage = Object.fromEntries(
+      buildSafeStateDiff(transaction.nonce, SIMULATION_ACCOUNT.address).map((entry) => [
+        entry.slot,
+        entry.value,
+      ])
+    );
+    const addresses: Address[] = [safeAddress, recipient, SIMULATION_ACCOUNT.address];
+    const snapshots = await Promise.all(
+      addresses.map(async (address) => {
+        const [balance, nonce, code] = await Promise.all([
+          client.getBalance({ address, blockNumber }),
+          client.getTransactionCount({ address, blockNumber }),
+          client.getCode({ address, blockNumber }),
+        ]);
+
+        return {
+          address: address.toLowerCase() as Address,
+          balance: normalizeHex(toHex(balance)),
+          nonce,
+          code: code && code !== "0x" ? normalizeHex(code) : "0x",
+          storage:
+            address.toLowerCase() === safeAddress.toLowerCase()
+              ? safeOverrideStorage
+              : {},
+        };
+      })
+    );
+
+    return snapshots;
   } catch {
     return undefined;
   }

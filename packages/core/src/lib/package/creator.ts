@@ -173,18 +173,14 @@ export async function enrichWithSimulation(
   const hasReplaySupportedOperation = evidence.transaction.operation === 0;
   const useWitnessOnlySimulation =
     hasReplaySupportedOperation && hasReplayAccounts && hasReplayBlockContext;
-  const packagedSimulation = useWitnessOnlySimulation
-    ? {
-        ...simulation,
-        // Witness-only mode: do not ship decoded effects from RPC output.
-        logs: [],
-        nativeTransfers: undefined,
-      }
-    : simulation;
+  // Keep RPC simulation effects in the package for UI comparison against
+  // offline replay results. Witness-only trust decisions are still enforced
+  // by desktop/CLI using simulationWitness + local replay verification.
+  const packagedSimulation = simulation;
   const packagedSimulationWitness = useWitnessOnlySimulation
     ? {
         ...simulationWitness!,
-        // Keep digest aligned with the packaged simulation projection.
+        // Keep digest aligned with packaged simulation.
         simulationDigest: computeSimulationDigest(packagedSimulation),
         witnessOnly: true,
       }

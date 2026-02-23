@@ -108,6 +108,7 @@ function EvidenceDisplay({
   // Decode simulation events
   const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
   const sim = evidence.simulation;
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
   const logEvents = sim
     ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
     : [];
@@ -186,9 +187,14 @@ function EvidenceDisplay({
                 })}
               </div>
             )}
-            {transfers.length === 0 && sim.success && (
+            {transfers.length === 0 && sim.success && !witnessOnlySimulation && (
               <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
                 No token movements detected.
+              </div>
+            )}
+            {transfers.length === 0 && sim.success && witnessOnlySimulation && (
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                This is a witness-only package. Token movements are intentionally omitted here and will be derived during local replay verification in Desktop/CLI.
               </div>
             )}
             {approvals.length > 0 && (
@@ -455,7 +461,10 @@ export default function AnalyzePage() {
 
       simulationAttempted = true;
       try {
-        enriched = await enrichWithSimulation(enriched, { rpcUrl: resolvedRpcUrl });
+        enriched = await enrichWithSimulation(enriched, {
+          rpcUrl: resolvedRpcUrl,
+          blockNumber: enriched.onchainPolicyProof?.blockNumber,
+        });
       } catch (err) {
         simulationFailed = true;
         console.warn("Failed to simulate transaction:", err);
@@ -658,35 +667,6 @@ export default function AnalyzePage() {
         </CardContent>
       </Card>
 
-      {!evidence && !pendingTxs && !loading && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Trust Assumptions</CardTitle>
-            <CardDescription>
-              Every input used to build evidence, with explicit trust level.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {generationSources.map((source) => {
-              const trust = TRUST_CONFIG[source.trust];
-              return (
-                <div
-                  key={source.id}
-                  className="rounded-md border border-border/15 bg-surface-2/40 p-3"
-                >
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium">{source.title}</span>
-                    <span className={`text-xs ${trust.color}`}>{trust.label}</span>
-                  </div>
-                  <p className="text-xs text-muted">{source.summary}</p>
-                  <p className="mt-1 text-xs text-muted">{source.detail}</p>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
-
       {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>Error</AlertTitle>
@@ -795,6 +775,35 @@ export default function AnalyzePage() {
           <AlertTitle>Consensus Proof Warning</AlertTitle>
           <AlertDescription>{consensusWarning}</AlertDescription>
         </Alert>
+      )}
+
+      {!evidence && !pendingTxs && !loading && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Trust Assumptions</CardTitle>
+            <CardDescription>
+              Every input used to build evidence, with explicit trust level.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {generationSources.map((source) => {
+              const trust = TRUST_CONFIG[source.trust];
+              return (
+                <div
+                  key={source.id}
+                  className="rounded-md border border-border/15 bg-surface-2/40 p-3"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">{source.title}</span>
+                    <span className={`text-xs ${trust.color}`}>{trust.label}</span>
+                  </div>
+                  <p className="text-xs text-muted">{source.summary}</p>
+                  <p className="mt-1 text-xs text-muted">{source.detail}</p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
 
       {evidence && <EvidenceDisplay
