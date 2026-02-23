@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -75,6 +76,7 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: write
 
