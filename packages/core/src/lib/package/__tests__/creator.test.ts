@@ -169,6 +169,12 @@ describe("finalizeEvidenceExport", () => {
         overriddenSlots: [],
         simulationDigest:
           "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        replayBlock: {
+          timestamp: "1700000000",
+          gasLimit: "30000000",
+          baseFeePerGas: "1",
+          beneficiary: "0x0000000000000000000000000000000000000000",
+        },
         replayAccounts: [
           {
             address: COWSWAP_TWAP_TX.safe,
@@ -245,6 +251,103 @@ describe("finalizeEvidenceExport", () => {
         logs: [],
         blockNumber: 1,
         trust: "rpc-sourced" as const,
+      },
+    };
+
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: true,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: true,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.mode).toBe("partial");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
+    expect(finalized.exportContract?.reasons).toContain("missing-simulation-witness");
+  });
+
+  it("marks export partial when simulation witness replay block context is missing", () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidence = {
+      ...base,
+      onchainPolicyProof: {
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        accountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        decodedPolicy: {
+          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+          threshold: 1,
+          nonce: 0,
+          modules: [],
+          guard: "0x0000000000000000000000000000000000000000",
+          fallbackHandler: "0x0000000000000000000000000000000000000000",
+          singleton: "0x0000000000000000000000000000000000000000",
+        },
+        trust: "rpc-sourced" as const,
+      },
+      consensusProof: {
+        checkpoint:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "mainnet" as const,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        blockNumber: 1,
+        finalizedSlot: 1,
+      },
+      simulation: {
+        success: true,
+        returnData: "0x",
+        gasUsed: "1",
+        logs: [],
+        blockNumber: 1,
+        trust: "rpc-sourced" as const,
+      },
+      simulationWitness: {
+        chainId: CHAIN_ID,
+        safeAddress: COWSWAP_TWAP_TX.safe,
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        safeAccountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        overriddenSlots: [],
+        simulationDigest:
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        replayAccounts: [
+          {
+            address: COWSWAP_TWAP_TX.safe,
+            balance: "0x0",
+            nonce: 0,
+            code: "0x",
+            storage: {},
+          },
+        ],
       },
     };
 

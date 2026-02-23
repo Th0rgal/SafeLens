@@ -199,7 +199,7 @@ describe("proof alignment in package enrichment", () => {
     expect(enriched.version).toBe("1.2");
   });
 
-  it("enables witness-only simulation only when replay accounts are present", async () => {
+  it("enables witness-only simulation only when replay accounts and block context are present", async () => {
     const simulationLog = {
       address: "0x1111111111111111111111111111111111111111",
       topics: [],
@@ -233,6 +233,12 @@ describe("proof alignment in package enrichment", () => {
       overriddenSlots: [],
       simulationDigest:
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      replayBlock: {
+        timestamp: "1700000000",
+        gasLimit: "30000000",
+        baseFeePerGas: "1",
+        beneficiary: "0x0000000000000000000000000000000000000000",
+      },
       replayAccounts: [
         {
           address: COWSWAP_TWAP_TX.safe,
@@ -287,6 +293,61 @@ describe("proof alignment in package enrichment", () => {
       overriddenSlots: [],
       simulationDigest:
         "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      replayCaller: COWSWAP_TWAP_TX.safe,
+    });
+
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const enriched = await enrichWithSimulation(evidence, {
+      rpcUrl: "https://rpc.example",
+    });
+
+    expect(enriched.simulation?.logs).toEqual([simulationLog]);
+    expect(enriched.simulationWitness?.witnessOnly).toBeUndefined();
+  });
+
+  it("keeps packaged simulation effects when witness replay block context is missing", async () => {
+    const simulationLog = {
+      address: "0x1111111111111111111111111111111111111111",
+      topics: [],
+      data: "0x",
+    };
+    fetchSimulationMock.mockResolvedValue({
+      success: true,
+      returnData: "0x",
+      gasUsed: "1",
+      logs: [simulationLog],
+      blockNumber: 21000000,
+      trust: "rpc-sourced",
+    });
+    fetchSimulationWitnessMock.mockResolvedValue({
+      chainId: CHAIN_ID,
+      safeAddress: COWSWAP_TWAP_TX.safe,
+      blockNumber: 21000000,
+      stateRoot:
+        "0xa38574512fb60ec85617785cd52c30f918902b355bab53242fbdf3b40b7a1e7e",
+      safeAccountProof: {
+        address: COWSWAP_TWAP_TX.safe,
+        balance: "0",
+        nonce: 0,
+        codeHash:
+          "0x1122334411223344112233441122334411223344112233441122334411223344",
+        storageHash:
+          "0x5566778855667788556677885566778855667788556677885566778855667788",
+        accountProof: [],
+        storageProof: [],
+      },
+      overriddenSlots: [],
+      simulationDigest:
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      replayAccounts: [
+        {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          nonce: 0,
+          code: "0x",
+          storage: {},
+        },
+      ],
       replayCaller: COWSWAP_TWAP_TX.safe,
     });
 

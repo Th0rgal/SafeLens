@@ -1,5 +1,5 @@
 use revm::{
-    context::{result::ExecutionResult, Context, TxEnv},
+    context::{result::ExecutionResult, BlockEnv, Context, TxEnv},
     database::CacheDB,
     database_interface::EmptyDB,
     handler::{ExecuteEvm, MainBuilder, MainContext},
@@ -44,6 +44,8 @@ pub struct ReplaySimulation {
     pub return_data: Option<String>,
     pub gas_used: String,
     #[serde(default)]
+    pub block_number: u64,
+    #[serde(default)]
     pub logs: Vec<ReplaySimulationLog>,
 }
 
@@ -59,10 +61,22 @@ pub struct ReplaySimulationLog {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayWitness {
+    pub replay_block: Option<ReplayBlock>,
     pub replay_accounts: Option<Vec<ReplayWitnessAccount>>,
     pub replay_caller: Option<String>,
     pub replay_gas_limit: Option<u64>,
     pub witness_only: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayBlock {
+    pub timestamp: String,
+    pub gas_limit: String,
+    pub base_fee_per_gas: String,
+    pub beneficiary: String,
+    pub prev_randao: Option<String>,
+    pub difficulty: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,6 +219,7 @@ fn execute_replay(
     input: &SimulationReplayInput,
     accounts: &[ReplayWitnessAccount],
 ) -> Result<ReplayExecution, String> {
+    let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
     let mut db = CacheDB::new(EmptyDB::default());
 
     for account in accounts {
@@ -263,12 +278,10 @@ fn execute_replay(
 
     let tx_kind = match input.transaction.operation {
         0 => TxKind::Call(to),
-        1 => {
-            return Err(
-                "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
-                    .to_string(),
-            )
-        }
+        1 => return Err(
+            "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
+                .to_string(),
+        ),
         value => {
             return Err(format!(
                 "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
@@ -276,17 +289,20 @@ fn execute_replay(
         }
     };
 
+    let gas_price = resolve_replay_gas_price(input)?;
     let tx = TxEnv::builder()
         .caller(caller)
         .kind(tx_kind)
         .gas_limit(gas_limit)
+        .gas_price(gas_price)
         .chain_id(Some(input.chain_id))
         .value(value)
         .data(data)
         .build()
         .map_err(|err| format!("failed to build replay tx: {err:?}"))?;
 
-    let ctx = Context::mainnet().with_db(db);
+    let block = resolve_replay_block(input, witness_only)?;
+    let ctx = Context::mainnet().with_block(block).with_db(db);
     let mut evm = ctx.build_mainnet();
     let replay = evm
         .transact(tx)
@@ -294,6 +310,80 @@ fn execute_replay(
         .result;
 
     Ok(extract_execution(replay))
+}
+
+fn resolve_replay_block(
+    input: &SimulationReplayInput,
+    witness_only: bool,
+) -> Result<BlockEnv, String> {
+    match input.simulation_witness.replay_block.as_ref() {
+        Some(block) => build_replay_block_env(block, input.simulation.block_number),
+        None if witness_only => Err(
+            "simulationWitness.replayBlock is missing; witness-only replay requires full block context."
+                .to_string(),
+        ),
+        None => Ok(default_replay_block(input.simulation.block_number)),
+    }
+}
+
+fn resolve_replay_gas_price(input: &SimulationReplayInput) -> Result<u128, String> {
+    let Some(block) = input.simulation_witness.replay_block.as_ref() else {
+        return Ok(0);
+    };
+
+    let basefee = parse_u256(&block.base_fee_per_gas)
+        .map_err(|err| format!("invalid simulationWitness.replayBlock.baseFeePerGas: {err}"))?;
+    if basefee > U256::from(u128::MAX) {
+        return Err("simulationWitness.replayBlock.baseFeePerGas exceeds u128 range.".to_string());
+    }
+    Ok(basefee.to::<u128>())
+}
+
+fn build_replay_block_env(block: &ReplayBlock, block_number: u64) -> Result<BlockEnv, String> {
+    let beneficiary = parse_address(
+        &block.beneficiary,
+        "simulationWitness.replayBlock.beneficiary",
+    )?;
+    let timestamp = parse_u256(&block.timestamp)
+        .map_err(|err| format!("invalid simulationWitness.replayBlock.timestamp: {err}"))?;
+    let gas_limit_u256 = parse_u256(&block.gas_limit)
+        .map_err(|err| format!("invalid simulationWitness.replayBlock.gasLimit: {err}"))?;
+    if gas_limit_u256 > U256::from(u64::MAX) {
+        return Err("simulationWitness.replayBlock.gasLimit exceeds u64 range.".to_string());
+    }
+    let gas_limit = gas_limit_u256.to::<u64>();
+    let basefee_u256 = parse_u256(&block.base_fee_per_gas)
+        .map_err(|err| format!("invalid simulationWitness.replayBlock.baseFeePerGas: {err}"))?;
+    if basefee_u256 > U256::from(u64::MAX) {
+        return Err("simulationWitness.replayBlock.baseFeePerGas exceeds u64 range.".to_string());
+    }
+    let basefee = basefee_u256.to::<u64>();
+    let prevrandao = match block.prev_randao.as_deref() {
+        Some(raw) => Some(parse_b256(raw, "simulationWitness.replayBlock.prevRandao")?),
+        None => None,
+    };
+    let difficulty = match block.difficulty.as_deref() {
+        Some(raw) => parse_u256(raw)
+            .map_err(|err| format!("invalid simulationWitness.replayBlock.difficulty: {err}"))?,
+        None => U256::ZERO,
+    };
+
+    let mut replay_block = BlockEnv::default();
+    replay_block.number = U256::from(block_number);
+    replay_block.beneficiary = beneficiary;
+    replay_block.timestamp = timestamp;
+    replay_block.gas_limit = gas_limit;
+    replay_block.basefee = basefee;
+    replay_block.difficulty = difficulty;
+    replay_block.prevrandao = prevrandao;
+
+    Ok(replay_block)
+}
+
+fn default_replay_block(block_number: u64) -> BlockEnv {
+    let mut block = BlockEnv::default();
+    block.number = U256::from(block_number);
+    block
 }
 
 fn extract_execution(result: ExecutionResult) -> ReplayExecution {
@@ -378,6 +468,10 @@ fn parse_u256(raw: &str) -> Result<U256, String> {
     }
 }
 
+fn parse_b256(raw: &str, field: &str) -> Result<B256, String> {
+    B256::from_str(raw).map_err(|err| format!("invalid {field} ({raw}): {err}"))
+}
+
 fn normalize_address(value: &str) -> String {
     value.to_ascii_lowercase()
 }
@@ -423,6 +517,19 @@ mod tests {
         }
     }
 
+    fn replay_block(timestamp: &str) -> ReplayBlock {
+        ReplayBlock {
+            timestamp: timestamp.to_string(),
+            gas_limit: "30000000".to_string(),
+            base_fee_per_gas: "1".to_string(),
+            beneficiary: "0x0000000000000000000000000000000000000000".to_string(),
+            prev_randao: Some(
+                "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+            ),
+            difficulty: Some("0".to_string()),
+        }
+    }
+
     #[test]
     fn returns_incomplete_witness_when_replay_accounts_are_missing() {
         let result = verify_simulation_replay(SimulationReplayInput {
@@ -439,9 +546,11 @@ mod tests {
                 success: true,
                 return_data: Some("0x".to_string()),
                 gas_used: "21000".to_string(),
+                block_number: 1,
                 logs: Vec::new(),
             },
             simulation_witness: ReplayWitness {
+                replay_block: None,
                 replay_accounts: None,
                 replay_caller: None,
                 replay_gas_limit: None,
@@ -474,9 +583,11 @@ mod tests {
                 success: true,
                 return_data: Some("0x".to_string()),
                 gas_used: "500000".to_string(),
+                block_number: 1,
                 logs: Vec::new(),
             },
             simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
@@ -486,7 +597,10 @@ mod tests {
 
         assert!(result.executed);
         assert!(!result.success);
-        assert_eq!(result.reason, REASON_REPLAY_MISMATCH_RETURN_DATA);
+        assert_eq!(
+            result.reason, REASON_REPLAY_MISMATCH_RETURN_DATA,
+            "{result:?}"
+        );
     }
 
     #[test]
@@ -510,9 +624,11 @@ mod tests {
                 success: false,
                 return_data: Some("0x".to_string()),
                 gas_used: "500000".to_string(),
+                block_number: 1,
                 logs: Vec::new(),
             },
             simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
@@ -521,7 +637,7 @@ mod tests {
         });
 
         assert!(result.executed);
-        assert!(result.success);
+        assert!(result.success, "{result:?}");
         assert_eq!(result.reason, REASON_REPLAY_MATCHED);
     }
 
@@ -544,9 +660,11 @@ mod tests {
                 success: true,
                 return_data: Some("0x".to_string()),
                 gas_used: "500000".to_string(),
+                block_number: 1,
                 logs: Vec::new(),
             },
             simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
@@ -557,13 +675,11 @@ mod tests {
         assert!(result.executed);
         assert!(!result.success);
         assert_eq!(result.reason, REASON_REPLAY_EXEC_ERROR);
-        assert!(
-            result
-                .error
-                .as_deref()
-                .unwrap_or("")
-                .contains("DELEGATECALL")
-        );
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("DELEGATECALL"));
     }
 
     fn percentile(sorted: &[u128], p: f64) -> u128 {
@@ -583,10 +699,34 @@ mod tests {
         // Scenario B: deterministic revert path.
         let revert_code = "0x60006000fd";
         let scenarios = vec![
-            ("erc20-transfer-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
-            ("allowance-swap-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
-            ("multisend-like", success_code, true, "0x000000000000000000000000000000000000000000000000000000000000002a", Vec::<ReplaySimulationLog>::new()),
-            ("revert-path", revert_code, false, "0x", Vec::<ReplaySimulationLog>::new()),
+            (
+                "erc20-transfer-like",
+                success_code,
+                true,
+                "0x000000000000000000000000000000000000000000000000000000000000002a",
+                Vec::<ReplaySimulationLog>::new(),
+            ),
+            (
+                "allowance-swap-like",
+                success_code,
+                true,
+                "0x000000000000000000000000000000000000000000000000000000000000002a",
+                Vec::<ReplaySimulationLog>::new(),
+            ),
+            (
+                "multisend-like",
+                success_code,
+                true,
+                "0x000000000000000000000000000000000000000000000000000000000000002a",
+                Vec::<ReplaySimulationLog>::new(),
+            ),
+            (
+                "revert-path",
+                revert_code,
+                false,
+                "0x",
+                Vec::<ReplaySimulationLog>::new(),
+            ),
         ];
 
         for (name, code, expected_success, expected_return, expected_logs) in scenarios {
@@ -606,9 +746,11 @@ mod tests {
                         success: expected_success,
                         return_data: Some(expected_return.to_string()),
                         gas_used: "500000".to_string(),
+                        block_number: 1,
                         logs: expected_logs.clone(),
                     },
                     simulation_witness: ReplayWitness {
+                        replay_block: Some(replay_block("1")),
                         replay_accounts: Some(vec![
                             caller_account(caller),
                             target_account(target, code),
@@ -635,5 +777,85 @@ mod tests {
             let p95 = percentile(&samples_ms, 0.95);
             println!("{name}: p50={}ms p95={}ms samples={}", p50, p95, iterations);
         }
+    }
+
+    #[test]
+    fn returns_incomplete_when_witness_only_replay_block_is_missing() {
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 1,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: None,
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(!result.success);
+        assert_eq!(result.reason, REASON_REPLAY_EXEC_ERROR);
+        assert!(result
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("simulationWitness.replayBlock is missing"));
+    }
+
+    #[test]
+    fn uses_replay_block_timestamp_for_timestamp_opcode_paths() {
+        // Runtime: TIMESTAMP PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+        let code = "0x4260005260206000f3";
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+        let expected_timestamp =
+            "0x000000000000000000000000000000000000000000000000000000000000002a";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 1,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some(expected_timestamp.to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 42,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("42")),
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.reason, REASON_REPLAY_MATCHED);
     }
 }

@@ -73,6 +73,9 @@ Notes:
 
 - In witness-only packages, simulation effects are intentionally omitted from
   packaged RPC output and are derived from local replay during verification.
+- Witness-only replay requires complete replay inputs: world-state accounts and
+  pinned block environment (timestamp/gas/basefee/beneficiary, plus optional
+  prevrandao/difficulty). If block context is missing, replay must fail closed.
 - Log equality checks apply when packaged logs are present; witness-only replay
   still enforces success/return-data/gas policy checks.
 

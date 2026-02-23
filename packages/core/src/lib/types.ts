@@ -236,6 +236,23 @@ export const simulationSchema = z.object({
 
 export type Simulation = z.infer<typeof simulationSchema>;
 
+export const simulationReplayBlockSchema = z.object({
+  /** Block timestamp in seconds since Unix epoch. */
+  timestamp: evmQuantitySchema,
+  /** Block gas limit. */
+  gasLimit: evmQuantitySchema,
+  /** Block base fee per gas. */
+  baseFeePerGas: evmQuantitySchema,
+  /** Block beneficiary / coinbase. */
+  beneficiary: addressSchema,
+  /** Optional randomness beacon value (post-merge). */
+  prevRandao: hashSchema.optional(),
+  /** Block difficulty / prevrandao fallback for legacy networks. */
+  difficulty: evmQuantitySchema.optional(),
+});
+
+export type SimulationReplayBlock = z.infer<typeof simulationReplayBlockSchema>;
+
 // Witness artifact for simulation verification.
 // This does not include a full execution proof; it anchors simulation context
 // to a proven state root and binds the simulation payload with a digest.
@@ -252,6 +269,7 @@ export const simulationWitnessSchema = z.object({
     })
   ),
   simulationDigest: hashSchema,
+  replayBlock: simulationReplayBlockSchema.optional(),
   replayAccounts: z.array(
     z.object({
       address: addressSchema,

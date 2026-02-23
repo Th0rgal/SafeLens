@@ -168,7 +168,8 @@ export async function enrichWithSimulation(
   const hasReplayAccounts =
     Array.isArray(simulationWitness?.replayAccounts) &&
     simulationWitness.replayAccounts.length > 0;
-  const useWitnessOnlySimulation = hasReplayAccounts;
+  const hasReplayBlockContext = Boolean(simulationWitness?.replayBlock);
+  const useWitnessOnlySimulation = hasReplayAccounts && hasReplayBlockContext;
 
   return {
     ...evidence,
@@ -246,8 +247,9 @@ export interface FinalizeExportContractOptions {
 /**
  * Stamp package export status with explicit machine-readable completeness data.
  * A package is "fully-verifiable" only when consensus proof, on-chain policy
- * proof, simulation artifact, and replay-capable simulation witness are all
- * present. All other states are partial.
+ * proof, simulation artifact, and replay-capable simulation witness inputs
+ * (accounts + pinned block context) are all present. All other states are
+ * partial.
  */
 export function finalizeEvidenceExport(
   evidence: EvidencePackage,
@@ -266,7 +268,8 @@ export function finalizeEvidenceExport(
   const hasSimulation = Boolean(evidence.simulation);
   const hasSimulationWitnessReplayInputs =
     Array.isArray(evidence.simulationWitness?.replayAccounts) &&
-    evidence.simulationWitness.replayAccounts.length > 0;
+    evidence.simulationWitness.replayAccounts.length > 0 &&
+    Boolean(evidence.simulationWitness.replayBlock);
   const reasons = new Set<ExportContractReason>();
 
   if (!hasConsensusProofArtifact) {
