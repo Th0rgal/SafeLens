@@ -338,6 +338,107 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+const SAFE_MULTISIG_TX_TOPIC =
+  "0x66753cd2356569ee081232e3be8909b950e0a76c1f8460c3a5e3c2be32b11bed";
+const SAFE_EXECUTION_SUCCESS_TOPIC =
+  "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
+const SAFE_EXECUTION_FAILURE_TOPIC =
+  "0x23428b18acfb3ea64b08dc0c1d296ea9c09702c09083ca5272e64d115b687d23";
+
+function logEvidenceDebugSnapshot(
+  evidence: EvidencePackage,
+  context: {
+    rpcProvided: boolean;
+    rpcUrl?: string;
+    chainMismatch?: { expected: number; actual: number } | null;
+    consensusProofAttempted: boolean;
+    consensusProofFailed: boolean;
+    onchainPolicyProofAttempted: boolean;
+    onchainPolicyProofFailed: boolean;
+    simulationAttempted: boolean;
+    simulationFailed: boolean;
+  }
+): void {
+  try {
+    const sim = evidence.simulation;
+    const topics = sim?.logs?.map((log) => log.topics?.[0]?.toLowerCase()).filter(Boolean) ?? [];
+    const safeMultisigEventCount = topics.filter((t) => t === SAFE_MULTISIG_TX_TOPIC).length;
+    const safeExecutionSuccessCount = topics.filter((t) => t === SAFE_EXECUTION_SUCCESS_TOPIC).length;
+    const safeExecutionFailureCount = topics.filter((t) => t === SAFE_EXECUTION_FAILURE_TOPIC).length;
+    const nativeTransferCount = sim?.nativeTransfers?.length ?? 0;
+
+    const possibleRpcInconsistency =
+      sim != null &&
+      sim.success === false &&
+      (safeExecutionSuccessCount > 0 || nativeTransferCount > 0);
+
+    const label = `[SafeLens debug] ${evidence.safeTxHash.slice(0, 10)}… on chain ${evidence.chainId}`;
+    console.groupCollapsed(label);
+    console.info(
+      "[SafeLens debug] Keep this diagnostics block. It is intentionally verbose for bug reports and should not be removed."
+    );
+    console.debug("[SafeLens debug] Bug-report identifiers:", {
+      safeTxHash: evidence.safeTxHash,
+      safeAddress: evidence.safeAddress,
+      chainId: evidence.chainId,
+      txNonce: evidence.transaction.nonce,
+      packagedAt: evidence.packagedAt,
+    });
+    console.debug("[SafeLens debug] Enrichment context:", context);
+
+    if (sim) {
+      console.debug("[SafeLens debug] Simulation result:", {
+        success: sim.success,
+        returnData: sim.returnData,
+        gasUsed: sim.gasUsed,
+        blockNumber: sim.blockNumber,
+        blockTimestamp: sim.blockTimestamp,
+        traceAvailable: sim.traceAvailable,
+        logCount: sim.logs.length,
+        nativeTransferCount,
+      });
+      console.debug("[SafeLens debug] Safe execution log signals:", {
+        safeMultisigEventCount,
+        safeExecutionSuccessCount,
+        safeExecutionFailureCount,
+      });
+    } else {
+      console.debug("[SafeLens debug] Simulation is missing from exported evidence.");
+    }
+
+    if (evidence.simulationWitness) {
+      console.debug("[SafeLens debug] Simulation witness summary:", {
+        witnessOnly: evidence.simulationWitness.witnessOnly === true,
+        blockNumber: evidence.simulationWitness.blockNumber,
+        stateRoot: evidence.simulationWitness.stateRoot,
+        overriddenSlots: evidence.simulationWitness.overriddenSlots.length,
+        replayAccounts: evidence.simulationWitness.replayAccounts?.length ?? 0,
+      });
+    }
+
+    if (evidence.onchainPolicyProof) {
+      console.debug("[SafeLens debug] On-chain policy proof summary:", {
+        blockNumber: evidence.onchainPolicyProof.blockNumber,
+        stateRoot: evidence.onchainPolicyProof.stateRoot,
+        threshold: evidence.onchainPolicyProof.decodedPolicy.threshold,
+        owners: evidence.onchainPolicyProof.decodedPolicy.owners.length,
+        nonce: evidence.onchainPolicyProof.decodedPolicy.nonce,
+      });
+    }
+
+    console.debug("[SafeLens debug] Export contract summary:", evidence.exportContract);
+
+    if (possibleRpcInconsistency) {
+      console.warn(
+        "[SafeLens debug] Possible RPC inconsistency: simulation.success=false while trace/log signals indicate success effects. Include this diagnostics group in bug reports."
+      );
+    }
+    console.groupEnd();
+  } catch (error) {
+    console.warn("[SafeLens debug] Failed to print diagnostics:", error);
+  }
+}
+
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
   const [rpcUrl, setRpcUrl] = useState("");
@@ -407,7 +508,7 @@ export default function AnalyzePage() {
             : "Please provide an RPC URL for the transaction chain and retry.")
         );
 
-        return finalizeEvidenceExport(enriched, {
+        const finalized = finalizeEvidenceExport(enriched, {
           rpcProvided,
           consensusProofAttempted,
           consensusProofFailed,
@@ -418,6 +519,18 @@ export default function AnalyzePage() {
           simulationAttempted: true,
           simulationFailed: true,
         });
+        logEvidenceDebugSnapshot(finalized, {
+          rpcProvided,
+          rpcUrl: resolvedRpcUrl,
+          chainMismatch: { expected: pkg.chainId, actual: rpcChainId },
+          consensusProofAttempted,
+          consensusProofFailed,
+          onchainPolicyProofAttempted: true,
+          onchainPolicyProofFailed: true,
+          simulationAttempted: true,
+          simulationFailed: true,
+        });
+        return finalized;
       }
     }
 
@@ -486,7 +599,7 @@ export default function AnalyzePage() {
       }
     }
 
-    return finalizeEvidenceExport(enriched, {
+    const finalized = finalizeEvidenceExport(enriched, {
       rpcProvided,
       consensusProofAttempted,
       consensusProofFailed,
@@ -497,6 +610,18 @@ export default function AnalyzePage() {
       simulationAttempted,
       simulationFailed,
     });
+    logEvidenceDebugSnapshot(finalized, {
+      rpcProvided,
+      rpcUrl: resolvedRpcUrl || undefined,
+      chainMismatch: null,
+      consensusProofAttempted,
+      consensusProofFailed,
+      onchainPolicyProofAttempted,
+      onchainPolicyProofFailed,
+      simulationAttempted,
+      simulationFailed,
+    });
+    return finalized;
   };
 
   const handleAnalyze = async () => {
