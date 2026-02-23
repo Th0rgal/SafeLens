@@ -20,7 +20,6 @@ apps/generator/out/
 # tauri
 /apps/desktop/src-tauri/target
 /apps/desktop/src-tauri/.tauri
-/apps/desktop/src-tauri/Cargo.lock
 /apps/desktop/src-tauri/gen/schemas
 # /apps/desktop/src-tauri/icons  # tracked: custom app icon
 
