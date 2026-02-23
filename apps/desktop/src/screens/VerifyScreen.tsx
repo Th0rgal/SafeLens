@@ -758,12 +758,9 @@ function ExecutionSafetyPanel({
 
   // ── Simulation effects ────────────────────────────────────────────
   const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
-  const replaySimulationPassed =
-    simulationReplayVerification?.executed === true &&
-    simulationReplayVerification.success === true;
   const decodedEvents = useMemo(() => {
     if (witnessOnlySimulation) {
-      if (!replaySimulationPassed) {
+      if (!replayPassed) {
         return [];
       }
       const replayLogs = (simulationReplayVerification?.replayLogs ?? []).map((log: {
@@ -794,7 +791,7 @@ function ExecutionSafetyPanel({
     evidence.chainId,
     evidence.simulationWitness?.witnessOnly,
     nativeTokenSymbol,
-    replaySimulationPassed,
+    replayPassed,
     simulationReplayVerification?.replayLogs,
     witnessOnlySimulation,
   ]);
@@ -813,7 +810,7 @@ function ExecutionSafetyPanel({
     simulationAvailable &&
     simulationVerification?.valid === true &&
     !simulationVerification.executionReverted &&
-    (!witnessOnlySimulation || replaySimulationPassed);
+    (!witnessOnlySimulation || replayPassed);
 
   // ── Expandable detail data ────────────────────────────────────────
   const simulationFreshness = buildSimulationFreshnessDetail(evidence.simulation, evidence.packagedAt);
@@ -882,6 +879,21 @@ function ExecutionSafetyPanel({
                         return (
                           <div className="text-muted">
                             Signature verification is still running.
+                          </div>
+                        );
+                      }
+                      if (replayFailed) {
+                        return (
+                          <div className="text-red-300">
+                            {simulationReplayVerification?.error ??
+                              "Local replay verification failed. Token effects cannot be trusted."}
+                          </div>
+                        );
+                      }
+                      if (replayPending) {
+                        return (
+                          <div className="text-amber-300">
+                            Local replay verification is still running.
                           </div>
                         );
                       }
