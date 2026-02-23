@@ -81,6 +81,8 @@ Notes:
 
 - In witness-only packages, simulation effects are intentionally omitted from
   packaged RPC output and are derived from local replay during verification.
+- `simulationWitness.simulationDigest` must always be computed from the exact
+  packaged simulation payload (including witness-only stripped projections).
 - Desktop `Simulation outcome` must not return a success/check state for
   witness-only packages unless both witness verification and replay verification
   succeed.

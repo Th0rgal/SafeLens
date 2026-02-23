@@ -16,6 +16,7 @@ import {
   fetchSimulationWitness,
   type FetchSimulationOptions,
 } from "../simulation";
+import { computeSimulationDigest } from "../simulation/witness-verifier";
 import {
   fetchConsensusProof,
   type FetchConsensusProofOptions,
@@ -170,24 +171,28 @@ export async function enrichWithSimulation(
     simulationWitness.replayAccounts.length > 0;
   const hasReplayBlockContext = Boolean(simulationWitness?.replayBlock);
   const useWitnessOnlySimulation = hasReplayAccounts && hasReplayBlockContext;
+  const packagedSimulation = useWitnessOnlySimulation
+    ? {
+        ...simulation,
+        // Witness-only mode: do not ship decoded effects from RPC output.
+        logs: [],
+        nativeTransfers: undefined,
+      }
+    : simulation;
+  const packagedSimulationWitness = useWitnessOnlySimulation
+    ? {
+        ...simulationWitness!,
+        // Keep digest aligned with the packaged simulation projection.
+        simulationDigest: computeSimulationDigest(packagedSimulation),
+        witnessOnly: true,
+      }
+    : simulationWitness;
 
   return {
     ...evidence,
     version: withEnrichmentVersion(evidence.version),
-    simulation: useWitnessOnlySimulation
-      ? {
-          ...simulation,
-          // Witness-only mode: do not ship decoded effects from RPC output.
-          logs: [],
-          nativeTransfers: undefined,
-        }
-      : simulation,
-    simulationWitness: useWitnessOnlySimulation
-      ? {
-          ...simulationWitness!,
-          witnessOnly: true,
-        }
-      : simulationWitness,
+    simulation: packagedSimulation,
+    simulationWitness: packagedSimulationWitness,
   };
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ConsensusProof, OnchainPolicyProof } from "../../types";
+import { computeSimulationDigest } from "../../simulation/witness-verifier";
 import {
   createEvidencePackage,
   enrichWithConsensusProof,
@@ -257,6 +258,9 @@ describe("proof alignment in package enrichment", () => {
 
     expect(enriched.simulation?.logs).toEqual([]);
     expect(enriched.simulationWitness?.witnessOnly).toBe(true);
+    expect(enriched.simulationWitness?.simulationDigest).toBe(
+      computeSimulationDigest(enriched.simulation!)
+    );
   });
 
   it("keeps packaged simulation effects when witness replay accounts are missing", async () => {
