@@ -16,6 +16,7 @@ import {
   fetchSimulationWitness,
   type FetchSimulationOptions,
 } from "../simulation";
+import { computeSimulationDigest } from "../simulation/witness-verifier";
 import {
   fetchConsensusProof,
   type FetchConsensusProofOptions,
@@ -165,11 +166,35 @@ export async function enrichWithSimulation(
     simulationWitness = undefined;
   }
 
+  const hasReplayAccounts =
+    Array.isArray(simulationWitness?.replayAccounts) &&
+    simulationWitness.replayAccounts.length > 0;
+  const hasReplayBlockContext = Boolean(simulationWitness?.replayBlock);
+  const hasReplaySupportedOperation = evidence.transaction.operation === 0;
+  const useWitnessOnlySimulation =
+    hasReplaySupportedOperation && hasReplayAccounts && hasReplayBlockContext;
+  const packagedSimulation = useWitnessOnlySimulation
+    ? {
+        ...simulation,
+        // Witness-only mode: do not ship decoded effects from RPC output.
+        logs: [],
+        nativeTransfers: undefined,
+      }
+    : simulation;
+  const packagedSimulationWitness = useWitnessOnlySimulation
+    ? {
+        ...simulationWitness!,
+        // Keep digest aligned with the packaged simulation projection.
+        simulationDigest: computeSimulationDigest(packagedSimulation),
+        witnessOnly: true,
+      }
+    : simulationWitness;
+
   return {
     ...evidence,
     version: withEnrichmentVersion(evidence.version),
-    simulation,
-    simulationWitness,
+    simulation: packagedSimulation,
+    simulationWitness: packagedSimulationWitness,
   };
 }
 
@@ -229,7 +254,9 @@ export interface FinalizeExportContractOptions {
 /**
  * Stamp package export status with explicit machine-readable completeness data.
  * A package is "fully-verifiable" only when consensus proof, on-chain policy
- * proof, and simulation are all present. All other states are partial.
+ * proof, simulation artifact, and replay-capable simulation witness inputs
+ * (accounts + pinned block context) are all present. All other states are
+ * partial.
  */
 export function finalizeEvidenceExport(
   evidence: EvidencePackage,
@@ -246,6 +273,13 @@ export function finalizeEvidenceExport(
     hasConsensusProofArtifact && proofConsensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
+  const hasSimulationWitnessReplayInputs =
+    Array.isArray(evidence.simulationWitness?.replayAccounts) &&
+    evidence.simulationWitness.replayAccounts.length > 0 &&
+    Boolean(evidence.simulationWitness.replayBlock);
+  const hasReplaySupportedOperation = evidence.transaction.operation === 0;
+  const hasReplayCapableSimulationWitnessInputs =
+    hasReplaySupportedOperation && hasSimulationWitnessReplayInputs;
   const reasons = new Set<ExportContractReason>();
 
   if (!hasConsensusProofArtifact) {
@@ -288,10 +322,17 @@ export function finalizeEvidenceExport(
     } else {
       reasons.add("missing-simulation");
     }
+  } else if (!hasReplaySupportedOperation) {
+    reasons.add("simulation-replay-unsupported-operation");
+  } else if (!hasSimulationWitnessReplayInputs) {
+    reasons.add("missing-simulation-witness");
   }
 
   const isFullyVerifiable =
-    hasVerifierSupportedConsensusProof && hasOnchainPolicyProof && hasSimulation;
+    hasVerifierSupportedConsensusProof &&
+    hasOnchainPolicyProof &&
+    hasSimulation &&
+    hasReplayCapableSimulationWitnessInputs;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",

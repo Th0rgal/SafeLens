@@ -50,6 +50,14 @@ Rules:
 
 For OP Stack and Linea, summary/detail must preserve the non-equivalence boundary to Beacon light-client finality.
 
+Desktop UI rule:
+
+- `Chain state is finalized` must consume the core `consensusTrustDecisionReason`.
+- Even when `consensusVerification.valid === true`, any non-null trust decision reason
+  (for example `state-root-mismatch-policy-proof` or
+  `block-number-mismatch-policy-proof`) must downgrade the safety check from `check`
+  to warning/error according to `isWarningConsensusTrustDecisionReason(...)`.
+
 ## Decoded calldata trust matrix
 
 `decoded-calldata` trust is derived from `decodedCalldataVerification`:
@@ -58,6 +66,37 @@ For OP Stack and Linea, summary/detail must preserve the non-equivalence boundar
 2. `partial` -> trust `api-sourced` with partial-verification wording
 3. `mismatch` -> trust `api-sourced` with explicit mismatch wording
 4. `api-only` or omitted -> trust `api-sourced`
+
+## Simulation trust matrix
+
+`simulation` trust is derived from witness + replay outcomes:
+
+1. no simulation artifact -> source disabled
+2. simulation without witness -> trust `rpc-sourced`
+3. simulation + witness, but witness verification fails -> trust `rpc-sourced`
+4. simulation + witness verified, replay not run/failed/mismatch -> trust `rpc-sourced`
+5. simulation + witness verified, replay executes and matches, and structural simulation verification passes -> trust remains `rpc-sourced` until replay world-state accounts are fully state-root proven
+
+Notes:
+
+- In witness-only packages, simulation effects are intentionally omitted from
+  packaged RPC output and are derived from local replay during verification.
+- `simulationWitness.simulationDigest` must always be computed from the exact
+  packaged simulation payload (including witness-only stripped projections).
+- Desktop `Simulation outcome` must not return a success/check state for
+  witness-only packages unless both witness verification and replay verification
+  succeed.
+- Witness-only replay requires complete replay inputs: world-state accounts and
+  pinned block environment (timestamp/gas/basefee/beneficiary, plus optional
+  prevrandao/difficulty). If block context is missing, replay must fail closed.
+- Replay currently supports `operation=0` (`CALL`) only. For
+  `operation=1` (`DELEGATECALL`), generator must keep packaged simulation
+  effects and export cannot be labeled `fully-verifiable`.
+- Log equality checks apply when packaged logs are present; witness-only replay
+  still enforces success/return-data/gas policy checks.
+- Replay success currently proves deterministic consistency against provided
+  witness inputs, not full cryptographic completeness for all replay world-state
+  accounts. Do not label simulation as `proof-verified` under this model.
 
 ## Required tests
 

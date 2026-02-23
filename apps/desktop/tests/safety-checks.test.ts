@@ -4,6 +4,8 @@ import type {
   ConsensusVerificationResult,
   EvidencePackage,
   PolicyProofVerificationResult,
+  SimulationReplayVerificationResult,
+  SimulationWitnessVerificationResult,
   SimulationVerificationResult,
 } from "@safelens/core";
 import {
@@ -323,6 +325,28 @@ describe("classifyConsensusStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toBe("Verified at block 999.");
   });
+
+  it("returns error when consensus trust decision stays downgraded despite verifier success", () => {
+    const status = classifyConsensusStatus(
+      makeEvidence("beacon"),
+      makeConsensusVerification({
+        valid: true,
+        state_root_matches: true,
+        verified_state_root: `0x${"a".repeat(64)}`,
+        verified_block_number: 1001,
+        error: null,
+        error_code: null,
+      }),
+      "Consensus proof included, but trust did not upgrade: verified block does not match on-chain policy proof block.",
+      "block-number-mismatch-policy-proof"
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("block-number-mismatch-policy-proof");
+    expect(status.detail).toBe(
+      "Consensus proof included, but trust did not upgrade: verified block does not match on-chain policy proof block."
+    );
+  });
 });
 
 describe("classifyPolicyStatus", () => {
@@ -420,6 +444,114 @@ describe("classifySimulationStatus", () => {
     expect(status.status).toBe("warning");
     expect(status.reasonCode).toBe("simulation-execution-reverted");
     expect(status.detail).toBe("Simulation ran but the transaction reverted.");
+  });
+
+  it("returns warning for witness-only simulation while replay is pending", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      undefined
+    );
+
+    expect(status.status).toBe("warning");
+    expect(status.reasonCode).toBe("simulation-replay-pending");
+  });
+
+  it("returns error for witness-only simulation when replay fails", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: true,
+        errors: [],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: false,
+        reason: "simulation-replay-exec-error",
+        error: "replay failed",
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("simulation-replay-exec-error");
+    expect(status.detail).toBe("replay failed");
+  });
+
+  it("returns error for witness-only simulation when witness proof is invalid even if replay passes", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: "0x0000000000000000000000000000000000000001",
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          logs: [],
+          blockNumber: 1,
+          trust: "rpc-sourced",
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: false,
+        errors: ["witness digest mismatch"],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-matched",
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("error");
+    expect(status.reasonCode).toBe("simulation-witness-proof-failed");
+    expect(status.detail).toBe("witness digest mismatch");
   });
 });
 

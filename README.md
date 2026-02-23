@@ -34,6 +34,7 @@ The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capab
 - Docs index: [`docs/README.md`](docs/README.md)
 - Interpreter precedence contract: [`docs/architecture/interpretation-precedence.md`](docs/architecture/interpretation-precedence.md)
 - Verification source contract: [`docs/architecture/verification-source-contract.md`](docs/architecture/verification-source-contract.md)
+- On-chain verification UI contract: [`docs/architecture/onchain-verification-ui.md`](docs/architecture/onchain-verification-ui.md)
 - ERC-7730 bundle update runbook: [`docs/runbooks/erc7730-bundle-update.md`](docs/runbooks/erc7730-bundle-update.md)
 - Simulation replay benchmark runbook: [`docs/runbooks/simulation-replay-benchmark.md`](docs/runbooks/simulation-replay-benchmark.md)
 
@@ -41,11 +42,18 @@ The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capab
 
 - `self-verified`: Safe tx hash recomputation and supported signature recovery.
 - `proof-verified`: on-chain Safe policy proof verification (`eth_getProof` artifacts).
-- `proof-verified` (simulation): witness-anchored local `revm` replay matches packaged simulation output (success/revert, return data, logs, gas policy).
+- `rpc-sourced` (simulation): local replay can validate consistency against witness inputs, but replay world-state accounts are not yet fully state-root proven.
 - `consensus-verified-beacon`: beacon consensus proofs verified by desktop via Helios.
 - `consensus-verified-opstack` / `consensus-verified-linea`: deterministic envelope checks with explicit non-equivalence to beacon light-client finality.
 
 The generator/CLI can attach optional `onchainPolicyProof`, `simulation`, and `consensusProof` sections. Desktop/CLI verify consume these sections when present.
+
+Simulation replay note: witness-only replay currently supports `CALL` (`operation=0`) paths. `DELEGATECALL` (`operation=1`) packages remain partial and keep packaged simulation effects.
+
+### Desktop vs CLI
+
+- **Desktop**: full verification path, including local simulation replay (`revm`) and consensus-proof verification.
+- **CLI**: verifies hashes/signatures/proofs from the package, but does not run the desktop replay/consensus verifier path.
 
 ### Replay benchmark
 

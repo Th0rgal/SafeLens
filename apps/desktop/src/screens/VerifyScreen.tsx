@@ -27,7 +27,7 @@ import {
   type SafetyCheck,
   type SafetyStatus,
 } from "@/lib/safety-checks";
-import { buildSimulationFreshnessDetail, formatRelativeTime } from "@/lib/simulation-freshness";
+import { buildSimulationFreshnessDetail } from "@/lib/simulation-freshness";
 import { buildNetworkSupportStatus, type NetworkSupportStatus } from "@/lib/network-support";
 import { buildConsensusDetailRows } from "@/lib/consensus-details";
 import { buildPolicyDetailRows } from "@/lib/policy-details";
@@ -35,13 +35,19 @@ import { buildSimulationDetailRows } from "@/lib/simulation-details";
 import {
   getSimulationUnavailableReason,
 } from "@/lib/simulation-unavailable";
+import {
+  buildFullyVerifiedDescription,
+  buildFullyVerifiedPopoverDetail,
+} from "@/lib/verification-copy";
 import { useEvidenceVerification } from "@/lib/use-evidence-verification";
 import { ShieldCheck, AlertTriangle, HelpCircle, Upload, ChevronRight } from "lucide-react";
 import type {
   EvidencePackage,
+  SignatureCheckResult,
   TransactionWarning,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
+  SimulationReplayVerificationResult,
   ConsensusVerificationResult,
   WarningLevel,
 } from "@safelens/core";
@@ -90,8 +96,11 @@ export default function VerifyScreen() {
     hashMatch,
     policyProof,
     simulationVerification,
+    simulationWitnessVerification,
+    simulationReplayVerification,
     consensusVerification,
     consensusSourceSummary,
+    consensusTrustDecisionReason,
   } = useEvidenceVerification(evidence, config ?? null);
   const errors = [...parseErrors, ...verificationErrors];
 
@@ -142,10 +151,29 @@ export default function VerifyScreen() {
     if (!evidence) return [];
     return [
       classifyPolicyStatus(evidence, policyProof),
-      classifyConsensusStatus(evidence, consensusVerification, consensusSourceSummary),
-      classifySimulationStatus(evidence, simulationVerification),
+      classifyConsensusStatus(
+        evidence,
+        consensusVerification,
+        consensusSourceSummary,
+        consensusTrustDecisionReason
+      ),
+      classifySimulationStatus(
+        evidence,
+        simulationVerification,
+        simulationWitnessVerification,
+        simulationReplayVerification
+      ),
     ];
-  }, [evidence, policyProof, consensusVerification, consensusSourceSummary, simulationVerification]);
+  }, [
+    evidence,
+    policyProof,
+    consensusVerification,
+    consensusSourceSummary,
+    consensusTrustDecisionReason,
+    simulationVerification,
+    simulationWitnessVerification,
+    simulationReplayVerification,
+  ]);
   const decodedCallsSummary = useMemo(() => {
     if (!evidence?.dataDecoded) return null;
     const steps = normalizeCallSteps(
@@ -375,6 +403,8 @@ export default function VerifyScreen() {
             consensusVerification={consensusVerification}
             policyProof={policyProof}
             simulationVerification={simulationVerification}
+            simulationReplayVerification={simulationReplayVerification}
+            sigResults={sigResults}
             showDetails={showSafetyDetails}
             onToggleDetails={() => setShowSafetyDetails((value) => !value)}
           />
@@ -508,10 +538,6 @@ function SafePolicySection({ evidence }: { evidence: EvidencePackage }) {
       <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 space-y-2">
         {/* Signing policy summary */}
         <div className="flex items-center justify-between text-xs">
-          <span className="text-muted">Required signatures</span>
-          <span className="font-medium">{policy.threshold}</span>
-        </div>
-        <div className="flex items-center justify-between text-xs">
           <span className="text-muted">Signatures collected</span>
           <span className="font-medium">{signedCount} / {policy.threshold}</span>
         </div>
@@ -577,6 +603,8 @@ function ExecutionSafetyPanel({
   consensusVerification,
   policyProof,
   simulationVerification,
+  simulationReplayVerification,
+  sigResults,
   showDetails,
   onToggleDetails,
 }: {
@@ -587,6 +615,8 @@ function ExecutionSafetyPanel({
   consensusVerification: ConsensusVerificationResult | undefined;
   policyProof: PolicyProofVerificationResult | undefined;
   simulationVerification: SimulationVerificationResult | undefined;
+  simulationReplayVerification: SimulationReplayVerificationResult | undefined;
+  sigResults: Record<string, SignatureCheckResult>;
   showDetails: boolean;
   onToggleDetails: () => void;
 }) {
@@ -682,19 +712,22 @@ function ExecutionSafetyPanel({
   // ── Verification status ───────────────────────────────────────────
   const hasError = checksForVerificationStatus.some((check) => check.status === "error");
   const hasWarning = checksForVerificationStatus.some((check) => check.status === "warning");
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
+  const replayRequired = Boolean(evidence.simulation && witnessOnlySimulation);
+  const replayResultAvailable = Boolean(simulationReplayVerification);
+  const replayPassed =
+    simulationReplayVerification?.executed === true &&
+    simulationReplayVerification.success === true;
+  const replayFailed = replayRequired && replayResultAvailable && !replayPassed;
+  const replayPending = replayRequired && !replayResultAvailable;
+  const signatureStatuses = evidence.confirmations.map(
+    (confirmation) => sigResults[confirmation.owner]?.status
+  );
+  const signaturesPending = signatureStatuses.some((status) => status === undefined);
+  const signaturesInvalid = signatureStatuses.some((status) => status === "invalid");
+  const signaturesUnsupported = signatureStatuses.some((status) => status === "unsupported");
 
-  const freshnessDescription = (() => {
-    const sim = evidence.simulation;
-    if (!sim) return "Simulation not available for this package.";
-    const blockPart = `block ${sim.blockNumber}`;
-    if (sim.blockTimestamp) {
-      const relative = formatRelativeTime(sim.blockTimestamp);
-      return relative
-        ? `Verified at ${blockPart}, ${relative}.`
-        : `Verified at ${blockPart}.`;
-    }
-    return `Verified at ${blockPart}.`;
-  })();
+  const freshnessDescription = buildFullyVerifiedDescription(evidence, consensusVerification);
 
   const DATA_ABSENT_REASON_CODES = new Set([
     "missing-onchain-policy-proof",
@@ -709,12 +742,30 @@ function ExecutionSafetyPanel({
     (c) => c.reasonCode && DATA_ABSENT_REASON_CODES.has(c.reasonCode)
   );
 
-  const verification = hasError
-    ? { label: "Verification Failed", description: "One or more safety checks failed. Do not sign.", status: "error" as const }
+  const verification = hasError || replayFailed || signaturesInvalid
+    ? {
+        label: "Verification Failed",
+        description: signaturesInvalid
+          ? "One or more signatures are invalid."
+          : replayFailed
+            ? simulationReplayVerification?.error ?? "Local replay verification failed. Do not sign."
+            : "One or more safety checks failed. Do not sign.",
+        status: "error" as const,
+      }
     : hasWarning && allDataAbsent
       ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
-      : hasWarning
-        ? { label: "Partially Verified", description: "Some checks are partial or unavailable.", status: "warning" as const }
+      : hasWarning || replayPending || signaturesPending || signaturesUnsupported
+        ? {
+            label: "Partially Verified",
+            description: signaturesPending
+              ? "Signature verification is still running."
+              : signaturesUnsupported
+                ? "Some signatures use unsupported schemes and cannot be fully verified."
+                : replayPending
+                  ? "Local replay verification is still running."
+                  : "Some checks are partial or unavailable.",
+            status: "warning" as const,
+          }
         : { label: "Fully Verified", description: freshnessDescription, status: "check" as const };
 
   const verificationStyle = SAFETY_STATUS_STYLE[verification.status];
@@ -722,12 +773,24 @@ function ExecutionSafetyPanel({
 
   // ── Simulation effects ────────────────────────────────────────────
   const decodedEvents = useMemo(() => {
+    if (witnessOnlySimulation) {
+      if (!replayPassed) {
+        return [];
+      }
+      const replayLogs = (simulationReplayVerification?.replayLogs ?? []).map((log: {
+        address: string;
+        topics: string[];
+        data: string;
+      }) => ({
+        address: log.address as `0x${string}`,
+        topics: log.topics as `0x${string}`[],
+        data: log.data as `0x${string}`,
+      }));
+      return decodeSimulationEvents(replayLogs, evidence.safeAddress, evidence.chainId);
+    }
+
     if (!evidence.simulation?.logs) return [];
-    const logEvents = decodeSimulationEvents(
-      evidence.simulation.logs,
-      evidence.safeAddress,
-      evidence.chainId,
-    );
+    const logEvents = decodeSimulationEvents(evidence.simulation.logs, evidence.safeAddress, evidence.chainId);
     const nativeEvents = evidence.simulation.nativeTransfers?.length
       ? decodeNativeTransfers(
           evidence.simulation.nativeTransfers,
@@ -736,7 +799,16 @@ function ExecutionSafetyPanel({
         )
       : [];
     return [...nativeEvents, ...logEvents];
-  }, [evidence.simulation, evidence.safeAddress, evidence.chainId, nativeTokenSymbol]);
+  }, [
+    evidence.simulation,
+    evidence.safeAddress,
+    evidence.chainId,
+    evidence.simulationWitness?.witnessOnly,
+    nativeTokenSymbol,
+    replayPassed,
+    simulationReplayVerification?.replayLogs,
+    witnessOnlySimulation,
+  ]);
 
   const transferEvents = useMemo(
     () => decodedEvents.filter((e) => e.kind !== "approval"),
@@ -751,7 +823,8 @@ function ExecutionSafetyPanel({
   const simulationPassed =
     simulationAvailable &&
     simulationVerification?.valid === true &&
-    !simulationVerification.executionReverted;
+    !simulationVerification.executionReverted &&
+    (!witnessOnlySimulation || replayPassed);
 
   // ── Expandable detail data ────────────────────────────────────────
   const simulationFreshness = buildSimulationFreshnessDetail(evidence.simulation, evidence.packagedAt);
@@ -790,10 +863,9 @@ function ExecutionSafetyPanel({
               >
                 {verification.status === "check" ? (
                   <div className="text-muted">
-                    This evidence includes a simulation from an RPC node, verified locally
-                    against finalized chain state using an embedded Helios lightclient.
-                    On-chain conditions may change before execution, the actual outcome
-                    could differ from what was simulated.
+                    {buildFullyVerifiedPopoverDetail(evidence)} On-chain conditions may
+                    change before execution, so the actual outcome could differ from
+                    the simulated result.
                   </div>
                 ) : (
                   (() => {
@@ -801,6 +873,42 @@ function ExecutionSafetyPanel({
                       (check) => check.status !== "check"
                     );
                     if (nonCheckWarnings.length === 0) {
+                      if (signaturesInvalid) {
+                        return (
+                          <div className="text-red-300">
+                            One or more signatures are invalid.
+                          </div>
+                        );
+                      }
+                      if (signaturesUnsupported) {
+                        return (
+                          <div className="text-amber-300">
+                            Some signatures use unsupported schemes and cannot be fully verified.
+                          </div>
+                        );
+                      }
+                      if (signaturesPending) {
+                        return (
+                          <div className="text-muted">
+                            Signature verification is still running.
+                          </div>
+                        );
+                      }
+                      if (replayFailed) {
+                        return (
+                          <div className="text-red-300">
+                            {simulationReplayVerification?.error ??
+                              "Local replay verification failed. Token effects cannot be trusted."}
+                          </div>
+                        );
+                      }
+                      if (replayPending) {
+                        return (
+                          <div className="text-amber-300">
+                            Local replay verification is still running.
+                          </div>
+                        );
+                      }
                       return (
                         <div className="text-muted">
                           Simulation reverted. See the Simulation section for details.
@@ -832,46 +940,97 @@ function ExecutionSafetyPanel({
         <CardDescription>{verification.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="space-y-2">
-          {checksForVerificationStatus.map((check) => {
-            const style = SAFETY_STATUS_STYLE[check.status];
-            const Icon = style.icon;
-            return (
-              <div key={check.id} className="rounded-md border border-border/15 glass-subtle px-3 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium">{check.label}</span>
-                  <span className={`inline-flex items-center gap-1 text-[11px] ${style.text}`}>
-                    <Icon className="h-3 w-3" />
-                    {check.status === "check" ? "Check" : check.status === "warning" ? "Warning" : "Error"}
-                  </span>
-                </div>
-                <div className={`mt-1 text-[11px] ${style.text}`}>{check.detail}</div>
+        <SafePolicySection evidence={evidence} />
+
+        <div className="text-xs font-medium text-muted">Simulation effects</div>
+        {simulationPassed ? (
+          <>
+            {transferEvents.length > 0 && (
+              <div className="space-y-1.5">
+                {transferEvents.map((event, i) => {
+                  const colorClass =
+                    event.direction === "send"
+                      ? "text-red-400"
+                      : event.direction === "receive"
+                        ? "text-emerald-400"
+                        : "text-muted";
+                  const bgClass =
+                    event.direction === "send"
+                      ? "bg-red-500/5"
+                      : event.direction === "receive"
+                        ? "bg-emerald-500/5"
+                        : "bg-surface-2/30";
+                  const arrow =
+                    event.direction === "send" ? "↗" : event.direction === "receive" ? "↙" : "↔";
+                  const verb =
+                    event.direction === "send" ? "Send" : event.direction === "receive" ? "Receive" : "Transfer";
+                  const counterparty =
+                    event.direction === "send" ? event.to : event.direction === "receive" ? event.from : event.to;
+                  const preposition =
+                    event.direction === "send" ? "to" : event.direction === "receive" ? "from" : "at";
+
+                  return (
+                    <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
+                      <span className={`font-medium ${colorClass}`}>
+                        {arrow} {verb}
+                      </span>
+                      <span className="font-medium">{event.amountFormatted}</span>
+                      <span className="text-muted">{preposition}</span>
+                      <AddressDisplay address={counterparty} chainId={evidence.chainId} />
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
-        </div>
-
-        <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-          {simulationFreshness}
-        </div>
-
-        {networkSupport && (
-          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-muted">Network support</span>
-              <span
-                className={`inline-flex items-center rounded-md border px-2 py-0.5 font-medium ${
-                  networkSupport.isFullySupported
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                    : "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                }`}
-              >
-                {networkSupport.badgeText}
-              </span>
-            </div>
-            {networkSupport.helperText && (
-              <div className="mt-1 text-amber-300">{networkSupport.helperText}</div>
             )}
+            {transferEvents.length === 0 && (
+              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+                {evidence.simulation?.traceAvailable === false
+                  ? "No token movements detected. Event details may be limited, RPC does not support debug_traceCall."
+                  : "No token movements detected."}
+              </div>
+            )}
+            {remainingApprovals.length > 0 && (
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                <div className="text-xs font-medium text-amber-200">
+                  Remaining token approvals
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  {remainingApprovals.map((approval, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
+                      <span className={approval.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
+                        {approval.amountFormatted}
+                      </span>
+                      <span className="text-amber-400/70">to</span>
+                      <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1.5 text-[11px] text-amber-400/70">
+                  These allowances remain active after execution. Verify that the approved spenders are trusted.
+                </div>
+              </div>
+            )}
+          </>
+        ) : simulationAvailable && simulationVerification?.executionReverted ? (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Token effects could not be determined because the simulation reverted.
+          </div>
+        ) : witnessOnlySimulation && replayFailed ? (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            Local replay verification failed. Token effects cannot be trusted.
+            {simulationReplayVerification?.error ? ` ${simulationReplayVerification.error}` : ""}
+          </div>
+        ) : witnessOnlySimulation ? (
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            This is a witness-only package. Token effects are shown only after successful local replay.
+          </div>
+        ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+            Simulation verification failed. Token effects cannot be trusted.
+          </div>
+        ) : (
+          <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
+            Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
           </div>
         )}
 
@@ -886,91 +1045,6 @@ function ExecutionSafetyPanel({
         {/* ── Expandable details ───────────────────────────────────── */}
         {showDetails && (
           <div className="space-y-3 border-t border-border/10 pt-3">
-            <SafePolicySection evidence={evidence} />
-
-            <div className="text-xs font-medium text-muted">Simulation effects</div>
-            {simulationPassed ? (
-              <>
-                {transferEvents.length > 0 && (
-                  <div className="space-y-1.5">
-                    {transferEvents.map((event, i) => {
-                      const colorClass =
-                        event.direction === "send"
-                          ? "text-red-400"
-                          : event.direction === "receive"
-                            ? "text-emerald-400"
-                            : "text-muted";
-                      const bgClass =
-                        event.direction === "send"
-                          ? "bg-red-500/5"
-                          : event.direction === "receive"
-                            ? "bg-emerald-500/5"
-                            : "bg-surface-2/30";
-                      const arrow =
-                        event.direction === "send" ? "↗" : event.direction === "receive" ? "↙" : "↔";
-                      const verb =
-                        event.direction === "send" ? "Send" : event.direction === "receive" ? "Receive" : "Transfer";
-                      const counterparty =
-                        event.direction === "send" ? event.to : event.direction === "receive" ? event.from : event.to;
-                      const preposition =
-                        event.direction === "send" ? "to" : event.direction === "receive" ? "from" : "at";
-
-                      return (
-                        <div key={i} className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md px-3 py-2 text-xs ${bgClass}`}>
-                          <span className={`font-medium ${colorClass}`}>
-                            {arrow} {verb}
-                          </span>
-                          <span className="font-medium">{event.amountFormatted}</span>
-                          <span className="text-muted">{preposition}</span>
-                          <AddressDisplay address={counterparty} chainId={evidence.chainId} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {transferEvents.length === 0 && (
-                  <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-                    {evidence.simulation?.traceAvailable === false
-                      ? "No token movements detected. Event details may be limited, RPC does not support debug_traceCall."
-                      : "No token movements detected."}
-                  </div>
-                )}
-                {remainingApprovals.length > 0 && (
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
-                    <div className="text-xs font-medium text-amber-200">
-                      Remaining token approvals
-                    </div>
-                    <div className="mt-1.5 space-y-1.5">
-                      {remainingApprovals.map((approval, i) => (
-                        <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-amber-300">
-                          <span className={approval.isUnlimited ? "font-medium text-red-400" : "font-medium"}>
-                            {approval.amountFormatted}
-                          </span>
-                          <span className="text-amber-400/70">to</span>
-                          <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-1.5 text-[11px] text-amber-400/70">
-                      These allowances remain active after execution. Verify that the approved spenders are trusted.
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : simulationAvailable && simulationVerification?.executionReverted ? (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-                Token effects could not be determined because the simulation reverted.
-              </div>
-            ) : simulationAvailable && simulationVerification && !simulationVerification.valid ? (
-              <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-                Simulation verification failed. Token effects cannot be trusted.
-              </div>
-            ) : (
-              <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-                Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
-              </div>
-            )}
-
             {/* ── Chain state + consensus details ──────────────────── */}
             {(() => {
               const check = checks.find((c) => c.id === "chain-state-finalized");

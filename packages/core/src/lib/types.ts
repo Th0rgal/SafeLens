@@ -236,6 +236,23 @@ export const simulationSchema = z.object({
 
 export type Simulation = z.infer<typeof simulationSchema>;
 
+export const simulationReplayBlockSchema = z.object({
+  /** Block timestamp in seconds since Unix epoch. */
+  timestamp: evmQuantitySchema,
+  /** Block gas limit. */
+  gasLimit: evmQuantitySchema,
+  /** Block base fee per gas. */
+  baseFeePerGas: evmQuantitySchema,
+  /** Block beneficiary / coinbase. */
+  beneficiary: addressSchema,
+  /** Optional randomness beacon value (post-merge). */
+  prevRandao: hashSchema.optional(),
+  /** Block difficulty / prevrandao fallback for legacy networks. */
+  difficulty: evmQuantitySchema.optional(),
+});
+
+export type SimulationReplayBlock = z.infer<typeof simulationReplayBlockSchema>;
+
 // Witness artifact for simulation verification.
 // This does not include a full execution proof; it anchors simulation context
 // to a proven state root and binds the simulation payload with a digest.
@@ -252,6 +269,7 @@ export const simulationWitnessSchema = z.object({
     })
   ),
   simulationDigest: hashSchema,
+  replayBlock: simulationReplayBlockSchema.optional(),
   replayAccounts: z.array(
     z.object({
       address: addressSchema,
@@ -263,6 +281,9 @@ export const simulationWitnessSchema = z.object({
   ).optional(),
   replayCaller: addressSchema.optional(),
   replayGasLimit: z.number().int().positive().optional(),
+  /** When true, simulation effects (logs/nativeTransfers) are intentionally
+   * omitted from the packaged simulation and must be derived from local replay. */
+  witnessOnly: z.boolean().optional(),
 });
 
 export type SimulationWitness = z.infer<typeof simulationWitnessSchema>;
@@ -280,6 +301,8 @@ export const exportContractReasonSchema = z.enum([
   "policy-proof-fetch-failed",
   "simulation-fetch-failed",
   "missing-simulation",
+  "missing-simulation-witness",
+  "simulation-replay-unsupported-operation",
 ]);
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
@@ -300,6 +323,10 @@ export const EXPORT_CONTRACT_REASON_LABELS: Record<ExportContractReason, string>
   "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
   "simulation-fetch-failed": "Simulation fetch failed.",
   "missing-simulation": "Simulation result was not included.",
+  "missing-simulation-witness":
+    "Simulation witness/replay inputs were not included, so simulation cannot be fully verified offline.",
+  "simulation-replay-unsupported-operation":
+    "Simulation replay currently supports CALL (operation=0) only; DELEGATECALL evidence cannot be fully replay-verified offline.",
 };
 
 export function getExportContractReasonLabel(reason: ExportContractReason): string {

@@ -6,12 +6,14 @@ import {
   VERIFICATION_SOURCE_IDS,
 } from "@safelens/core";
 import type {
+  ConsensusTrustDecisionReason,
   EvidencePackage,
   SignatureCheckResult,
   TransactionWarning,
   SafeTxHashDetails,
   PolicyProofVerificationResult,
   SimulationVerificationResult,
+  SimulationWitnessVerificationResult,
   SimulationReplayVerificationResult,
   ConsensusVerificationResult,
   SettingsConfig,
@@ -45,8 +47,11 @@ type EvidenceVerificationState = {
   hashMatch: boolean;
   policyProof: PolicyProofVerificationResult | undefined;
   simulationVerification: SimulationVerificationResult | undefined;
+  simulationWitnessVerification: SimulationWitnessVerificationResult | undefined;
+  simulationReplayVerification: SimulationReplayVerificationResult | undefined;
   consensusVerification: ConsensusVerificationResult | undefined;
   consensusSourceSummary: string;
+  consensusTrustDecisionReason: ConsensusTrustDecisionReason | undefined;
 };
 
 const EMPTY_STATE: EvidenceVerificationState = {
@@ -58,8 +63,11 @@ const EMPTY_STATE: EvidenceVerificationState = {
   hashMatch: true,
   policyProof: undefined,
   simulationVerification: undefined,
+  simulationWitnessVerification: undefined,
+  simulationReplayVerification: undefined,
   consensusVerification: undefined,
   consensusSourceSummary: "",
+  consensusTrustDecisionReason: undefined,
 };
 
 function createConsensusFailureResult(error: string, errorCode: string): ConsensusVerificationResult {
@@ -111,10 +119,13 @@ export function useEvidenceVerification(
       hashMatch: true,
       policyProof: undefined,
       simulationVerification: undefined,
+      simulationWitnessVerification: undefined,
+      simulationReplayVerification: undefined,
       consensusVerification: undefined,
       consensusSourceSummary: currentEvidence.consensusProof
         ? "Consensus proof included but not yet verified (requires desktop app)."
         : "",
+      consensusTrustDecisionReason: undefined,
     }));
 
     async function verifyAll() {
@@ -139,7 +150,11 @@ export function useEvidenceVerification(
           hashMatch: report.hashMatch,
           policyProof: report.policyProof,
           simulationVerification: report.simulationVerification,
+          simulationWitnessVerification: report.simulationWitnessVerification,
+          simulationReplayVerification: undefined,
           consensusSourceSummary: initialConsensusSource?.summary ?? prev.consensusSourceSummary,
+          consensusTrustDecisionReason:
+            report.consensusTrustDecisionReason ?? undefined,
         }));
 
         const replayResult =
@@ -168,6 +183,13 @@ export function useEvidenceVerification(
               simulationReplayVerification: replayResult,
             })
           : report;
+
+        if (!cancelled && replayResult) {
+          setState((prev) => ({
+            ...prev,
+            simulationReplayVerification: replayResult,
+          }));
+        }
 
         if (!currentEvidence.consensusProof) return;
 
@@ -204,6 +226,8 @@ export function useEvidenceVerification(
             ...prev,
             consensusVerification: consensusResult,
             consensusSourceSummary: consensusSource?.summary ?? prev.consensusSourceSummary,
+            consensusTrustDecisionReason:
+              upgradedReport.consensusTrustDecisionReason ?? undefined,
           }));
         }
       } catch (err) {

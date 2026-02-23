@@ -15,6 +15,7 @@ export type SimulationVerificationReason =
   | "missing-simulation-witness"
   | "simulation-replay-not-run"
   | "simulation-replay-exec-error"
+  | "simulation-replay-world-state-unproven"
   | "simulation-witness-proof-failed"
   | "simulation-witness-incomplete"
   | "simulation-replay-mismatch-success"
@@ -330,9 +331,12 @@ export function buildVerificationSources(
               : context.simulationVerificationReason === "simulation-replay-not-run"
                 ? "Simulation witness checks passed, but local replay was unavailable in this verification run."
                 : context.simulationVerificationReason === "simulation-replay-exec-error"
-                  ? "Local replay execution failed; simulation remains RPC-sourced."
+                    ? "Local replay execution failed; simulation remains RPC-sourced."
+                  : context.simulationVerificationReason ===
+                      "simulation-replay-world-state-unproven"
+                    ? "Local replay matched, but replay world-state remains RPC-sourced."
                   : context.simulationTrust === "proof-verified"
-                    ? "Local replay matched packaged simulation output."
+                    ? "Local replay matched simulation outputs/constraints."
                 : "Transaction simulated via execTransaction with state overrides.",
           detail:
             context.simulationVerificationReason === "missing-simulation-witness"
@@ -353,9 +357,12 @@ export function buildVerificationSources(
                 ? "Witness anchoring checks passed, but local replay did not execute in this verification run (for example non-desktop verification). Trust remains RPC-sourced until replay verification executes and passes."
                 : context.simulationVerificationReason === "simulation-replay-exec-error"
                   ? "Witness anchoring checks passed, but local replay execution failed. Treat simulation outcome as RPC-trusted until replay verification executes and passes."
+                  : context.simulationVerificationReason ===
+                      "simulation-replay-world-state-unproven"
+                    ? "Witness anchoring checks and local replay consistency checks passed, but replay world-state accounts are still RPC-sourced debug-trace inputs (not yet fully state-root proven). Trust remains RPC-sourced."
                   : context.simulationTrust === "proof-verified"
-                    ? "Witness anchoring checks passed and local replay matched success/revert status, return data, ordered logs, and gas policy. Simulation trust upgrades to proof-verified."
-                : "Simulation was run using storage-override technique. Trust level depends on how the simulation was sourced: rpc-sourced if from a standard RPC, proof-verified only when a full local replay verifier confirms the packaged result.",
+                    ? "Witness anchoring checks passed and local replay matched success/revert status, return data, gas policy, and (when present) ordered logs. Simulation trust upgrades to proof-verified."
+                : "Simulation was generated via storage-override technique. Trust remains rpc-sourced until witness validation and local replay verification pass.",
           status: "enabled" as VerificationSourceStatus,
         }
       : {

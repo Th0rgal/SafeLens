@@ -21,7 +21,9 @@ User Input (Safe URL/address)
   → Fetch from Safe Transaction Service API (api-sourced)
   → Create base evidence package
   → OPTIONAL: Enrich with on-chain policy proof via eth_getProof (rpc-sourced)
-  → OPTIONAL: Enrich with simulation via eth_call + state overrides (rpc-sourced)
+  → OPTIONAL: Enrich with simulation via eth_call + state overrides (rpc-sourced generation input)
+  → OPTIONAL: Attach simulation witness (state root, account/storage proofs, replay world-state)
+  → If witness replay inputs are complete and operation is CALL (`operation=0`), export in witness-only simulation mode (effects derived from replay)
   → OPTIONAL: Enrich with consensus proof (beacon BLS data or execution envelope)
   → Finalize export contract (fully-verifiable | partial)
   → Export JSON
@@ -33,6 +35,7 @@ Verification (desktop/CLI, offline):
   → MPT verification of on-chain policy proof against state root
   → MPT verification of simulation witness anchoring + digest
   → Local `revm` replay of simulation witness world state (desktop path)
+  → Derive simulation effects from replay outputs when package is witness-only
   → BLS sync committee verification of consensus proof (Rust/Helios)
   → Cross-validate: consensus state root == policy proof state root
   → Emit trust-classified verification report
@@ -163,10 +166,20 @@ Evidence packages may contain sensitive pre-execution transaction details. Airga
 
 ### Open Issues (this PR)
 
-| Issue | Severity | Location |
+Canonical source: GitHub issues for this repo  
+`https://github.com/Th0rgal/SafeLens/issues`
+
+Snapshot as of **2026-02-23**:
+
+| Issue | Severity | Scope |
 |---|---|---|
-| `fetchBeaconJson` returns `Promise<any>` — beacon API responses lack Zod validation | Medium | `beacon-api.ts:368` |
-| No Rust toolchain in CI for desktop build verification | Process | CI config |
+| #57 Witness-only packaging is incompatible with DELEGATECALL replay limitation | Medium | simulation packaging/replay capability |
+| #58 `exportContract` can label replay-incompatible witness-only packages as fully-verifiable | Medium | export contract trust labeling |
+| #59 `AUDIT.md` open-issues section stale for PR #54 | Low | documentation maintenance |
+| #61 Simulation replay world-state is unproven but can still be labeled proof-verified | High | simulation trust boundary |
+| #64 Simulation replay success path reason code mismatch | Low | replay result contract |
+| #66 `fully-verifiable` can be true when simulation is only rpc-sourced | Medium | export mode contract |
+| #69 Simulation trust can upgrade despite structural simulation verification failure | High | simulation trust boundary |
 
 ### Replay Status
 

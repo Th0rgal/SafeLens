@@ -6,7 +6,7 @@ SafeLens classifies each source as:
 
 - `proof-verified`: validated against cryptographic Merkle/consensus proofs
 - `self-verified`: validated locally with deterministic code
-- `rpc-sourced`: accepted from an RPC endpoint (e.g., simulation results)
+- `rpc-sourced`: accepted from an RPC endpoint (e.g., generation-time simulation/witness inputs)
 - `api-sourced`: accepted from remote API responses
 - `user-provided`: accepted from local operator input or local files
 
@@ -33,7 +33,7 @@ as proof infrastructure is added.
 | Signature scheme coverage | api-sourced when unsupported signatures exist | Contract signatures / pre-approved hashes are not fully verified locally | Use on-chain or Safe-native validation when unsupported signatures appear |
 | Safe owners and threshold | api-sourced (upgradable to proof-verified) | `confirmations` and `confirmationsRequired` in evidence reflect on-chain state | Include `onchainPolicyProof` to upgrade to proof-verified |
 | On-chain policy proof | proof-verified when present, disabled otherwise | Merkle storage proofs for owners, threshold, nonce, modules, guard, fallback handler, singleton are valid against provided state root | Verify state root against finalized beacon chain consensus (Phase 4) |
-| Transaction simulation | rpc-sourced by default, upgradeable to proof-verified | RPC simulation output may be wrong until witness and local replay checks pass | Include `simulationWitness` and run desktop replay verification to upgrade simulation trust |
+| Transaction simulation | rpc-sourced by default, upgradeable to proof-verified | Generation-time RPC simulation/witness inputs may be wrong until witness and local replay checks pass | Include `simulationWitness` and run desktop replay verification to upgrade simulation trust |
 | Decoded calldata metadata | api-sourced | Human-readable decode (`dataDecoded`) may be incorrect | Treat raw calldata + hash as canonical; decode independently when needed |
 | Local settings labels | user-provided | Address/contract labels are accurate | Keep settings under change control and review diffs |
 
@@ -45,7 +45,7 @@ The evidence package (v1.1) supports optional sections, each with an embedded tr
 |---|---|---|
 | Core transaction data | - (always present) | EIP-712 fields, confirmations, hash, self-verified on parse |
 | `onchainPolicyProof` | `.trust` | Merkle storage proofs for Safe policy state (Phase 2) |
-| `simulation` | `.trust` | Transaction simulation results with state diffs and logs (Phase 3) |
+| `simulation` | `.trust` | Transaction simulation result envelope (`success`, `returnData`, `gasUsed`, etc). In witness-only mode, effects/logs are derived at verify time from local replay. |
 
 Sections are independent and can be enabled progressively. A v1.0 package
 without these sections is fully supported and behaves identically to before.
@@ -56,7 +56,7 @@ From highest to lowest assurance:
 
 1. **proof-verified**: Validated against cryptographic proofs (Merkle storage proofs, consensus proofs)
 2. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
-3. **rpc-sourced**: Accepted from an RPC endpoint (simulation results without consensus backing)
+3. **rpc-sourced**: Accepted from an RPC endpoint (including generation-time simulation/witness inputs without full local replay confirmation)
 4. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
 5. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
 

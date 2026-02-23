@@ -323,6 +323,8 @@ describe("export contract schema", () => {
       "policy-proof-fetch-failed",
       "simulation-fetch-failed",
       "missing-simulation",
+      "missing-simulation-witness",
+      "simulation-replay-unsupported-operation",
     ] as const;
 
     for (const reason of reasons) {
@@ -541,6 +543,14 @@ describe("simulation witness schema", () => {
       ],
       simulationDigest:
         "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      replayBlock: {
+        timestamp: "1700000000",
+        gasLimit: "30000000",
+        baseFeePerGas: "1",
+        beneficiary: "0x1111111111111111111111111111111111111111",
+        prevRandao:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
       replayAccounts: [
         {
           address: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
@@ -566,6 +576,7 @@ describe("simulation witness schema", () => {
       );
       expect(result.data.replayCaller).toBe(witness.replayCaller);
       expect(result.data.replayGasLimit).toBe(3000000);
+      expect(result.data.replayBlock?.beneficiary).toBe(witness.replayBlock.beneficiary);
     }
   });
 

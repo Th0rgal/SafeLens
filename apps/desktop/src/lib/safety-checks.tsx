@@ -4,12 +4,16 @@ import {
   findLegacyPendingConsensusExportReason,
   isConsensusVerifierErrorCode,
   isWarningConsensusTrustDecisionReason,
+  summarizeConsensusTrustDecisionReason,
   mapConsensusVerifierErrorCodeToTrustReason,
+  type ConsensusTrustDecisionReason,
   type ConsensusVerificationResult,
   type ConsensusVerifierErrorCode,
   type EvidencePackage,
   type PolicyProofVerificationResult,
+  type SimulationWitnessVerificationResult,
   type SimulationVerificationResult,
+  type SimulationReplayVerificationResult,
   summarizeSimulationEvents,
 } from "@safelens/core";
 import {
@@ -189,6 +193,21 @@ function assertUnreachableConsensusMode(mode: never): never {
   throw new Error(`Unhandled consensus mode: ${String(mode)}`);
 }
 
+function getConsensusTrustDecisionDetail(
+  reason: Exclude<ConsensusTrustDecisionReason, null>,
+  fallbackSummary: string
+): string {
+  const normalizedFallback = fallbackSummary.trim();
+  if (normalizedFallback.length > 0) {
+    return normalizedFallback;
+  }
+
+  const summarized = summarizeConsensusTrustDecisionReason(reason);
+  return summarized
+    ? `Consensus trust did not upgrade: ${summarized}.`
+    : "Consensus trust did not upgrade.";
+}
+
 export function classifyPolicyStatus(
   evidence: EvidencePackage,
   policyProof: PolicyProofVerificationResult | undefined
@@ -237,7 +256,8 @@ export function classifyPolicyStatus(
 export function classifyConsensusStatus(
   evidence: EvidencePackage,
   consensusVerification: ConsensusVerificationResult | undefined,
-  fallbackSummary: string
+  fallbackSummary: string,
+  consensusTrustDecisionReason?: ConsensusTrustDecisionReason
 ): SafetyCheck {
   if (!evidence.consensusProof) {
     const reasonCode = getNoProofConsensusReasonCode(evidence);
@@ -268,6 +288,21 @@ export function classifyConsensusStatus(
   }
 
   if (consensusVerification.valid) {
+    if (consensusTrustDecisionReason) {
+      return {
+        id: "chain-state-finalized",
+        label: "Chain state is finalized",
+        status: isWarningConsensusTrustDecisionReason(consensusTrustDecisionReason)
+          ? "warning"
+          : "error",
+        detail: getConsensusTrustDecisionDetail(
+          consensusTrustDecisionReason,
+          fallbackSummary
+        ),
+        reasonCode: consensusTrustDecisionReason,
+      };
+    }
+
     return {
       id: "chain-state-finalized",
       label: "Chain state is finalized",
@@ -290,7 +325,9 @@ export function classifyConsensusStatus(
 
 export function classifySimulationStatus(
   evidence: EvidencePackage,
-  simulationVerification: SimulationVerificationResult | undefined
+  simulationVerification: SimulationVerificationResult | undefined,
+  simulationWitnessVerification?: SimulationWitnessVerificationResult,
+  simulationReplayVerification?: SimulationReplayVerificationResult
 ): SafetyCheck {
   if (!simulationVerification || !evidence.simulation) {
     const reasonCode = getSimulationUnavailableReasonCode(evidence);
@@ -322,6 +359,76 @@ export function classifySimulationStatus(
       status: "warning",
       detail: "Simulation ran but the transaction reverted.",
       reasonCode: "simulation-execution-reverted",
+    };
+  }
+
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
+  if (witnessOnlySimulation) {
+    if (simulationWitnessVerification && simulationWitnessVerification.valid !== true) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "error",
+        detail:
+          simulationWitnessVerification.errors?.[0] ??
+          "Simulation witness verification failed for this witness-only package.",
+        reasonCode: "simulation-witness-proof-failed",
+      };
+    }
+
+    if (!simulationReplayVerification) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "warning",
+        detail: "Local replay verification is still running for this witness-only package.",
+        reasonCode: "simulation-replay-pending",
+      };
+    }
+
+    if (
+      simulationReplayVerification.executed !== true ||
+      simulationReplayVerification.success !== true
+    ) {
+      return {
+        id: "simulation-outcome",
+        label: "Simulation outcome",
+        status: "error",
+        detail:
+          simulationReplayVerification.error ??
+          "Local replay verification failed for this witness-only package.",
+        reasonCode: simulationReplayVerification.reason,
+      };
+    }
+
+    const replaySummary = summarizeSimulationEvents(
+      simulationReplayVerification.replayLogs ?? [],
+      evidence.safeAddress,
+      evidence.chainId,
+      {
+        maxTransferPreviews: 3,
+      },
+    );
+    const parts: string[] = ["Simulation ran successfully."];
+    if (replaySummary.transfersOut > 0 || replaySummary.transfersIn > 0) {
+      parts.push(
+        `${replaySummary.transfersOut + replaySummary.transfersIn} transfer${replaySummary.transfersOut + replaySummary.transfersIn !== 1 ? "s" : ""} detected.`
+      );
+    }
+    if (replaySummary.approvals > 0) {
+      const unlimitedSuffix = replaySummary.unlimitedApprovals > 0
+        ? ` (${replaySummary.unlimitedApprovals} unlimited)`
+        : "";
+      parts.push(
+        `${replaySummary.approvals} approval${replaySummary.approvals !== 1 ? "s" : ""}${unlimitedSuffix}.`
+      );
+    }
+
+    return {
+      id: "simulation-outcome",
+      label: "Simulation outcome",
+      status: "check",
+      detail: parts.join(" "),
     };
   }
 
