@@ -164,7 +164,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     if (!savedConfig) return;
-    setChainEntries((prev) => (prev === null ? Object.entries(savedConfig.chains) : prev));
+    setChainEntries(Object.entries(savedConfig.chains));
   }, [savedConfig]);
 
   const [newChainId, setNewChainId] = useState("");
@@ -219,7 +219,6 @@ export default function SettingsScreen() {
 
   const handleReset = async () => {
     await resetConfig();
-    setChainEntries(null);
   };
 
   const handleExport = async () => {

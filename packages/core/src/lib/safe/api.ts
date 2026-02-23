@@ -6,7 +6,12 @@ import { getSafeApiUrl } from "./url-parser";
 // Validates nonce at the trust boundary to prevent a malicious API from
 // injecting arbitrary values that would affect pending-transaction filtering.
 const safeInfoNonceSchema = z.object({
-  nonce: z.coerce.number().int().nonnegative(),
+  nonce: z
+    .union([
+      z.number().int().nonnegative(),
+      z.string().regex(/^\d+$/),
+    ])
+    .transform((value) => (typeof value === "string" ? Number.parseInt(value, 10) : value)),
 });
 
 /**
