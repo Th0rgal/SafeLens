@@ -85,3 +85,19 @@ jobs:
 
       - name: Desktop tests
         run: bun run --cwd apps/desktop test
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Workspace production build
+        run: bun run build
