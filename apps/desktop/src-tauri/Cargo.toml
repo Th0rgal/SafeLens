@@ -12,17 +12,17 @@ serde_json = "1"
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
-window-vibrancy = "0.5"
+window-vibrancy = "0.6"
 
 # Helios consensus verification (Phase 4)
 helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda319ed1ecb5fb82c71f4fa755a32e01031a", package = "helios-consensus-core" }
 alloy = { version = "1.0.3", default-features = false, features = ["consensus", "ssz"] }
-tree_hash = "0.10.0"
+tree_hash = "0.12.1"
 eyre = "0.6.8"
 hex = "0.4"
 typenum = "1"
 time = { version = "0.3", features = ["parsing"] }
-revm = { version = "30", default-features = false, features = ["std"] }
+revm = { version = "34", default-features = false, features = ["std"] }
 
 [patch.crates-io]
 ethereum_hashing = { git = "https://github.com/ncitron/ethereum_hashing", rev = "7ee70944ed4fabe301551da8c447e4f4ae5e6c35" }
