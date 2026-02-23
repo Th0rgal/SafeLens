@@ -323,6 +323,7 @@ describe("export contract schema", () => {
       "policy-proof-fetch-failed",
       "simulation-fetch-failed",
       "missing-simulation",
+      "missing-simulation-witness",
     ] as const;
 
     for (const reason of reasons) {

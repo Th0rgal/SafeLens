@@ -246,7 +246,8 @@ export interface FinalizeExportContractOptions {
 /**
  * Stamp package export status with explicit machine-readable completeness data.
  * A package is "fully-verifiable" only when consensus proof, on-chain policy
- * proof, and simulation are all present. All other states are partial.
+ * proof, simulation artifact, and replay-capable simulation witness are all
+ * present. All other states are partial.
  */
 export function finalizeEvidenceExport(
   evidence: EvidencePackage,
@@ -263,6 +264,9 @@ export function finalizeEvidenceExport(
     hasConsensusProofArtifact && proofConsensusMode === "beacon";
   const hasOnchainPolicyProof = Boolean(evidence.onchainPolicyProof);
   const hasSimulation = Boolean(evidence.simulation);
+  const hasSimulationWitnessReplayInputs =
+    Array.isArray(evidence.simulationWitness?.replayAccounts) &&
+    evidence.simulationWitness.replayAccounts.length > 0;
   const reasons = new Set<ExportContractReason>();
 
   if (!hasConsensusProofArtifact) {
@@ -305,10 +309,15 @@ export function finalizeEvidenceExport(
     } else {
       reasons.add("missing-simulation");
     }
+  } else if (!hasSimulationWitnessReplayInputs) {
+    reasons.add("missing-simulation-witness");
   }
 
   const isFullyVerifiable =
-    hasVerifierSupportedConsensusProof && hasOnchainPolicyProof && hasSimulation;
+    hasVerifierSupportedConsensusProof &&
+    hasOnchainPolicyProof &&
+    hasSimulation &&
+    hasSimulationWitnessReplayInputs;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",

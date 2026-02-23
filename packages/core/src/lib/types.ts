@@ -283,6 +283,7 @@ export const exportContractReasonSchema = z.enum([
   "policy-proof-fetch-failed",
   "simulation-fetch-failed",
   "missing-simulation",
+  "missing-simulation-witness",
 ]);
 
 export type ExportContractReason = z.infer<typeof exportContractReasonSchema>;
@@ -303,6 +304,8 @@ export const EXPORT_CONTRACT_REASON_LABELS: Record<ExportContractReason, string>
   "policy-proof-fetch-failed": "On-chain policy proof fetch failed.",
   "simulation-fetch-failed": "Simulation fetch failed.",
   "missing-simulation": "Simulation result was not included.",
+  "missing-simulation-witness":
+    "Simulation witness/replay inputs were not included, so simulation cannot be fully verified offline.",
 };
 
 export function getExportContractReasonLabel(reason: ExportContractReason): string {
