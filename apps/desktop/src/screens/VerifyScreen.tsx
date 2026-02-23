@@ -687,7 +687,8 @@ function ExecutionSafetyPanel({
   // ── Verification status ───────────────────────────────────────────
   const hasError = checksForVerificationStatus.some((check) => check.status === "error");
   const hasWarning = checksForVerificationStatus.some((check) => check.status === "warning");
-  const replayRequired = Boolean(evidence.simulation && evidence.simulationWitness);
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
+  const replayRequired = Boolean(evidence.simulation && witnessOnlySimulation);
   const replayResultAvailable = Boolean(simulationReplayVerification);
   const replayPassed =
     simulationReplayVerification?.executed === true &&
@@ -757,7 +758,6 @@ function ExecutionSafetyPanel({
   const VerificationIcon = verificationStyle.icon;
 
   // ── Simulation effects ────────────────────────────────────────────
-  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
   const decodedEvents = useMemo(() => {
     if (witnessOnlySimulation) {
       if (!replayPassed) {
