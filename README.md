@@ -42,7 +42,7 @@ The desktop verifier ships with `connect-src 'none'` CSP and no shell-open capab
 
 - `self-verified`: Safe tx hash recomputation and supported signature recovery.
 - `proof-verified`: on-chain Safe policy proof verification (`eth_getProof` artifacts).
-- `proof-verified` (simulation): witness-anchored local `revm` replay matches simulation constraints (`success`/revert, return data, gas policy, and logs when packaged).
+- `rpc-sourced` (simulation): local replay can validate consistency against witness inputs, but replay world-state accounts are not yet fully state-root proven.
 - `consensus-verified-beacon`: beacon consensus proofs verified by desktop via Helios.
 - `consensus-verified-opstack` / `consensus-verified-linea`: deterministic envelope checks with explicit non-equivalence to beacon light-client finality.
 

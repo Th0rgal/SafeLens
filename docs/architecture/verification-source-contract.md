@@ -75,7 +75,7 @@ Desktop UI rule:
 2. simulation without witness -> trust `rpc-sourced`
 3. simulation + witness, but witness verification fails -> trust `rpc-sourced`
 4. simulation + witness verified, replay not run/failed/mismatch -> trust `rpc-sourced`
-5. simulation + witness verified, replay executes and matches, and structural simulation verification passes -> trust `proof-verified`
+5. simulation + witness verified, replay executes and matches, and structural simulation verification passes -> trust remains `rpc-sourced` until replay world-state accounts are fully state-root proven
 
 Notes:
 
@@ -91,6 +91,9 @@ Notes:
   prevrandao/difficulty). If block context is missing, replay must fail closed.
 - Log equality checks apply when packaged logs are present; witness-only replay
   still enforces success/return-data/gas policy checks.
+- Replay success currently proves deterministic consistency against provided
+  witness inputs, not full cryptographic completeness for all replay world-state
+  accounts. Do not label simulation as `proof-verified` under this model.
 
 ## Required tests
 

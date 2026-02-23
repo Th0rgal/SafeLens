@@ -259,12 +259,7 @@ function buildReportSources(
 
   const simulationTrust =
     options.evidence.simulation && options.evidence.simulationWitness
-      ? options.simulationVerification?.valid &&
-        options.simulationWitnessVerification?.valid &&
-        options.simulationReplayVerification?.executed &&
-        options.simulationReplayVerification.success
-        ? "proof-verified"
-        : "rpc-sourced"
+      ? "rpc-sourced"
       : options.evidence.simulation?.trust;
   const simulationVerificationReason =
     !options.evidence.simulation
@@ -279,7 +274,7 @@ function buildReportSources(
                 "simulation-replay-matched"
                 ? "simulation-replay-exec-error"
                 : options.simulationReplayVerification.reason
-              : undefined
+              : "simulation-replay-world-state-unproven"
             : "simulation-replay-not-run";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(

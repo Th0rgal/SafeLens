@@ -178,7 +178,7 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
     expect(simulationSource?.summary).toContain("Local replay execution failed");
   });
 
-  it("upgrades simulation trust to proof-verified when replay matches", async () => {
+  it("keeps simulation trust rpc-sourced when replay matches but world-state is unproven", async () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const simulation = makeSimulation();
     const enriched = {
@@ -202,8 +202,9 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
     const simulationSource = upgraded.sources.find(
       (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
     );
-    expect(simulationSource?.trust).toBe("proof-verified");
+    expect(simulationSource?.trust).toBe("rpc-sourced");
     expect(simulationSource?.summary).toContain("Local replay matched");
+    expect(simulationSource?.summary).toContain("RPC-sourced");
   });
 
   it("does not upgrade simulation trust when structural simulation verification fails", async () => {
