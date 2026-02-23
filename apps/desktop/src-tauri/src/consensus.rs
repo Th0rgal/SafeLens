@@ -854,16 +854,14 @@ fn verify_execution_envelope(
     let packaged_at_raw =
         match input.package_packaged_at.as_deref() {
             Some(packaged_at) => packaged_at,
-            None => {
-                return fail_result_with_context(
-                    ERR_INVALID_PROOF_PAYLOAD,
-                    "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
-                        .into(),
-                    checks,
-                    envelope_state_root,
-                    envelope_block_number,
-                )
-            }
+            None => return fail_result_with_context(
+                ERR_INVALID_PROOF_PAYLOAD,
+                "packagePackagedAt is required for non-beacon consensus envelope freshness checks."
+                    .into(),
+                checks,
+                envelope_state_root,
+                envelope_block_number,
+            ),
         };
     let packaged_at = match parse_rfc3339_timestamp(packaged_at_raw, "packagePackagedAt") {
         Ok(timestamp) => timestamp,
@@ -1345,8 +1343,8 @@ mod tests {
         expected_current_slot_for_network, get_network_config, parse_b256, parse_network,
         verify_consensus_proof, ConsensusNetwork, ConsensusProofInput,
         ERR_ENVELOPE_BLOCK_NUMBER_MISMATCH, ERR_ENVELOPE_NETWORK_MISMATCH,
-        ERR_ENVELOPE_STATE_ROOT_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_PROOF_PAYLOAD,
-        ERR_INVALID_EXPECTED_STATE_ROOT, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
+        ERR_ENVELOPE_STATE_ROOT_MISMATCH, ERR_INVALID_CHECKPOINT, ERR_INVALID_EXPECTED_STATE_ROOT,
+        ERR_INVALID_PROOF_PAYLOAD, ERR_NON_FINALIZED_CONSENSUS_ENVELOPE,
         ERR_STALE_CONSENSUS_ENVELOPE, ERR_STATE_ROOT_MISMATCH, ERR_UNSUPPORTED_CONSENSUS_MODE,
         ERR_UNSUPPORTED_NETWORK,
     };
