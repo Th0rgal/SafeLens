@@ -257,7 +257,8 @@ function buildReportSources(
 
   const simulationTrust =
     options.evidence.simulation && options.evidence.simulationWitness
-      ? options.simulationWitnessVerification?.valid &&
+      ? options.simulationVerification?.valid &&
+        options.simulationWitnessVerification?.valid &&
         options.simulationReplayVerification?.executed &&
         options.simulationReplayVerification.success
         ? "proof-verified"

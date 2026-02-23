@@ -67,7 +67,7 @@ For OP Stack and Linea, summary/detail must preserve the non-equivalence boundar
 2. simulation without witness -> trust `rpc-sourced`
 3. simulation + witness, but witness verification fails -> trust `rpc-sourced`
 4. simulation + witness verified, replay not run/failed/mismatch -> trust `rpc-sourced`
-5. simulation + witness verified, replay executes and matches -> trust `proof-verified`
+5. simulation + witness verified, replay executes and matches, and structural simulation verification passes -> trust `proof-verified`
 
 Notes:
 

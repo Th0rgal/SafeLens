@@ -206,6 +206,41 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
     expect(simulationSource?.summary).toContain("Local replay matched");
   });
 
+  it("does not upgrade simulation trust when structural simulation verification fails", async () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const simulation = {
+      ...makeSimulation(),
+      success: true,
+      returnData:
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+    };
+    const enriched = {
+      ...base,
+      version: "1.2" as const,
+      onchainPolicyProof: makeOnchainProof(),
+      simulation,
+      simulationWitness: makeWitness(simulation),
+    };
+
+    const report = await verifyEvidencePackage(enriched);
+    expect(report.simulationVerification?.valid).toBe(false);
+    expect(report.simulationWitnessVerification?.valid).toBe(true);
+
+    const upgraded = applySimulationReplayVerificationToReport(report, enriched, {
+      simulationReplayVerification: {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-not-run",
+        error: null,
+      },
+    });
+
+    const simulationSource = upgraded.sources.find(
+      (source) => source.id === VERIFICATION_SOURCE_IDS.SIMULATION
+    );
+    expect(simulationSource?.trust).toBe("rpc-sourced");
+  });
+
   it("surfaces deterministic replay mismatch reasons", async () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const simulation = makeSimulation();
