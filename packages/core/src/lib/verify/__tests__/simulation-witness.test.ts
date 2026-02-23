@@ -194,7 +194,7 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
       simulationReplayVerification: {
         executed: true,
         success: true,
-        reason: "simulation-replay-not-run",
+        reason: "simulation-replay-matched",
         error: null,
       },
     });
@@ -230,7 +230,7 @@ describe("verifyEvidencePackage simulation witness trust handling", () => {
       simulationReplayVerification: {
         executed: true,
         success: true,
-        reason: "simulation-replay-not-run",
+        reason: "simulation-replay-matched",
         error: null,
       },
     });

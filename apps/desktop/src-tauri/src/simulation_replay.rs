@@ -9,7 +9,7 @@ use revm::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, str::FromStr};
 
-const REASON_REPLAY_NOT_RUN: &str = "simulation-replay-not-run";
+const REASON_REPLAY_MATCHED: &str = "simulation-replay-matched";
 const REASON_REPLAY_EXEC_ERROR: &str = "simulation-replay-exec-error";
 const REASON_REPLAY_MISMATCH_SUCCESS: &str = "simulation-replay-mismatch-success";
 const REASON_REPLAY_MISMATCH_RETURN_DATA: &str = "simulation-replay-mismatch-return-data";
@@ -195,7 +195,7 @@ pub fn verify_simulation_replay(
     SimulationReplayVerificationResult {
         executed: true,
         success: true,
-        reason: REASON_REPLAY_NOT_RUN.to_string(),
+        reason: REASON_REPLAY_MATCHED.to_string(),
         error: None,
         replay_logs: Some(replay.logs),
     }
@@ -522,6 +522,7 @@ mod tests {
 
         assert!(result.executed);
         assert!(result.success);
+        assert_eq!(result.reason, REASON_REPLAY_MATCHED);
     }
 
     #[test]

@@ -108,16 +108,18 @@ export interface VerifyEvidenceOptions {
 export type SimulationReplayVerificationResult = {
   executed: boolean;
   success: boolean;
-  reason: Extract<
-    SimulationVerificationReason,
-    | "simulation-replay-not-run"
-    | "simulation-replay-exec-error"
-    | "simulation-witness-incomplete"
-    | "simulation-replay-mismatch-success"
-    | "simulation-replay-mismatch-return-data"
-    | "simulation-replay-mismatch-logs"
-    | "simulation-replay-mismatch-gas"
-  >;
+  reason:
+    | "simulation-replay-matched"
+    | Extract<
+        SimulationVerificationReason,
+        | "simulation-replay-not-run"
+        | "simulation-replay-exec-error"
+        | "simulation-witness-incomplete"
+        | "simulation-replay-mismatch-success"
+        | "simulation-replay-mismatch-return-data"
+        | "simulation-replay-mismatch-logs"
+        | "simulation-replay-mismatch-gas"
+      >;
   error?: string | null;
   replayLogs?: Array<{
     address: string;
@@ -272,9 +274,12 @@ function buildReportSources(
         : !options.simulationWitnessVerification?.valid
           ? "simulation-witness-proof-failed"
           : options.simulationReplayVerification
-            ? options.simulationReplayVerification.success
-              ? undefined
-              : options.simulationReplayVerification.reason
+            ? options.simulationReplayVerification.success === false
+              ? options.simulationReplayVerification.reason ===
+                "simulation-replay-matched"
+                ? "simulation-replay-exec-error"
+                : options.simulationReplayVerification.reason
+              : undefined
             : "simulation-replay-not-run";
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
