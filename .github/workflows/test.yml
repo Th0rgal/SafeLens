@@ -37,9 +37,24 @@ jobs:
       - name: TypeScript type-check
         run: bun run type-check
 
+  rust-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: './apps/desktop/src-tauri -> target'
+
+      - name: Desktop Rust unit tests
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+
   test:
     runs-on: ubuntu-latest
-    needs: [lint, type-check]
+    needs: [lint, type-check, rust-test]
 
     steps:
       - uses: actions/checkout@v4
