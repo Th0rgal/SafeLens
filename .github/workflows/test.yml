@@ -7,6 +7,21 @@ on:
     branches: [main]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      - name: Workspace lint
+        run: bun run lint
+
   type-check:
     runs-on: ubuntu-latest
 
@@ -24,7 +39,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: type-check
+    needs: [lint, type-check]
 
     steps:
       - uses: actions/checkout@v4
