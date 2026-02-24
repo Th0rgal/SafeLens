@@ -148,6 +148,12 @@ bun run build        # generator + desktop frontend assets
 bun run build:tauri  # full desktop distributable
 ```
 
+### CI Parity Check
+
+```bash
+bun run verify:ci    # lint + type-check + JS tests + Rust fmt/clippy/tests + build
+```
+
 ### Settings
 
 Settings are JSON (address book and contract registry).

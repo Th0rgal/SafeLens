@@ -16,6 +16,10 @@
     "build:tauri": "bun run --cwd apps/desktop tauri build",
     "test": "bun run --cwd packages/core test && bun run --cwd packages/cli test && bun run --cwd apps/generator test && bun run --cwd apps/desktop test",
     "type-check": "bun run --cwd packages/core type-check && bun run --cwd packages/cli type-check && bun run --cwd apps/generator type-check && bun run --cwd apps/desktop type-check",
-    "lint": "bun run --cwd apps/generator lint"
+    "lint": "bun run --cwd apps/generator lint",
+    "rust:fmt": "cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check",
+    "rust:clippy": "cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings",
+    "rust:test": "cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml",
+    "verify:ci": "bun run lint && bun run type-check && bun run test && bun run rust:fmt && bun run rust:clippy && bun run rust:test && bun run build"
   }
 }
