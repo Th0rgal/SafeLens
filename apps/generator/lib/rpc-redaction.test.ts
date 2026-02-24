@@ -25,4 +25,16 @@ describe("redactRpcUrl", () => {
     const output = redactRpcUrl(input);
     expect(output).toBe("https://rpc.provider.test/key/***");
   });
+
+  it("redacts malformed credential-like URLs", () => {
+    const input = "user:pass@rpc.provider.test/key/secret";
+    const output = redactRpcUrl(input);
+    expect(output).toBe("[invalid URL redacted]");
+  });
+
+  it("keeps non-URL plain strings unchanged", () => {
+    const input = "not a url";
+    const output = redactRpcUrl(input);
+    expect(output).toBe("not a url");
+  });
 });

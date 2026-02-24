@@ -8,6 +8,7 @@ const SENSITIVE_KEY_MARKERS = [
 ] as const;
 const SENSITIVE_QUERY_KEYS = new Set(SENSITIVE_KEY_MARKERS);
 const SENSITIVE_PATH_MARKERS = new Set(SENSITIVE_KEY_MARKERS);
+const INVALID_URL_REDACTED_PLACEHOLDER = "[invalid URL redacted]";
 
 function redactPathSecrets(parsed: URL): void {
   const segments = parsed.pathname.split("/");
@@ -57,6 +58,14 @@ export function redactRpcUrl(value?: string): string | undefined {
   if (!value) return undefined;
   try {
     const parsed = new URL(value);
+    const allowedProtocol = parsed.protocol === "http:" ||
+      parsed.protocol === "https:" ||
+      parsed.protocol === "ws:" ||
+      parsed.protocol === "wss:";
+    if (!allowedProtocol) {
+      return value.includes("@") ? INVALID_URL_REDACTED_PLACEHOLDER : value;
+    }
+
     if (parsed.username || parsed.password) {
       parsed.username = parsed.username ? "***" : "";
       parsed.password = parsed.password ? "***" : "";
@@ -71,6 +80,7 @@ export function redactRpcUrl(value?: string): string | undefined {
     redactPathSecrets(parsed);
     return parsed.toString();
   } catch {
-    return value;
+    const credentialLikeInvalidUrl = /^[^/@:\s?#]+:[^/@\s?#]+@/.test(value) || value.includes("@");
+    return credentialLikeInvalidUrl ? INVALID_URL_REDACTED_PLACEHOLDER : value;
   }
 }
