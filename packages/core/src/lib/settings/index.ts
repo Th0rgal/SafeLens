@@ -12,6 +12,9 @@ export {
   exportSettingsConfig,
   importSettingsConfig,
   type SettingsStore,
+  type SettingsLoadResult,
+  type SettingsLoadWarning,
+  type SettingsLoadWarningKind,
 } from "./store";
 export { resolveAddress, resolveContract } from "./resolve";
 export { computeConfigFingerprint, colorFromHash } from "./fingerprint";

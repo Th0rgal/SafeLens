@@ -7,17 +7,61 @@ export interface SettingsStore {
   remove(): Promise<void> | void;
 }
 
+export type SettingsLoadWarningKind = "parse_error" | "schema_error" | "read_error";
+
+export interface SettingsLoadWarning {
+  kind: SettingsLoadWarningKind;
+  message: string;
+}
+
+export interface SettingsLoadResult {
+  config: SettingsConfig;
+  warning?: SettingsLoadWarning;
+}
+
 export async function loadSettingsConfig(
   store: SettingsStore,
   fallback: SettingsConfig = DEFAULT_SETTINGS_CONFIG
-): Promise<SettingsConfig> {
+): Promise<SettingsLoadResult> {
+  let raw: string | null;
   try {
-    const raw = await store.read();
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return settingsConfigSchema.parse(parsed);
-  } catch {
-    return fallback;
+    raw = await store.read();
+  } catch (err) {
+    return {
+      config: fallback,
+      warning: {
+        kind: "read_error",
+        message: `Failed to read settings: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
+
+  if (!raw) return { config: fallback };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    return {
+      config: fallback,
+      warning: {
+        kind: "parse_error",
+        message: `Settings file contains invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
+  }
+
+  try {
+    const config = settingsConfigSchema.parse(parsed);
+    return { config };
+  } catch (err) {
+    return {
+      config: fallback,
+      warning: {
+        kind: "schema_error",
+        message: `Settings file failed schema validation: ${err instanceof Error ? err.message : String(err)}`,
+      },
+    };
   }
 }
 
@@ -38,7 +82,10 @@ export async function resetSettingsConfig(
 }
 
 export async function exportSettingsConfig(store: SettingsStore): Promise<string> {
-  const config = await loadSettingsConfig(store);
+  // Warning is intentionally discarded here — load warnings are surfaced
+  // through the normal bootstrap path (UI banner / CLI stderr), and the
+  // export function only needs the resolved config.
+  const { config } = await loadSettingsConfig(store);
   return JSON.stringify(config, null, 2);
 }
 

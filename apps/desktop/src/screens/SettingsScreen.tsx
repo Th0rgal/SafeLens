@@ -161,7 +161,7 @@ function RemoveChainButton({
 }
 
 export default function SettingsScreen() {
-  const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
+  const { config: savedConfig, loadWarning, saveConfig, resetConfig, dismissWarning } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
   const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>(() => getChainEntries(savedConfig));
@@ -287,6 +287,21 @@ export default function SettingsScreen() {
           </div>
         )}
       </div>
+
+      {loadWarning && (
+        <Card className="border-amber-500/50 bg-amber-500/10">
+          <CardContent className="flex items-start gap-3 py-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-300">Settings loaded with defaults</p>
+              <p className="mt-1 text-xs text-amber-400/80">{loadWarning.message}</p>
+            </div>
+            <button onClick={dismissWarning} className="shrink-0 text-amber-400/60 hover:text-amber-400">
+              <X className="h-4 w-4" />
+            </button>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="space-y-6">
         <Card>

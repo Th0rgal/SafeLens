@@ -1,12 +1,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import type { SettingsConfig } from "@safelens/core";
+import type { SettingsConfig, SettingsLoadWarning } from "@safelens/core";
 import { loadSettingsConfig, saveSettingsConfig, resetSettingsConfig, setGlobalDescriptors } from "@safelens/core";
 import { createTauriSettingsStore } from "./store";
 
 interface SettingsContextValue {
   config: SettingsConfig | null;
+  loadWarning: SettingsLoadWarning | undefined;
   saveConfig: (config: SettingsConfig) => Promise<void>;
   resetConfig: () => Promise<void>;
+  dismissWarning: () => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -14,13 +16,15 @@ const settingsStore = createTauriSettingsStore();
 
 export function SettingsConfigProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<SettingsConfig | null>(null);
+  const [loadWarning, setLoadWarning] = useState<SettingsLoadWarning | undefined>();
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const loaded = await loadSettingsConfig(settingsStore);
+      const { config: loaded, warning } = await loadSettingsConfig(settingsStore);
       if (active) {
         setConfig(loaded);
+        setLoadWarning(warning);
         setGlobalDescriptors(loaded.erc7730Descriptors ?? []);
       }
     })();
@@ -32,6 +36,7 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
 
   const saveConfig = useCallback(async (newConfig: SettingsConfig) => {
     setConfig(newConfig);
+    setLoadWarning(undefined);
     setGlobalDescriptors(newConfig.erc7730Descriptors ?? []);
     await saveSettingsConfig(settingsStore, newConfig);
   }, []);
@@ -39,12 +44,17 @@ export function SettingsConfigProvider({ children }: { children: ReactNode }) {
   const resetConfig = useCallback(async () => {
     const defaults = await resetSettingsConfig(settingsStore);
     setConfig(defaults);
+    setLoadWarning(undefined);
     setGlobalDescriptors(defaults.erc7730Descriptors ?? []);
   }, []);
 
+  const dismissWarning = useCallback(() => {
+    setLoadWarning(undefined);
+  }, []);
+
   const value = useMemo(
-    () => ({ config, saveConfig, resetConfig }),
-    [config, saveConfig, resetConfig],
+    () => ({ config, loadWarning, saveConfig, resetConfig, dismissWarning }),
+    [config, loadWarning, saveConfig, resetConfig, dismissWarning],
   );
 
   return (

@@ -27,8 +27,9 @@ beforeEach(() => {
 
 describe("loadSettingsConfig", () => {
   it("returns defaults when nothing is stored", async () => {
-    const config = await loadSettingsConfig(store);
+    const { config, warning } = await loadSettingsConfig(store);
     expect(config).toEqual(DEFAULT_SETTINGS_CONFIG);
+    expect(warning).toBeUndefined();
   });
 
   it("returns stored config when valid", async () => {
@@ -38,23 +39,44 @@ describe("loadSettingsConfig", () => {
     };
     storage.value = JSON.stringify(custom);
 
-    const config = await loadSettingsConfig(store);
+    const { config, warning } = await loadSettingsConfig(store);
     expect(config.addressRegistry).toHaveLength(1);
     expect(config.addressRegistry[0].name).toBe("Test");
+    expect(warning).toBeUndefined();
   });
 
-  it("returns defaults for corrupt data", async () => {
+  it("returns defaults with parse_error warning for corrupt data", async () => {
     storage.value = "not json";
 
-    const config = await loadSettingsConfig(store);
+    const { config, warning } = await loadSettingsConfig(store);
     expect(config).toEqual(DEFAULT_SETTINGS_CONFIG);
+    expect(warning).toBeDefined();
+    expect(warning!.kind).toBe("parse_error");
+    expect(warning!.message).toContain("invalid JSON");
   });
 
-  it("returns defaults for invalid schema", async () => {
+  it("returns defaults with schema_error warning for invalid schema", async () => {
     storage.value = JSON.stringify({ version: "2.0", invalid: true });
 
-    const config = await loadSettingsConfig(store);
+    const { config, warning } = await loadSettingsConfig(store);
     expect(config).toEqual(DEFAULT_SETTINGS_CONFIG);
+    expect(warning).toBeDefined();
+    expect(warning!.kind).toBe("schema_error");
+    expect(warning!.message).toContain("schema validation");
+  });
+
+  it("returns defaults with read_error warning when store.read throws", async () => {
+    const failStore: SettingsStore = {
+      read: vi.fn(async () => { throw new Error("disk failure"); }),
+      write: vi.fn(),
+      remove: vi.fn(),
+    };
+
+    const { config, warning } = await loadSettingsConfig(failStore);
+    expect(config).toEqual(DEFAULT_SETTINGS_CONFIG);
+    expect(warning).toBeDefined();
+    expect(warning!.kind).toBe("read_error");
+    expect(warning!.message).toContain("disk failure");
   });
 });
 
