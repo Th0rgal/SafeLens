@@ -32,6 +32,18 @@ describe("redactRpcUrl", () => {
     expect(output).toBe("[invalid URL redacted]");
   });
 
+  it("keeps malformed non-URL strings with at-sign unchanged", () => {
+    const input = "account@label";
+    const output = redactRpcUrl(input);
+    expect(output).toBe("account@label");
+  });
+
+  it("redacts malformed username-only authority pattern", () => {
+    const input = "user@rpc.provider.test/path";
+    const output = redactRpcUrl(input);
+    expect(output).toBe("[invalid URL redacted]");
+  });
+
   it("keeps non-URL plain strings unchanged", () => {
     const input = "not a url";
     const output = redactRpcUrl(input);
