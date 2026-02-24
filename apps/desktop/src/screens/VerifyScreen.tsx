@@ -805,6 +805,7 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.safeAddress,
     evidence.chainId,
+    nativeTokenSymbol,
     replayPassed,
     simulationReplayVerification?.replayLogs,
     witnessOnlySimulation,
