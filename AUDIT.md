@@ -177,33 +177,20 @@ Snapshot as of **2026-02-24**:
 
 | Issue | Severity | Scope |
 |---|---|---|
-| #137 Trust-boundary gap: `simulationWitness.blockNumber` accepts non-integers and can pass witness verification | Medium | witness block-pin integrity boundary allows malformed fractional block numbers to pass schema validation and still be classified as a valid witness anchor (`packages/core`) |
-| #136 Trust-boundary gap: `simulationWitness.chainId` accepts non-integers | Medium | simulation witness identity boundary allows malformed fractional chain IDs to pass schema validation and degrade into downstream mismatch checks instead of parse-time rejection (`packages/core`) |
+| #140 Trust-boundary docs gap: `TRUST_ASSUMPTIONS` evidence section list omits `consensusProof` | Low | auditor-facing evidence contract table omits a critical optional section and its trust semantics (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
 | #135 Trust-boundary mismatch: beacon `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Low | evidence contract drift: `finalizedSlot` appears authoritative in package schema but is not consumed/validated at desktop verification boundary (`packages/core`, `apps/desktop`) |
 | #134 Generator emits verbose evidence debug logs in production without opt-in | Low | production diagnostics trust boundary is always active and logs evidence metadata without explicit environment/user opt-in (`apps/generator`) |
 | #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Low | auditor entry-point documentation drift: `AUDIT.md` still says witness-only effects are replay-derived while runtime keeps packaged simulation effects (`AUDIT.md`, `packages/core`) |
 | #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Low | trust-boundary documentation drift in witness-only simulation semantics (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
 | #131 Docs mismatch: `TRUST_ASSUMPTIONS` pins evidence package to v1.1 while schema accepts v1.0/v1.1/v1.2 | Low | trust-boundary documentation drift on accepted evidence package versions (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
-| #130 Trust-boundary gap: `simulation.blockNumber` accepts non-integers but desktop replay expects `u64` | Medium | simulation numeric boundary mismatch allows malformed fractional block numbers to pass TS schema and fail later at desktop Rust deserialization boundary (`packages/core`, `apps/desktop`) |
-| #129 Trust-boundary gap: `onchain decodedPolicy.nonce` accepts non-integers | Medium | on-chain policy proof numeric boundary allows malformed fractional nonce values that become downstream nonce-mismatch decisions instead of parse-time rejection (`packages/core`) |
 | #127 RPC URL sanitizer misses case-variant credential params (e.g. `apiKey`) in generator debug logs | Medium | production diagnostics trust boundary may leak user-provided RPC credentials because redaction only matches a case-sensitive key subset (`apps/generator`) |
-| #126 Trust-boundary gap: `onchainPolicyProof.blockNumber` accepts non-integers and causes false mismatch decisions | Medium | evidence package policy-proof numeric boundary allows malformed fractional block numbers that become downstream `block-number-mismatch-policy-proof` trust decisions instead of parse-time rejection (`packages/core`) |
 | #125 Stale consensus-mode schema comment misstates desktop verifier support | Low | inline trust-boundary documentation drift: schema comment claims beacon-only while desktop verifier supports beacon/opstack/linea (`packages/core`, `apps/desktop`) |
 | #123 Stale `simulationWitness.witnessOnly` schema comment contradicts runtime behavior | Low | inline trust-boundary documentation drift between schema comments and package creator behavior (`packages/core`) |
-| #121 Trust-boundary gap: `transaction.nonce` accepts non-integers and verifier throws `RangeError` | Medium | evidence package transaction schema vs hash recomputation invariants (`packages/core`) |
 | #120 Docs mismatch: README/TRUST_ASSUMPTIONS claim `connect-src 'none'` but desktop CSP allows Tauri IPC origins | Low | top-level trust-boundary documentation drift for desktop airgap policy (`README.md`, `TRUST_ASSUMPTIONS.md`, `apps/desktop/src-tauri`) |
 | #119 Architecture doc mismatch: witness-only simulation effects no longer omitted | Low | trust-boundary documentation drift between architecture contract and package creator behavior (`docs/architecture`, `packages/core`) |
 | #118 Witness-only verification gap: VerifyScreen can display unverified packaged simulation effects | High | desktop signing surface may present packaged simulation effects that are not replay-validated in witness-only mode (`apps/desktop`) |
 | #117 Witness generation errors are silently swallowed in `enrichWithSimulation` | Medium | simulation witness trust boundary loses failure diagnostics by collapsing all fetch/build errors into `missing-simulation-witness` (`packages/core`) |
-| #116 Trust-boundary gap: onchain decodedPolicy.threshold accepts non-integers | Medium | on-chain policy proof schema boundary allows fractional threshold, causing downstream proof mismatch classification (`packages/core`) |
-| #115 Trust-boundary gap: consensusProof.blockNumber accepts non-integers but desktop verifier requires u64 | Medium | evidence package consensus proof numeric boundary mismatch across TS schema and Rust verifier (`packages/core`, `apps/desktop`) |
-| #114 Trust-boundary gap: confirmationsRequired accepts fractional values | Medium | Safe API + evidence package threshold validation and quorum display correctness (`packages/core`, `apps/generator`) |
 | #113 `AUDIT.md` claims `connect-src 'none'` but production CSP allows Tauri IPC origins | Low | audit documentation accuracy for desktop airgap boundary |
-| #112 Trust-boundary gap: accountProof nonce accepts non-integers and can crash verifier | Medium | account proof/evidence trust boundary and offline verification error handling (`packages/core`) |
-| #111 Trust-boundary gap: Safe URL parser accepts conflicting Safe addresses in transaction URL | Medium | Safe URL input validation and transaction identity consistency (`packages/core`, `apps/generator`, `packages/cli`) |
-| #110 Trust-boundary gap: evidence package chainId accepts non-integers and fails later in hash path | Medium | evidence package input validation and validator error classification (`packages/core`) |
-| #109 Trust-boundary gap: evidence package nonce accepts non-integers and fails later in hash path | Medium | evidence package input validation and validator error classification (`packages/core`) |
-| #108 Trust-boundary gap: Safe API nonce schema accepts non-integers that crash hash path | Medium | Safe API input validation vs downstream hash invariants (`packages/core`) |
 | #107 `AUDIT.md` Open Issues section includes closed tickets | Low | audit documentation integrity |
 | #106 Settings loader silently falls back to defaults on read/parse/schema errors | Medium | local config trust boundary (`packages/core` settings store + desktop bootstrap UX) |
 | #105 Infer proven post-state balance/allowance deltas (replace event-only approval heuristic) | Medium | simulation interpretation correctness |
@@ -221,6 +208,9 @@ Snapshot as of **2026-02-24**:
 
 | Issue | Resolution |
 |---|---|
+| #139, #111 `parseSafeUrl` trusted arbitrary origin and ignored conflicting Safe address fields | `parseSafeUrl`/`parseSafeUrlFlexible` now enforce `https://app.safe.global` origin and reject mismatched Safe addresses between `safe` and `id` params; regression tests added in `safe/__tests__/url-parser.test.ts`. |
+| #138 `packagedAt` accepted arbitrary strings | `evidencePackageSchema.packagedAt` now requires RFC3339 datetime with timezone offset; malformed timestamps are rejected at parse time. |
+| #137, #136, #130, #129, #126, #121, #116, #115, #114, #112, #110, #109, #108 numeric trust-boundary gaps | Introduced strict safe-integer schemas and applied them to chain IDs, nonces, block numbers, thresholds, and confirmations across Safe API and evidence package schemas (`types.ts`); added regression tests in `package/__tests__/schema-extensions.test.ts`. |
 | `fail_result()` dropped accumulated checks in non-beacon envelope verifier | Fixed by returning `fail_result_with_context(...)` for post-envelope validation failures (invalid expected policy root, missing/invalid `packagePackagedAt`). Existing checks and verified envelope context are now preserved. |
 | Future-dated envelope timestamp freshness ambiguity | Explicitly rejected when skew exceeds `NON_BEACON_MAX_FUTURE_SKEW_SECS`; covered by regression tests in `consensus.rs`. |
 | State-root normalization mismatch risk in envelope verification | Roots are normalized through `parse_b256` + canonical hex formatting before comparison. |

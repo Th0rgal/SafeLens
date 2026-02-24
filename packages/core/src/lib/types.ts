@@ -22,6 +22,10 @@ export const evmQuantitySchema = z
   .string()
   .regex(/^(?:0x[a-fA-F0-9]+|[0-9]+)$/, "Invalid numeric quantity");
 
+// Canonical integer constraints for cross-language boundaries (TS <-> Rust).
+const uintSchema = z.number().int().nonnegative().safe();
+const positiveUintSchema = z.number().int().positive().safe();
+
 // Storage slot keys from eth_getProof may be compact quantities (e.g. 0x0)
 // or fully padded 32-byte words.
 export const storageSlotKeySchema = z
@@ -47,11 +51,11 @@ export const safeTransactionSchema = z.object({
   baseGas: z.coerce.string().pipe(evmQuantitySchema),
   gasPrice: z.coerce.string().pipe(evmQuantitySchema),
   refundReceiver: addressSchema,
-  nonce: z.number(),
+  nonce: uintSchema,
   executionDate: z.string().nullable(),
   submissionDate: z.string(),
   modified: z.string(),
-  blockNumber: z.number().nullable(),
+  blockNumber: uintSchema.nullable(),
   transactionHash: hashSchema.nullable(),
   safeTxHash: hashSchema,
   executor: addressSchema.nullable(),
@@ -60,11 +64,11 @@ export const safeTransactionSchema = z.object({
   ethGasPrice: z.string().nullable(),
   maxFeePerGas: z.string().nullable(),
   maxPriorityFeePerGas: z.string().nullable(),
-  gasUsed: z.number().nullable(),
+  gasUsed: uintSchema.nullable(),
   fee: z.string().nullable(),
   origin: z.string().nullable(),
   dataDecoded: z.any().nullable(),
-  confirmationsRequired: z.number(),
+  confirmationsRequired: positiveUintSchema,
   confirmations: z.array(
     z.object({
       owner: addressSchema,
@@ -114,7 +118,7 @@ export const accountProofSchema = z.object({
   address: addressSchema,
   balance: evmQuantitySchema,
   codeHash: hashSchema,
-  nonce: z.number(),
+  nonce: uintSchema,
   storageHash: hashSchema,
   accountProof: z.array(hexDataSchema),
   storageProof: z.array(storageProofEntrySchema),
@@ -124,13 +128,13 @@ export type AccountProof = z.infer<typeof accountProofSchema>;
 
 // On-chain policy proof section (Phase 2 will populate these)
 export const onchainPolicyProofSchema = z.object({
-  blockNumber: z.number(),
+  blockNumber: uintSchema,
   stateRoot: hashSchema,
   accountProof: accountProofSchema,
   decodedPolicy: z.object({
     owners: z.array(addressSchema),
-    threshold: z.number(),
-    nonce: z.number(),
+    threshold: positiveUintSchema,
+    nonce: uintSchema,
     modules: z.array(addressSchema),
     guard: addressSchema,
     fallbackHandler: addressSchema,
@@ -176,7 +180,7 @@ const consensusProofBaseSchema = z.object({
   /** The EVM execution state root extracted from a finalized or verified execution payload. */
   stateRoot: hashSchema,
   /** Block number for the execution payload associated with `stateRoot`. */
-  blockNumber: z.number(),
+  blockNumber: uintSchema,
 });
 
 // Beacon consensus proof section (Phase 4: Helios light client verification).
@@ -194,7 +198,7 @@ const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
   /** Beacon network identifier for selecting the correct fork config and genesis root. */
   network: z.enum(CONSENSUS_NETWORKS),
   /** Beacon slot of the finalized header in the finality update. */
-  finalizedSlot: z.number(),
+  finalizedSlot: uintSchema,
 });
 
 // Non-beacon proof envelope used by OP Stack and Linea integration paths.
@@ -225,7 +229,7 @@ export const simulationSchema = z.object({
   logs: z.array(simulationLogSchema),
   nativeTransfers: z.array(nativeTransferSchema).optional(),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
-  blockNumber: z.number(),
+  blockNumber: uintSchema,
   /** RFC3339 timestamp for the block used during simulation, when available. */
   blockTimestamp: z.string().datetime({ offset: true }).optional(),
   /** Whether debug_traceCall was available on the RPC. When false, logs and
@@ -257,9 +261,9 @@ export type SimulationReplayBlock = z.infer<typeof simulationReplayBlockSchema>;
 // This does not include a full execution proof; it anchors simulation context
 // to a proven state root and binds the simulation payload with a digest.
 export const simulationWitnessSchema = z.object({
-  chainId: z.number(),
+  chainId: positiveUintSchema,
   safeAddress: addressSchema,
-  blockNumber: z.number(),
+  blockNumber: uintSchema,
   stateRoot: hashSchema,
   safeAccountProof: accountProofSchema,
   overriddenSlots: z.array(
@@ -391,13 +395,13 @@ export const evidencePackageSchema = z.object({
   version: z.union([z.literal("1.0"), z.literal("1.1"), z.literal("1.2")]),
   safeAddress: addressSchema,
   safeTxHash: hashSchema,
-  chainId: z.number(),
+  chainId: positiveUintSchema,
   transaction: z.object({
     to: addressSchema,
     value: evmQuantitySchema,
     data: hexDataSchema.nullable(),
     operation: z.union([z.literal(0), z.literal(1)]),
-    nonce: z.number(),
+    nonce: uintSchema,
     safeTxGas: evmQuantitySchema,
     baseGas: evmQuantitySchema,
     gasPrice: evmQuantitySchema,
@@ -411,7 +415,7 @@ export const evidencePackageSchema = z.object({
       submissionDate: z.string(),
     })
   ),
-  confirmationsRequired: z.number(),
+  confirmationsRequired: positiveUintSchema,
   ethereumTxHash: hashSchema.nullable().optional(),
   dataDecoded: z.any().nullable().optional(),
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
@@ -423,7 +427,7 @@ export const evidencePackageSchema = z.object({
     safeApiUrl: z.string().url(),
     transactionUrl: z.string().url(),
   }),
-  packagedAt: z.string(),
+  packagedAt: z.string().datetime({ offset: true }),
 });
 
 export type EvidencePackage = z.infer<typeof evidencePackageSchema>;
@@ -448,7 +452,7 @@ export type SafeUrlParseResult =
 
 // Paginated response from Safe Transaction Service
 export const safeTransactionListSchema = z.object({
-  count: z.number(),
+  count: uintSchema,
   next: z.string().nullable(),
   previous: z.string().nullable(),
   results: z.array(safeTransactionSchema),

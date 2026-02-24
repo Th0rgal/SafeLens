@@ -5,6 +5,7 @@ import {
   getChainPrefix,
   getSafeApiUrl,
   parseSafeUrl,
+  parseSafeUrlFlexible,
 } from "../url-parser";
 
 describe("safe url parser network mappings", () => {
@@ -29,5 +30,21 @@ describe("safe url parser network mappings", () => {
 
   it("keeps safe-address chain search list explicit", () => {
     expect(SUPPORTED_CHAIN_IDS).toEqual([1, 11155111, 137, 42161, 10, 100, 8453, 59144]);
+  });
+
+  it("rejects non-safe.global origins", () => {
+    expect(() =>
+      parseSafeUrl(
+        "https://evil.example/transactions/tx?safe=eth:0x1111111111111111111111111111111111111111&id=multisig_0x1111111111111111111111111111111111111111_0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      )
+    ).toThrow(/Unsupported Safe host/);
+  });
+
+  it("rejects mismatched safe addresses between safe and id params", () => {
+    expect(() =>
+      parseSafeUrlFlexible(
+        "https://app.safe.global/transactions/tx?safe=eth:0x1111111111111111111111111111111111111111&id=multisig_0x2222222222222222222222222222222222222222_0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      )
+    ).toThrow(/Conflicting Safe addresses/);
   });
 });

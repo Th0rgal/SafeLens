@@ -6,6 +6,17 @@ import {
   SAFE_ADDRESS_SEARCH_CHAIN_IDS,
 } from "../networks/capabilities";
 
+const SAFE_APP_HOSTNAME = "app.safe.global";
+
+function assertSafeAppOrigin(url: URL): void {
+  if (url.protocol !== "https:") {
+    throw new Error("Unsupported URL protocol. Expected https://");
+  }
+  if (url.hostname !== SAFE_APP_HOSTNAME) {
+    throw new Error(`Unsupported Safe host: ${url.hostname}`);
+  }
+}
+
 /**
  * Parse a Safe transaction URL
  * Example: https://app.safe.global/transactions/tx?safe=eth:0x9fC3dc011b461664c835F2527fffb1169b3C213e&id=multisig_0x9fC3dc011b461664c835F2527fffb1169b3C213e_0x8bcba9ed52545bdc89eebc015757cda83c2468d3f225cea01c2a844b8a15cf17
@@ -13,6 +24,7 @@ import {
 export function parseSafeUrl(urlString: string): SafeUrlData {
   try {
     const url = new URL(urlString);
+    assertSafeAppOrigin(url);
 
     // Get safe parameter (e.g., "eth:0x...")
     const safeParam = url.searchParams.get("safe");
@@ -48,6 +60,14 @@ export function parseSafeUrl(urlString: string): SafeUrlData {
       throw new Error("Invalid 'id' parameter format. Expected format: 'multisig_{address}_{hash}'");
     }
 
+    const idSafeAddress = parts[1];
+    if (!/^0x[a-fA-F0-9]{40}$/.test(idSafeAddress)) {
+      throw new Error("Invalid Safe address format in 'id' parameter");
+    }
+    if (idSafeAddress.toLowerCase() !== safeAddress.toLowerCase()) {
+      throw new Error("Conflicting Safe addresses between 'safe' and 'id' parameters");
+    }
+
     const safeTxHash = parts[2];
     if (!/^0x[a-fA-F0-9]{64}$/.test(safeTxHash)) {
       throw new Error("Invalid Safe transaction hash format");
@@ -73,6 +93,7 @@ export function parseSafeUrl(urlString: string): SafeUrlData {
 export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {
   try {
     const url = new URL(urlString);
+    assertSafeAppOrigin(url);
 
     const safeParam = url.searchParams.get("safe");
     if (!safeParam) {
@@ -102,6 +123,14 @@ export function parseSafeUrlFlexible(urlString: string): SafeUrlParseResult {
     const parts = idParam.split("_");
     if (parts.length !== 3 || parts[0] !== "multisig") {
       throw new Error("Invalid 'id' parameter format. Expected format: 'multisig_{address}_{hash}'");
+    }
+
+    const idSafeAddress = parts[1];
+    if (!/^0x[a-fA-F0-9]{40}$/.test(idSafeAddress)) {
+      throw new Error("Invalid Safe address format in 'id' parameter");
+    }
+    if (idSafeAddress.toLowerCase() !== safeAddress.toLowerCase()) {
+      throw new Error("Conflicting Safe addresses between 'safe' and 'id' parameters");
     }
 
     const safeTxHash = parts[2];

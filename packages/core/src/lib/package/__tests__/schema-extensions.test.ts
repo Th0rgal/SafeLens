@@ -523,6 +523,11 @@ describe("simulation schema", () => {
       expect(result.data.logs[0].topics).toHaveLength(1);
     }
   });
+
+  it("rejects simulation with fractional block number", () => {
+    const invalid = { ...MOCK_SIMULATION, blockNumber: 19000000.5 };
+    expect(simulationSchema.safeParse(invalid).success).toBe(false);
+  });
 });
 
 describe("simulation witness schema", () => {
@@ -628,5 +633,66 @@ describe("simulation witness schema", () => {
     };
 
     expect(simulationWitnessSchema.safeParse(witness).success).toBe(false);
+  });
+
+  it("rejects fractional witness chainId and blockNumber", () => {
+    const witness = {
+      chainId: 1.5,
+      safeAddress: "0x9fC3dc011b461664c835F2527fffb1169b3C213e",
+      blockNumber: 19000000.5,
+      stateRoot:
+        "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+      safeAccountProof: MOCK_POLICY_PROOF.accountProof,
+      overriddenSlots: [],
+      simulationDigest:
+        "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    };
+
+    expect(simulationWitnessSchema.safeParse(witness).success).toBe(false);
+  });
+});
+
+describe("strict integer and timestamp boundaries", () => {
+  it("rejects fractional transaction nonce in evidence packages", () => {
+    const evidence = makeValidEvidence();
+    const invalid = {
+      ...evidence,
+      transaction: {
+        ...evidence.transaction,
+        nonce: 7.5,
+      },
+    };
+    expect(evidencePackageSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it("rejects malformed packagedAt timestamps", () => {
+    const evidence = makeValidEvidence();
+    const invalid = {
+      ...evidence,
+      packagedAt: "not-a-timestamp",
+    };
+    expect(evidencePackageSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it("rejects fractional evidence chainId and confirmationsRequired", () => {
+    const evidence = makeValidEvidence();
+    const invalid = {
+      ...evidence,
+      chainId: 1.5,
+      confirmationsRequired: 2.5,
+    };
+    expect(evidencePackageSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it("rejects fractional onchain policy block and nonce", () => {
+    const invalid = {
+      ...MOCK_POLICY_PROOF,
+      blockNumber: 19000000.5,
+      decodedPolicy: {
+        ...MOCK_POLICY_PROOF.decodedPolicy,
+        nonce: 42.5,
+      },
+    };
+    expect(onchainPolicyProofSchema.safeParse(invalid).success).toBe(false);
   });
 });
