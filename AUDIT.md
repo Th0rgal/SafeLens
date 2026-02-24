@@ -177,7 +177,6 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 
 | Issue | Severity | Scope |
 |---|---|---|
-| #135 Trust-boundary mismatch: beacon `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Low | evidence contract drift: `finalizedSlot` appears authoritative in package schema but is not consumed/validated at desktop verification boundary (`packages/core`, `apps/desktop`) |
 | #134 Generator emits verbose evidence debug logs in production without opt-in | Low | production diagnostics trust boundary is always active and logs evidence metadata without explicit environment/user opt-in (`apps/generator`) |
 | #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Low | auditor entry-point documentation drift: `AUDIT.md` still says witness-only effects are replay-derived while runtime keeps packaged simulation effects (`AUDIT.md`, `packages/core`) |
 | #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Low | trust-boundary documentation drift in witness-only simulation semantics (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
@@ -197,6 +196,7 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 
 | Issue | Resolution |
 |---|---|
+| #135 `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Fixed: `finalizedSlot` is now optional (`z.number().int().optional()`) with doc comment clarifying it is informational metadata not consumed by the desktop verifier |
 | #137 `simulationWitness.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
 | #136 `simulationWitness.chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
 | #130 `simulation.blockNumber` accepts non-integers but desktop replay expects `u64` | Fixed: schema now enforces `z.number().int()` |
