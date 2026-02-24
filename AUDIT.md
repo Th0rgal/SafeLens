@@ -23,7 +23,7 @@ User Input (Safe URL/address)
   → OPTIONAL: Enrich with on-chain policy proof via eth_getProof (rpc-sourced)
   → OPTIONAL: Enrich with simulation via eth_call + state overrides (rpc-sourced generation input)
   → OPTIONAL: Attach simulation witness (state root, account/storage proofs, replay world-state)
-  → If witness replay inputs are complete and operation is CALL (`operation=0`), export in witness-only simulation mode (packaged RPC effects retained; replay data attached for offline verification)
+  → If witness replay inputs are complete and operation is CALL (`operation=0`), export in witness-only simulation mode (simulation witness attached with replay inputs; packaged simulation effects retained for comparison against replay-derived effects)
   → OPTIONAL: Enrich with consensus proof (beacon BLS data or execution envelope)
   → Finalize export contract (fully-verifiable | partial)
   → Export JSON

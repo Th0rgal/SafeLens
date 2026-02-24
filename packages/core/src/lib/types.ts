@@ -171,7 +171,7 @@ export const stateDiffEntrySchema = z.object({
 export type StateDiffEntry = z.infer<typeof stateDiffEntrySchema>;
 
 const consensusProofBaseSchema = z.object({
-  /** Consensus verifier mode. Beacon is currently implemented in desktop verifier. */
+  /** Consensus verifier mode. Desktop verifier supports beacon (BLS), opstack, and linea (envelope checks). */
   consensusMode: consensusModeSchema.optional(),
   /** The EVM execution state root extracted from a finalized or verified execution payload. */
   stateRoot: hashSchema,
@@ -281,8 +281,10 @@ export const simulationWitnessSchema = z.object({
   ).optional(),
   replayCaller: addressSchema.optional(),
   replayGasLimit: z.number().int().positive().optional(),
-  /** When true, simulation effects (logs/nativeTransfers) are intentionally
-   * omitted from the packaged simulation and must be derived from local replay. */
+  /** When true, packaged simulation effects (logs/nativeTransfers) are retained
+   * but must be re-derived from local replay during verification. Set by the
+   * creator when witness contains complete replay inputs (world-state accounts
+   * + block environment) and operation is CALL (operation=0). */
   witnessOnly: z.boolean().optional(),
 });
 
