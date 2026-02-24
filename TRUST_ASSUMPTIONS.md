@@ -39,13 +39,15 @@ as proof infrastructure is added.
 
 ## Evidence Package Sections
 
-The evidence package (v1.1) supports optional sections, each with an embedded trust classification:
+The evidence package schema accepts versions 1.0, 1.1, and 1.2, each with optional sections carrying an embedded trust classification:
 
 | Section | Trust field | Description |
 |---|---|---|
 | Core transaction data | - (always present) | EIP-712 fields, confirmations, hash, self-verified on parse |
 | `onchainPolicyProof` | `.trust` | Merkle storage proofs for Safe policy state (Phase 2) |
-| `simulation` | `.trust` | Transaction simulation result envelope (`success`, `returnData`, `gasUsed`, etc). In witness-only mode, effects/logs are derived at verify time from local replay. |
+| `simulation` | `.trust` | Transaction simulation result envelope (`success`, `returnData`, `gasUsed`, etc). When `simulationWitness.witnessOnly=true`, packaged simulation effects are retained for comparison but must be re-derived from local replay during verification. See [`docs/architecture/verification-source-contract.md`](docs/architecture/verification-source-contract.md) for the full witness-only verification matrix. |
+| `simulationWitness` | (implicit) | Replay inputs (world-state accounts, block environment) for offline simulation verification |
+| `consensusProof` | (implicit) | Beacon light client data or OP Stack/Linea execution envelope for consensus state-root verification (Phase 4) |
 
 Sections are independent and can be enabled progressively. A v1.0 package
 without these sections is fully supported and behaves identically to before.
@@ -64,7 +66,7 @@ From highest to lowest assurance:
 
 SafeLens desktop is intended to run in a fully airgapped environment after install:
 
-- Production CSP sets `connect-src 'none'`.
+- Production CSP sets `connect-src ipc: http://ipc.localhost` (Tauri IPC only, no external network origins).
 - No `shell-open` capability is enabled in Tauri allowlist or Rust features.
 - Desktop frontend source contains no network API calls.
 
