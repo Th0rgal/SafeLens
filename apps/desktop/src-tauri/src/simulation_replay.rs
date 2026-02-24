@@ -172,9 +172,9 @@ where
                     frame_transfers.insert(
                         0,
                         ReplayNativeTransfer {
-                        from: format!("{:#x}", inputs.transfer_from()),
-                        to: format!("{:#x}", inputs.transfer_to()),
-                        value: value.to_string(),
+                            from: format!("{:#x}", inputs.transfer_from()),
+                            to: format!("{:#x}", inputs.transfer_to()),
+                            value: value.to_string(),
                         },
                     );
                 }
