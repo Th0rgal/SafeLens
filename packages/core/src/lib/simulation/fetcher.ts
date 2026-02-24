@@ -910,14 +910,18 @@ async function tryCollectReplayAccounts(
   }>,
   requiredAddresses: Address[]
 ): Promise<SimulationWitness["replayAccounts"]> {
-  const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
-  if (!traceResult) {
+  try {
+    const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
+    if (!traceResult) {
+      return undefined;
+    }
+    // Use `pre` when available (diffMode response), otherwise fall back to
+    // the raw result (non-diffMode or single-object response).
+    const trace = traceResult.pre ?? (traceResult.raw as PrestateTrace);
+    return traceToReplayAccounts(trace, requiredAddresses);
+  } catch {
     return undefined;
   }
-  // Use `pre` when available (diffMode response), otherwise fall back to
-  // the raw result (non-diffMode or single-object response).
-  const trace = traceResult.pre ?? (traceResult.raw as PrestateTrace);
-  return traceToReplayAccounts(trace, requiredAddresses);
 }
 
 async function tryCollectSimpleTransferReplayAccounts(
