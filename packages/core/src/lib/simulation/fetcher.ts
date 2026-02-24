@@ -773,13 +773,15 @@ async function tryCollectStateDiffs(
 
     let result: unknown;
     try {
+      // Gnosis-style RPCs expect `stateOverrides` (plural) — try that first,
+      // matching the retry order in tryTraceCall.
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: [
           ...paramsBase,
           {
             ...prestateConfig,
-            stateOverride: stateOverrideObj,
+            stateOverrides: stateOverrideObj,
           },
         ] as unknown as [
           { to: Address; data: Hex },
@@ -788,13 +790,14 @@ async function tryCollectStateDiffs(
         ],
       });
     } catch {
+      // Fallback for clients that expect `stateOverride` (singular).
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: [
           ...paramsBase,
           {
             ...prestateConfig,
-            stateOverrides: stateOverrideObj,
+            stateOverride: stateOverrideObj,
           },
         ] as unknown as [
           { to: Address; data: Hex },
