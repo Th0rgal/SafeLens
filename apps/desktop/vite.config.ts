@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { manualDesktopChunks } from "./vite.manual-chunks";
 
 export default defineConfig({
   plugins: [react()],
@@ -19,5 +20,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: manualDesktopChunks,
+      },
+    },
   },
 });
