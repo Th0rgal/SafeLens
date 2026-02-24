@@ -175,7 +175,11 @@ export async function enrichWithSimulation(
     // Redact URL-like fragments to prevent API key leakage in diagnostics.
     simulationWitness = undefined;
     const rawMessage =
-      error instanceof Error ? error.message : String(error);
+      error instanceof Error
+        ? error.message || "(empty error message)"
+        : typeof error === "string" && error.length > 0
+          ? error
+          : "(unknown error)";
     witnessGenerationError = rawMessage.replace(
       /https?:\/\/[^\s"',)}\]]+/gi,
       (url) => {
