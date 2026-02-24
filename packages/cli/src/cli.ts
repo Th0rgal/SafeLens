@@ -566,7 +566,11 @@ async function loadSettingsForVerify(args: string[]) {
   if (hasFlag(args, "--no-settings")) return null;
   const customPath = getFlag(args, "--settings") || getFlag(args, "--path");
   const store = createNodeSettingsStore(customPath);
-  const config = await loadSettingsConfig(store, DEFAULT_SETTINGS_CONFIG);
+  const { config, warning } = await loadSettingsConfig(store, DEFAULT_SETTINGS_CONFIG);
+  if (warning) {
+    console.error(`Warning: ${warning.message}`);
+    console.error("Falling back to default settings.\n");
+  }
   setGlobalDescriptors(config.erc7730Descriptors ?? []);
   return config;
 }
