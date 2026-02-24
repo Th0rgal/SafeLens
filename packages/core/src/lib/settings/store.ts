@@ -82,6 +82,9 @@ export async function resetSettingsConfig(
 }
 
 export async function exportSettingsConfig(store: SettingsStore): Promise<string> {
+  // Warning is intentionally discarded here — load warnings are surfaced
+  // through the normal bootstrap path (UI banner / CLI stderr), and the
+  // export function only needs the resolved config.
   const { config } = await loadSettingsConfig(store);
   return JSON.stringify(config, null, 2);
 }
