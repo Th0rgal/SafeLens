@@ -193,7 +193,7 @@ describe("proof alignment in package enrichment", () => {
       consensusProof: makeConsensusProof(),
     };
 
-    const enriched = await enrichWithSimulation(evidence, {
+    const { evidence: enriched } = await enrichWithSimulation(evidence, {
       rpcUrl: "https://rpc.example",
     });
 
@@ -259,7 +259,7 @@ describe("proof alignment in package enrichment", () => {
         operation: 0 as const,
       },
     };
-    const enriched = await enrichWithSimulation(evidence, {
+    const { evidence: enriched } = await enrichWithSimulation(evidence, {
       rpcUrl: "https://rpc.example",
     });
 
@@ -308,7 +308,7 @@ describe("proof alignment in package enrichment", () => {
     });
 
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-    const enriched = await enrichWithSimulation(evidence, {
+    const { evidence: enriched } = await enrichWithSimulation(evidence, {
       rpcUrl: "https://rpc.example",
     });
 
@@ -363,7 +363,7 @@ describe("proof alignment in package enrichment", () => {
     });
 
     const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
-    const enriched = await enrichWithSimulation(evidence, {
+    const { evidence: enriched } = await enrichWithSimulation(evidence, {
       rpcUrl: "https://rpc.example",
     });
 
@@ -430,7 +430,7 @@ describe("proof alignment in package enrichment", () => {
         operation: 1 as const,
       },
     };
-    const enriched = await enrichWithSimulation(evidence, {
+    const { evidence: enriched } = await enrichWithSimulation(evidence, {
       rpcUrl: "https://rpc.example",
     });
 

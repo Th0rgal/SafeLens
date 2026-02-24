@@ -647,4 +647,37 @@ describe("finalizeEvidenceExport", () => {
       expect(finalized.exportContract?.reasons).toContain("missing-rpc-url");
     }
   );
+
+  it("includes witnessGenerationError in diagnostics when provided", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: false,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+      witnessGenerationError: "eth_getProof not supported by RPC provider",
+    });
+
+    expect(finalized.exportContract?.diagnostics?.witnessGenerationError).toBe(
+      "eth_getProof not supported by RPC provider"
+    );
+  });
+
+  it("omits diagnostics when witnessGenerationError is not provided", () => {
+    const evidence = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: false,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: false,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.diagnostics).toBeUndefined();
+  });
 });
