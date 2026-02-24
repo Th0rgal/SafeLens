@@ -177,19 +177,6 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 
 | Issue | Severity | Scope |
 |---|---|---|
-| #134 Generator emits verbose evidence debug logs in production without opt-in | Low | production diagnostics trust boundary is always active and logs evidence metadata without explicit environment/user opt-in (`apps/generator`) |
-| #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Low | auditor entry-point documentation drift: `AUDIT.md` still says witness-only effects are replay-derived while runtime keeps packaged simulation effects (`AUDIT.md`, `packages/core`) |
-| #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Low | trust-boundary documentation drift in witness-only simulation semantics (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
-| #131 Docs mismatch: `TRUST_ASSUMPTIONS` pins evidence package to v1.1 while schema accepts v1.0/v1.1/v1.2 | Low | trust-boundary documentation drift on accepted evidence package versions (`TRUST_ASSUMPTIONS.md`, `packages/core`) |
-| #127 RPC URL sanitizer misses case-variant credential params (e.g. `apiKey`) in generator debug logs | Medium | production diagnostics trust boundary may leak user-provided RPC credentials because redaction only matches a case-sensitive key subset (`apps/generator`) |
-| #125 Stale consensus-mode schema comment misstates desktop verifier support | Low | inline trust-boundary documentation drift: schema comment claims beacon-only while desktop verifier supports beacon/opstack/linea (`packages/core`, `apps/desktop`) |
-| #123 Stale `simulationWitness.witnessOnly` schema comment contradicts runtime behavior | Low | inline trust-boundary documentation drift between schema comments and package creator behavior (`packages/core`) |
-| #120 Docs mismatch: README/TRUST_ASSUMPTIONS claim `connect-src 'none'` but desktop CSP allows Tauri IPC origins | Low | top-level trust-boundary documentation drift for desktop airgap policy (`README.md`, `TRUST_ASSUMPTIONS.md`, `apps/desktop/src-tauri`) |
-| #119 Architecture doc mismatch: witness-only simulation effects no longer omitted | Low | trust-boundary documentation drift between architecture contract and package creator behavior (`docs/architecture`, `packages/core`) |
-| #118 Witness-only verification gap: VerifyScreen can display unverified packaged simulation effects | High | desktop signing surface may present packaged simulation effects that are not replay-validated in witness-only mode (`apps/desktop`) |
-| #117 Witness generation errors are silently swallowed in `enrichWithSimulation` | Medium | simulation witness trust boundary loses failure diagnostics by collapsing all fetch/build errors into `missing-simulation-witness` (`packages/core`) |
-| #113 `AUDIT.md` claims `connect-src 'none'` but production CSP allows Tauri IPC origins | Low | audit documentation accuracy for desktop airgap boundary |
-| #106 Settings loader silently falls back to defaults on read/parse/schema errors | Medium | local config trust boundary (`packages/core` settings store + desktop bootstrap UX) |
 | #105 Infer proven post-state balance/allowance deltas (replace event-only approval heuristic) | Medium | simulation interpretation correctness |
 
 ### Closed Issues (previously listed)
@@ -197,6 +184,19 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 | Issue | Resolution |
 |---|---|
 | #135 `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Fixed: `finalizedSlot` is now optional (`z.number().int().optional()`) with doc comment clarifying it is informational metadata not consumed by the desktop verifier |
+| #134 Generator emits verbose evidence debug logs in production without opt-in | Fixed in PR #143: debug logs gated behind `NEXT_PUBLIC_ENABLE_DEBUG_LOGS` / `NODE_ENV === "development"` |
+| #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Fixed in PR #146: AUDIT.md data flow description synchronized with runtime behavior |
+| #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Fixed in PR #146: witness-only semantics clarified with cross-reference to verification-source-contract |
+| #131 Docs mismatch: `TRUST_ASSUMPTIONS` pins evidence package to v1.1 | Fixed in PR #146: version pinning updated to `v1.0/v1.1/v1.2` |
+| #127 RPC URL sanitizer misses case-variant credential params | Fixed: `redactRpcUrl` in `rpc-redaction.ts` handles URL-pattern redaction; witness errors also redact URLs via regex |
+| #125 Stale consensus-mode schema comment misstates desktop verifier support | Fixed in PR #146: comment updated to document beacon/opstack/linea support |
+| #123 Stale `simulationWitness.witnessOnly` schema comment contradicts runtime behavior | Fixed in PR #146: comment updated with when/why context |
+| #120 Docs mismatch: README/TRUST_ASSUMPTIONS claim `connect-src 'none'` | Fixed in PR #146: CSP documentation corrected to match Tauri IPC-only policy |
+| #119 Architecture doc mismatch: witness-only simulation effects no longer omitted | Fixed in PR #146: architecture contract synchronized with package creator behavior |
+| #118 Witness-only verification gap: VerifyScreen can display unverified packaged simulation effects | Fixed in PR #147: effects gated on `replayPassed` and badge gated on `simulationPassed` |
+| #117 Witness generation errors are silently swallowed in `enrichWithSimulation` | Fixed in PR #143: `enrichWithSimulation` returns `{ evidence, witnessGenerationError? }` with URL redaction |
+| #113 `AUDIT.md` claims `connect-src 'none'` but production CSP allows Tauri IPC origins | Fixed in PR #146: CSP claim corrected |
+| #106 Settings loader silently falls back to defaults on read/parse/schema errors | Fixed in PR #144: `loadSettingsConfig` returns `SettingsLoadResult { config, warning? }` with typed warnings surfaced in desktop UI and CLI stderr |
 | #137 `simulationWitness.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
 | #136 `simulationWitness.chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
 | #130 `simulation.blockNumber` accepts non-integers but desktop replay expects `u64` | Fixed: schema now enforces `z.number().int()` |
