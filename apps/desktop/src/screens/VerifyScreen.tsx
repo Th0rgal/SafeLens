@@ -777,24 +777,8 @@ function ExecutionSafetyPanel({
       if (!replayPassed) {
         return [];
       }
-      const packagedLogEvents = evidence.simulation?.logs
-        ? decodeSimulationEvents(
-            evidence.simulation.logs,
-            evidence.safeAddress,
-            evidence.chainId
-          )
-        : [];
-      const packagedNativeEvents = evidence.simulation?.nativeTransfers?.length
-        ? decodeNativeTransfers(
-            evidence.simulation.nativeTransfers,
-            evidence.safeAddress,
-            nativeTokenSymbol ?? "ETH",
-          )
-        : [];
-      if (packagedLogEvents.length > 0 || packagedNativeEvents.length > 0) {
-        return [...packagedNativeEvents, ...packagedLogEvents];
-      }
-
+      // Witness-only packages do not cryptographically bind packaged simulation effects.
+      // Show only locally replayed logs once replay verification has passed.
       const replayLogs = (simulationReplayVerification?.replayLogs ?? []).map((log: {
         address: string;
         topics: string[];
@@ -821,8 +805,6 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.safeAddress,
     evidence.chainId,
-    evidence.simulationWitness?.witnessOnly,
-    nativeTokenSymbol,
     replayPassed,
     simulationReplayVerification?.replayLogs,
     witnessOnlySimulation,

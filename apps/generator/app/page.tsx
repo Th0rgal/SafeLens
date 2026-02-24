@@ -30,6 +30,7 @@ import {
 import { downloadEvidencePackage } from "@/lib/download";
 import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
 import { summarizeConsensusProof } from "@/lib/consensus-proof-summary";
+import { redactRpcUrl } from "@/lib/rpc-redaction";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
@@ -336,27 +337,6 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
       <span className="text-right">{children}</span>
     </div>
   );
-}
-
-function redactRpcUrl(value?: string): string | undefined {
-  if (!value) return undefined;
-  try {
-    const parsed = new URL(value);
-    if (parsed.username || parsed.password) {
-      parsed.username = parsed.username ? "***" : "";
-      parsed.password = parsed.password ? "***" : "";
-    }
-
-    const sensitiveKeys = ["api-key", "apikey", "key", "token", "auth", "access_token"];
-    for (const key of sensitiveKeys) {
-      if (parsed.searchParams.has(key)) {
-        parsed.searchParams.set(key, "***");
-      }
-    }
-    return parsed.toString();
-  } catch {
-    return value;
-  }
 }
 
 const SAFE_MULTISIG_TX_TOPIC =
