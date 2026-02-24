@@ -958,7 +958,7 @@ function ExecutionSafetyPanel({
 
         <div className="flex items-center gap-2 text-xs font-medium text-muted">
           <span>Simulation effects</span>
-          {witnessOnlySimulation && replayPassed && (
+          {witnessOnlySimulation && simulationReplayVerification?.executed && simulationReplayVerification?.success && replayPassed && (
             <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
               replay-verified
             </span>
