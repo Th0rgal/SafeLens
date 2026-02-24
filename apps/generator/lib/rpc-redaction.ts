@@ -1,20 +1,13 @@
-const SENSITIVE_QUERY_KEYS = new Set([
+const SENSITIVE_KEY_MARKERS = [
   "api-key",
   "apikey",
   "key",
   "token",
   "auth",
   "access_token",
-]);
-
-const SENSITIVE_PATH_MARKERS = new Set([
-  "api-key",
-  "apikey",
-  "key",
-  "token",
-  "auth",
-  "access_token",
-]);
+] as const;
+const SENSITIVE_QUERY_KEYS = new Set(SENSITIVE_KEY_MARKERS);
+const SENSITIVE_PATH_MARKERS = new Set(SENSITIVE_KEY_MARKERS);
 
 function redactPathSecrets(parsed: URL): void {
   const segments = parsed.pathname.split("/");
