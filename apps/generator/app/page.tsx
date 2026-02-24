@@ -360,6 +360,12 @@ function logEvidenceDebugSnapshot(
     simulationFailed: boolean;
   }
 ): void {
+  if (
+    process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS !== "1" &&
+    process.env.NODE_ENV !== "development"
+  ) {
+    return;
+  }
   try {
     const sim = evidence.simulation;
     const topics = sim?.logs?.map((log) => log.topics?.[0]?.toLowerCase()).filter(Boolean) ?? [];
@@ -484,6 +490,7 @@ export default function AnalyzePage() {
     let simulationFailed = false;
     let onchainPolicyProofAttempted = false;
     let simulationAttempted = false;
+    let witnessGenerationError: string | undefined;
 
     if (!rpcProvided) {
       setSuggestedSimulationRpc(null);
@@ -591,10 +598,12 @@ export default function AnalyzePage() {
 
       simulationAttempted = true;
       try {
-        enriched = await enrichWithSimulation(enriched, {
+        const simulationResult = await enrichWithSimulation(enriched, {
           rpcUrl: resolvedRpcUrl,
           blockNumber: enriched.onchainPolicyProof?.blockNumber,
         });
+        enriched = simulationResult.evidence;
+        witnessGenerationError = simulationResult.witnessGenerationError;
       } catch (err) {
         simulationFailed = true;
         console.warn("Failed to simulate transaction:", err);
@@ -614,6 +623,7 @@ export default function AnalyzePage() {
       onchainPolicyProofFailed,
       simulationAttempted,
       simulationFailed,
+      witnessGenerationError,
     });
     logEvidenceDebugSnapshot(finalized, {
       rpcProvided,

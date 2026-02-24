@@ -384,6 +384,9 @@ export const evidenceExportContractSchema = z.object({
     onchainPolicyProof: z.boolean(),
     simulation: z.boolean(),
   }),
+  diagnostics: z.object({
+    witnessGenerationError: z.string().optional(),
+  }).optional(),
 });
 
 export type EvidenceExportContract = z.infer<typeof evidenceExportContractSchema>;

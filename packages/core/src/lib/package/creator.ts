@@ -140,10 +140,17 @@ export async function enrichWithOnchainProof(
  * (fake 1-of-1 owner) to reveal the transaction's success/revert status,
  * return data, gas usage, and event logs. Bumps version to "1.1".
  */
+export interface EnrichWithSimulationResult {
+  evidence: EvidencePackage;
+  /** When witness generation fails, the normalized error message is preserved
+   *  here so callers can thread it into `finalizeEvidenceExport` diagnostics. */
+  witnessGenerationError?: string;
+}
+
 export async function enrichWithSimulation(
   evidence: EvidencePackage,
   options: FetchSimulationOptions = {}
-): Promise<EvidencePackage> {
+): Promise<EnrichWithSimulationResult> {
   const simulation = await fetchSimulation(
     evidence.safeAddress as Address,
     evidence.chainId,
@@ -152,6 +159,7 @@ export async function enrichWithSimulation(
   );
 
   let simulationWitness: EvidencePackage["simulationWitness"] | undefined;
+  let witnessGenerationError: string | undefined;
   try {
     simulationWitness = await fetchSimulationWitness(
       evidence.safeAddress as Address,
@@ -160,10 +168,29 @@ export async function enrichWithSimulation(
       simulation,
       options
     );
-  } catch {
+  } catch (error: unknown) {
     // Witness generation is best-effort: keep simulation artifact even when
     // RPC cannot provide proof data for witness construction.
+    // Preserve the failure reason so downstream tooling can diagnose why.
+    // Redact URL-like fragments to prevent API key leakage in diagnostics.
     simulationWitness = undefined;
+    const rawMessage =
+      error instanceof Error
+        ? error.message || "(empty error message)"
+        : typeof error === "string" && error.length > 0
+          ? error
+          : "(unknown error)";
+    witnessGenerationError = rawMessage.replace(
+      /https?:\/\/[^\s"',)}\]]+/gi,
+      (url) => {
+        try {
+          const parsed = new URL(url);
+          return `${parsed.protocol}//${parsed.hostname}/***`;
+        } catch {
+          return "[redacted-url]";
+        }
+      }
+    );
   }
 
   const hasReplayAccounts =
@@ -187,10 +214,13 @@ export async function enrichWithSimulation(
     : simulationWitness;
 
   return {
-    ...evidence,
-    version: withEnrichmentVersion(evidence.version),
-    simulation: packagedSimulation,
-    simulationWitness: packagedSimulationWitness,
+    evidence: {
+      ...evidence,
+      version: withEnrichmentVersion(evidence.version),
+      simulation: packagedSimulation,
+      simulationWitness: packagedSimulationWitness,
+    },
+    witnessGenerationError,
   };
 }
 
@@ -245,6 +275,8 @@ export interface FinalizeExportContractOptions {
   onchainPolicyProofFailed: boolean;
   simulationAttempted: boolean;
   simulationFailed: boolean;
+  /** Normalized error message from witness generation failure, if any. */
+  witnessGenerationError?: string;
 }
 
 /**
@@ -329,6 +361,10 @@ export function finalizeEvidenceExport(
     hasOnchainPolicyProof &&
     hasSimulation &&
     hasReplayCapableSimulationWitnessInputs;
+  const diagnostics: EvidenceExportContract["diagnostics"] =
+    options.witnessGenerationError !== undefined
+      ? { witnessGenerationError: options.witnessGenerationError || "(unknown error)" }
+      : undefined;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",
     status: isFullyVerifiable ? "complete" : "partial",
@@ -339,6 +375,7 @@ export function finalizeEvidenceExport(
       onchainPolicyProof: hasOnchainPolicyProof,
       simulation: hasSimulation,
     },
+    ...(diagnostics && { diagnostics }),
   };
 
   return {

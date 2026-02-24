@@ -464,6 +464,7 @@ async function runAnalyze(args: string[]) {
   let onchainPolicyProofFailed = false;
   let simulationAttempted = false;
   let simulationFailed = false;
+  let witnessGenerationError: string | undefined;
 
   if (shouldAttemptConsensus) {
     consensusProofAttempted = true;
@@ -514,7 +515,9 @@ async function runAnalyze(args: string[]) {
 
     simulationAttempted = true;
     try {
-      evidence = await enrichWithSimulation(evidence, { rpcUrl });
+      const simulationResult = await enrichWithSimulation(evidence, { rpcUrl });
+      evidence = simulationResult.evidence;
+      witnessGenerationError = simulationResult.witnessGenerationError;
     } catch (err) {
       simulationFailed = true;
       console.error(
@@ -534,6 +537,7 @@ async function runAnalyze(args: string[]) {
     onchainPolicyProofFailed,
     simulationAttempted,
     simulationFailed,
+    witnessGenerationError,
   });
 
   const settings = await loadSettingsForVerify(args);
