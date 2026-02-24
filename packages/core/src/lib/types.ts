@@ -193,8 +193,8 @@ const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
   finalityUpdate: z.string(),
   /** Beacon network identifier for selecting the correct fork config and genesis root. */
   network: z.enum(CONSENSUS_NETWORKS),
-  /** Beacon slot of the finalized header in the finality update. */
-  finalizedSlot: z.number(),
+  /** Beacon slot of the finalized header in the finality update. Informational metadata only — not consumed by the desktop verifier. */
+  finalizedSlot: z.number().int().optional(),
 });
 
 // Non-beacon proof envelope used by OP Stack and Linea integration paths.
