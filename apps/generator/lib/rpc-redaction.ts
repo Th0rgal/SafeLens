@@ -6,8 +6,8 @@ const SENSITIVE_KEY_MARKERS = [
   "auth",
   "access_token",
 ] as const;
-const SENSITIVE_QUERY_KEYS = new Set(SENSITIVE_KEY_MARKERS);
-const SENSITIVE_PATH_MARKERS = new Set(SENSITIVE_KEY_MARKERS);
+const SENSITIVE_QUERY_KEYS: ReadonlySet<string> = new Set(SENSITIVE_KEY_MARKERS);
+const SENSITIVE_PATH_MARKERS: ReadonlySet<string> = new Set(SENSITIVE_KEY_MARKERS);
 const INVALID_URL_REDACTED_PLACEHOLDER = "[invalid URL redacted]";
 
 function redactPathSecrets(parsed: URL): void {
