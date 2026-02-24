@@ -2,7 +2,9 @@ use revm::{
     context::{result::ExecutionResult, BlockEnv, Context, TxEnv},
     database::CacheDB,
     database_interface::EmptyDB,
-    handler::{ExecuteEvm, MainBuilder, MainContext},
+    handler::{MainBuilder, MainContext},
+    inspector::{InspectEvm, Inspector},
+    interpreter::{CallInputs, CallOutcome},
     primitives::{Address, Bytes, Log, TxKind, B256, U256},
     state::{AccountInfo, Bytecode},
 };
@@ -58,6 +60,14 @@ pub struct ReplaySimulationLog {
     pub data: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayNativeTransfer {
+    pub from: String,
+    pub to: String,
+    pub value: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayWitness {
@@ -99,6 +109,8 @@ pub struct SimulationReplayVerificationResult {
     pub error: Option<String>,
     #[serde(rename = "replayLogs")]
     pub replay_logs: Option<Vec<ReplaySimulationLog>>,
+    #[serde(rename = "replayNativeTransfers")]
+    pub replay_native_transfers: Option<Vec<ReplayNativeTransfer>>,
 }
 
 #[derive(Debug)]
@@ -107,6 +119,68 @@ struct ReplayExecution {
     return_data: String,
     gas_used: u64,
     logs: Vec<ReplaySimulationLog>,
+    native_transfers: Vec<ReplayNativeTransfer>,
+}
+
+#[derive(Debug, Default)]
+struct NativeTransferInspector {
+    frame_stack: Vec<Vec<ReplayNativeTransfer>>,
+    finalized: Vec<ReplayNativeTransfer>,
+}
+
+impl NativeTransferInspector {
+    fn push_transfer(&mut self, transfer: ReplayNativeTransfer) {
+        if let Some(current_frame) = self.frame_stack.last_mut() {
+            current_frame.push(transfer);
+        } else {
+            self.finalized.push(transfer);
+        }
+    }
+
+    fn into_transfers(self) -> Vec<ReplayNativeTransfer> {
+        self.finalized
+    }
+}
+
+impl<CTX, INTR> Inspector<CTX, INTR> for NativeTransferInspector
+where
+    INTR: revm::interpreter::InterpreterTypes,
+{
+    fn call(&mut self, _context: &mut CTX, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+        self.frame_stack.push(Vec::new());
+        None
+    }
+
+    fn call_end(&mut self, _context: &mut CTX, inputs: &CallInputs, outcome: &mut CallOutcome) {
+        let mut frame_transfers = self.frame_stack.pop().unwrap_or_default();
+
+        if outcome.instruction_result().is_ok() {
+            if let Some(value) = inputs.transfer_value() {
+                if value > U256::ZERO {
+                    frame_transfers.push(ReplayNativeTransfer {
+                        from: format!("{:#x}", inputs.transfer_from()),
+                        to: format!("{:#x}", inputs.transfer_to()),
+                        value: value.to_string(),
+                    });
+                }
+            }
+            if let Some(parent_frame) = self.frame_stack.last_mut() {
+                parent_frame.extend(frame_transfers);
+            } else {
+                self.finalized.extend(frame_transfers);
+            }
+        }
+    }
+
+    fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {
+        if value > U256::ZERO {
+            self.push_transfer(ReplayNativeTransfer {
+                from: format!("{:#x}", contract),
+                to: format!("{:#x}", target),
+                value: value.to_string(),
+            });
+        }
+    }
 }
 
 pub fn verify_simulation_replay(
@@ -122,6 +196,7 @@ pub fn verify_simulation_replay(
                     .to_string(),
             ),
             replay_logs: None,
+            replay_native_transfers: None,
         };
     };
 
@@ -134,6 +209,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(error),
                 replay_logs: None,
+                replay_native_transfers: None,
             };
         }
     };
@@ -150,6 +226,7 @@ pub fn verify_simulation_replay(
                 replay.success, input.simulation.success
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
@@ -164,6 +241,7 @@ pub fn verify_simulation_replay(
                 replay.return_data, expected_return_data
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
@@ -177,6 +255,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_MISMATCH_LOGS.to_string(),
                 error: Some("Replay logs mismatch against packaged simulation logs.".to_string()),
                 replay_logs: Some(replay.logs.clone()),
+                replay_native_transfers: Some(replay.native_transfers.clone()),
             };
         }
     }
@@ -190,6 +269,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(format!("Invalid simulation.gasUsed: {err}")),
                 replay_logs: Some(replay.logs.clone()),
+                replay_native_transfers: Some(replay.native_transfers.clone()),
             };
         }
     };
@@ -204,6 +284,7 @@ pub fn verify_simulation_replay(
                 replay.gas_used, expected_gas_used
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
@@ -213,6 +294,7 @@ pub fn verify_simulation_replay(
         reason: REASON_REPLAY_MATCHED.to_string(),
         error: None,
         replay_logs: Some(replay.logs),
+        replay_native_transfers: Some(replay.native_transfers),
     }
 }
 
@@ -331,13 +413,14 @@ fn execute_replay(
         })
         .with_block(block)
         .with_db(db);
-    let mut evm = ctx.build_mainnet();
+    let mut inspector = NativeTransferInspector::default();
+    let mut evm = ctx.build_mainnet_with_inspector(&mut inspector);
     let replay = evm
-        .transact(tx)
-        .map_err(|err| format!("local replay transaction failed: {err}"))?
-        .result;
+        .inspect_one_tx(tx)
+        .map_err(|err| format!("local replay transaction failed: {err}"))?;
+    let native_transfers = inspector.into_transfers();
 
-    Ok(extract_execution(replay))
+    Ok(extract_execution(replay, native_transfers))
 }
 
 fn resolve_replay_block(
@@ -415,7 +498,10 @@ fn default_replay_block(block_number: u64) -> BlockEnv {
     }
 }
 
-fn extract_execution(result: ExecutionResult) -> ReplayExecution {
+fn extract_execution(
+    result: ExecutionResult,
+    native_transfers: Vec<ReplayNativeTransfer>,
+) -> ReplayExecution {
     match result {
         ExecutionResult::Success {
             gas_used,
@@ -427,12 +513,14 @@ fn extract_execution(result: ExecutionResult) -> ReplayExecution {
             return_data: to_hex_prefixed(output.into_data().as_ref()),
             gas_used,
             logs: logs.into_iter().map(into_simulation_log).collect(),
+            native_transfers,
         },
         ExecutionResult::Revert { gas_used, output } => ReplayExecution {
             success: false,
             return_data: to_hex_prefixed(output.as_ref()),
             gas_used,
             logs: Vec::new(),
+            native_transfers: Vec::new(),
         },
         ExecutionResult::Halt { reason, gas_used } => ReplayExecution {
             success: false,
@@ -443,6 +531,7 @@ fn extract_execution(result: ExecutionResult) -> ReplayExecution {
                 topics: vec![format!("halt:{reason:?}")],
                 data: "0x".to_string(),
             }],
+            native_transfers: Vec::new(),
         },
     }
 }
@@ -796,6 +885,14 @@ mod tests {
         assert!(result.executed);
         assert!(result.success, "{result:?}");
         assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+        assert_eq!(
+            result.replay_native_transfers,
+            Some(vec![ReplayNativeTransfer {
+                from: caller.to_string(),
+                to: target.to_string(),
+                value: "1000000000000000000".to_string(),
+            }])
+        );
     }
 
     #[test]

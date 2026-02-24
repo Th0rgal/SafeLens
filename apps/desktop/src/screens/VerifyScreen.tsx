@@ -788,7 +788,15 @@ function ExecutionSafetyPanel({
         topics: log.topics as `0x${string}`[],
         data: log.data as `0x${string}`,
       }));
-      return decodeSimulationEvents(replayLogs, evidence.safeAddress, evidence.chainId);
+      const replayNativeEvents = simulationReplayVerification?.replayNativeTransfers?.length
+        ? decodeNativeTransfers(
+            simulationReplayVerification.replayNativeTransfers,
+            evidence.safeAddress,
+            nativeTokenSymbol ?? "ETH",
+          )
+        : [];
+      const replayLogEvents = decodeSimulationEvents(replayLogs, evidence.safeAddress, evidence.chainId);
+      return [...replayNativeEvents, ...replayLogEvents];
     }
 
     if (!evidence.simulation?.logs) return [];
@@ -808,6 +816,7 @@ function ExecutionSafetyPanel({
     nativeTokenSymbol,
     replayPassed,
     simulationReplayVerification?.replayLogs,
+    simulationReplayVerification?.replayNativeTransfers,
     witnessOnlySimulation,
   ]);
 

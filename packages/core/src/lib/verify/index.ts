@@ -2,6 +2,7 @@ import { analyzeTarget, identifyProposer, type TransactionWarning } from "../war
 import {
   getLegacyPendingConsensusExportReasonForMode,
   type EvidencePackage,
+  type NativeTransfer,
 } from "../types";
 import { verifySignature, type SignatureCheckResult } from "../safe/signatures";
 import { computeSafeTxHashDetailed, type SafeTxHashDetails } from "../safe/hash";
@@ -126,6 +127,7 @@ export type SimulationReplayVerificationResult = {
     topics: string[];
     data: string;
   }>;
+  replayNativeTransfers?: NativeTransfer[];
 };
 
 interface BuildReportSourcesOptions {

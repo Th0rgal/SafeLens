@@ -621,6 +621,52 @@ describe("classifySimulationStatus", () => {
     expect(status.status).toBe("check");
     expect(status.detail).toBe("Simulation ran successfully.");
   });
+
+  it("includes replay-derived native transfers in witness-only simulation summary", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: SAFE,
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          blockNumber: 1,
+          trust: "rpc-sourced",
+          logs: [],
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: true,
+        errors: [],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-matched",
+        replayLogs: [],
+        replayNativeTransfers: [
+          {
+            from: SAFE,
+            to: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            value: "1000000000000000000",
+          },
+        ],
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("check");
+    expect(status.detail).toBe("Simulation ran successfully. 1 transfer detected.");
+  });
 });
 
 describe("buildSafetyAttentionItems", () => {

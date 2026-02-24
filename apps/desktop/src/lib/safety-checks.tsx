@@ -406,6 +406,7 @@ export function classifySimulationStatus(
       evidence.safeAddress,
       evidence.chainId,
       {
+        nativeTransfers: simulationReplayVerification.replayNativeTransfers,
         maxTransferPreviews: 3,
       },
     );
