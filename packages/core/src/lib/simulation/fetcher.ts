@@ -734,9 +734,20 @@ async function tryTraceCall(
   }
 }
 
-// ── Optional: extract storage-level state diffs via prestateTracer ──
+// ── Shared prestateTracer RPC helper ────────────────────────────────
 
-async function tryCollectStateDiffs(
+interface PrestateTraceRawResult {
+  raw: unknown;
+  pre: PrestateTrace | undefined;
+  post: PrestateTrace | undefined;
+}
+
+/**
+ * Run `debug_traceCall` with `prestateTracer` / `diffMode: true`.
+ * Handles state-override conversion and plural/singular retry.
+ * Returns the raw result together with parsed `pre`/`post` when available.
+ */
+async function tryRunPrestateTrace(
   client: ReturnType<typeof createPublicClient>,
   safeAddress: Address,
   calldata: Hex,
@@ -745,7 +756,7 @@ async function tryCollectStateDiffs(
     address: Address;
     stateDiff: Array<{ slot: Hex; value: Hex }>;
   }>
-): Promise<StateDiffEntry[] | undefined> {
+): Promise<PrestateTraceRawResult | undefined> {
   try {
     const stateOverrideObj: Record<
       string,
@@ -812,17 +823,37 @@ async function tryCollectStateDiffs(
     }
 
     const rawRecord = result as Record<string, unknown>;
-    const pre = rawRecord.pre as PrestateTrace | undefined;
-    const post = rawRecord.post as PrestateTrace | undefined;
-    if (!pre || !post) {
-      return undefined;
-    }
+    const pre = rawRecord.pre && typeof rawRecord.pre === "object"
+      ? (rawRecord.pre as PrestateTrace)
+      : undefined;
+    const post = rawRecord.post && typeof rawRecord.post === "object"
+      ? (rawRecord.post as PrestateTrace)
+      : undefined;
 
-    return extractStateDiffs(pre, post);
+    return { raw: result, pre, post };
   } catch {
     // prestateTracer is not supported by all RPCs, silently fall back
     return undefined;
   }
+}
+
+// ── Optional: extract storage-level state diffs via prestateTracer ──
+
+async function tryCollectStateDiffs(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  calldata: Hex,
+  blockNumber: bigint,
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>
+): Promise<StateDiffEntry[] | undefined> {
+  const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
+  if (!traceResult?.pre || !traceResult?.post) {
+    return undefined;
+  }
+  return extractStateDiffs(traceResult.pre, traceResult.post);
 }
 
 function extractStateDiffs(
@@ -879,79 +910,14 @@ async function tryCollectReplayAccounts(
   }>,
   requiredAddresses: Address[]
 ): Promise<SimulationWitness["replayAccounts"]> {
-  try {
-    const stateOverrideObj: Record<
-      string,
-      { stateDiff: Record<string, string> }
-    > = {};
-    for (const override of stateOverride) {
-      const diffs: Record<string, string> = {};
-      for (const entry of override.stateDiff) {
-        diffs[entry.slot] = entry.value;
-      }
-      stateOverrideObj[override.address] = { stateDiff: diffs };
-    }
-
-    const prestateConfig = {
-      tracer: "prestateTracer",
-      tracerConfig: { diffMode: true },
-    } as const;
-    const paramsBase = [
-      {
-        to: safeAddress,
-        data: calldata,
-      },
-      `0x${blockNumber.toString(16)}`,
-    ] as const;
-    let result: unknown;
-    try {
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...prestateConfig,
-            stateOverride: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    } catch {
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...prestateConfig,
-            stateOverrides: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    }
-
-    const raw = result as unknown;
-    if (!raw || typeof raw !== "object") {
-      return undefined;
-    }
-
-    const rawRecord = raw as Record<string, unknown>;
-    const pre = rawRecord.pre;
-    const trace =
-      pre && typeof pre === "object"
-        ? (pre as PrestateTrace)
-        : (raw as PrestateTrace);
-
-    return traceToReplayAccounts(trace, requiredAddresses);
-  } catch {
+  const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
+  if (!traceResult) {
     return undefined;
   }
+  // Use `pre` when available (diffMode response), otherwise fall back to
+  // the raw result (non-diffMode or single-object response).
+  const trace = traceResult.pre ?? (traceResult.raw as PrestateTrace);
+  return traceToReplayAccounts(trace, requiredAddresses);
 }
 
 async function tryCollectSimpleTransferReplayAccounts(
