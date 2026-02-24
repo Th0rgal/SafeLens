@@ -18,7 +18,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  verify-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+        with:
+          toolchain: 1.93.1
+          components: rustfmt, clippy
+
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
+        with:
+          bun-version: 1.3.9
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev
+
+      - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
+        with:
+          workspaces: './apps/desktop/src-tauri -> target'
+
+      - run: bun install --frozen-lockfile
+
+      - name: CI parity verification
+        run: bun run verify:ci
+
   build:
+    needs: verify-ci
     timeout-minutes: 90
     strategy:
       fail-fast: false
