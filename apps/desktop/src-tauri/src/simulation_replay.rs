@@ -267,7 +267,7 @@ pub fn verify_simulation_replay(
     }
 
     let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
-    if !witness_only && replay.return_data != expected_return_data {
+    if replay.return_data != expected_return_data {
         return SimulationReplayVerificationResult {
             executed: true,
             success: false,
@@ -992,6 +992,44 @@ mod tests {
                 value: "1000000000000000000".to_string(),
             }])
         );
+    }
+
+    #[test]
+    fn returns_mismatch_return_data_in_witness_only_mode() {
+        // Runtime: PUSH1 0x2a PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+        let code = "0x602a60005260206000f3";
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 1,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(!result.success);
+        assert_eq!(result.reason, REASON_REPLAY_MISMATCH_RETURN_DATA);
     }
 
     #[test]
