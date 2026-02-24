@@ -124,12 +124,12 @@ describe("verifySimulationWitness", () => {
     expect(digestCheck?.passed).toBe(false);
   });
 
-  it("fails when witness override slot value is not proven", () => {
+  it("fails when witness override slot key is not proven", () => {
     const simulation = makeSimulation();
     const witness = makeWitness(simulation, {
       overriddenSlots: [
         {
-          key: "0x0000000000000000000000000000000000000000000000000000000000000004",
+          key: "0x0000000000000000000000000000000000000000000000000000000000000099",
           value:
             "0x0000000000000000000000000000000000000000000000000000000000000099",
         },
@@ -149,7 +149,7 @@ describe("verifySimulationWitness", () => {
     );
     expect(overrideCheck?.passed).toBe(false);
     expect(
-      result.errors.some((error) => error.includes("Overridden slot value mismatch"))
+      result.errors.some((error) => error.includes("Missing storage proof for overridden slot"))
     ).toBe(true);
   });
 });

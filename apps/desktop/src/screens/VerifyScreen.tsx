@@ -777,6 +777,8 @@ function ExecutionSafetyPanel({
       if (!replayPassed) {
         return [];
       }
+      // Witness-only packages do not cryptographically bind packaged simulation effects.
+      // Show only locally replayed logs once replay verification has passed.
       const replayLogs = (simulationReplayVerification?.replayLogs ?? []).map((log: {
         address: string;
         topics: string[];
@@ -786,7 +788,15 @@ function ExecutionSafetyPanel({
         topics: log.topics as `0x${string}`[],
         data: log.data as `0x${string}`,
       }));
-      return decodeSimulationEvents(replayLogs, evidence.safeAddress, evidence.chainId);
+      const replayNativeEvents = simulationReplayVerification?.replayNativeTransfers?.length
+        ? decodeNativeTransfers(
+            simulationReplayVerification.replayNativeTransfers,
+            evidence.safeAddress,
+            nativeTokenSymbol ?? "ETH",
+          )
+        : [];
+      const replayLogEvents = decodeSimulationEvents(replayLogs, evidence.safeAddress, evidence.chainId);
+      return [...replayNativeEvents, ...replayLogEvents];
     }
 
     if (!evidence.simulation?.logs) return [];
@@ -803,10 +813,10 @@ function ExecutionSafetyPanel({
     evidence.simulation,
     evidence.safeAddress,
     evidence.chainId,
-    evidence.simulationWitness?.witnessOnly,
     nativeTokenSymbol,
     replayPassed,
     simulationReplayVerification?.replayLogs,
+    simulationReplayVerification?.replayNativeTransfers,
     witnessOnlySimulation,
   ]);
 
@@ -859,7 +869,7 @@ function ExecutionSafetyPanel({
               <div
                 ref={badgePopupRef}
                 style={badgePopupStyle}
-                className="absolute z-50 w-72 space-y-2 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg"
+                className="absolute z-50 w-80 max-w-[calc(100vw-2rem)] max-h-80 overflow-y-auto space-y-2 rounded-md border border-border/15 glass-panel px-3 py-2.5 text-xs shadow-lg"
               >
                 {verification.status === "check" ? (
                   <div className="text-muted">
@@ -927,7 +937,7 @@ function ExecutionSafetyPanel({
                               {check.status === "warning" ? "Warning" : "Error"}
                             </span>
                           </div>
-                          <div className={`mt-0.5 ${s.text}`}>{check.detail}</div>
+                          <div className={`mt-0.5 break-all ${s.text}`}>{check.detail}</div>
                         </div>
                       );
                     });

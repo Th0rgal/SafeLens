@@ -30,6 +30,7 @@ import {
 import { downloadEvidencePackage } from "@/lib/download";
 import { buildConsensusEnrichmentPlan } from "@/lib/consensus-enrichment";
 import { summarizeConsensusProof } from "@/lib/consensus-proof-summary";
+import { redactRpcUrl } from "@/lib/rpc-redaction";
 import { AddressDisplay } from "@/components/address-display";
 import type { EvidencePackage, SafeTransaction } from "@safelens/core";
 
@@ -104,10 +105,19 @@ function EvidenceDisplay({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const isFullyVerifiable = evidence.exportContract?.mode === "fully-verifiable";
+  const displayExportReasons =
+    evidence.exportContract?.reasons.filter((reason) => {
+      if (reason !== "missing-simulation-witness") return true;
+      // Only surface this when the package is explicitly witness-only.
+      // Otherwise simulation effects are still included and desktop can
+      // validate execution without requiring replay-derived effects.
+      return evidence.simulationWitness?.witnessOnly === true;
+    }) ?? [];
 
   // Decode simulation events
   const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
   const sim = evidence.simulation;
+  const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
   const logEvents = sim
     ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
     : [];
@@ -139,9 +149,13 @@ function EvidenceDisplay({
         {/* Partial export reasons */}
         {evidence.exportContract?.mode === "partial" && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            {evidence.exportContract.reasons.map((reason) => (
-              <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
-            ))}
+            {displayExportReasons.length > 0 ? (
+              displayExportReasons.map((reason) => (
+                <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
+              ))
+            ) : (
+              <div>· This package has partial verification coverage for this environment.</div>
+            )}
           </div>
         )}
 
@@ -186,9 +200,14 @@ function EvidenceDisplay({
                 })}
               </div>
             )}
-            {transfers.length === 0 && sim.success && (
+            {transfers.length === 0 && sim.success && !witnessOnlySimulation && (
               <div className="rounded-md border border-border/15 bg-surface-2/30 px-3 py-2 text-xs text-muted">
                 No token movements detected.
+              </div>
+            )}
+            {transfers.length === 0 && sim.success && witnessOnlySimulation && (
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                This is a witness-only package. No token movements were detected for this simulation.
               </div>
             )}
             {approvals.length > 0 && (
@@ -320,6 +339,111 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
+const SAFE_MULTISIG_TX_TOPIC =
+  "0x66753cd2356569ee081232e3be8909b950e0a76c1f8460c3a5e3c2be32b11bed";
+const SAFE_EXECUTION_SUCCESS_TOPIC =
+  "0x442e715f626346e8c54381002da614f62bee8d27386535b2521ec8540898556e";
+const SAFE_EXECUTION_FAILURE_TOPIC =
+  "0x23428b18acfb3ea64b08dc0c1d296ea9c09702c09083ca5272e64d115b687d23";
+
+function logEvidenceDebugSnapshot(
+  evidence: EvidencePackage,
+  context: {
+    rpcProvided: boolean;
+    rpcUrl?: string;
+    chainMismatch?: { expected: number; actual: number } | null;
+    consensusProofAttempted: boolean;
+    consensusProofFailed: boolean;
+    onchainPolicyProofAttempted: boolean;
+    onchainPolicyProofFailed: boolean;
+    simulationAttempted: boolean;
+    simulationFailed: boolean;
+  }
+): void {
+  try {
+    const sim = evidence.simulation;
+    const topics = sim?.logs?.map((log) => log.topics?.[0]?.toLowerCase()).filter(Boolean) ?? [];
+    const safeMultisigEventCount = topics.filter((t) => t === SAFE_MULTISIG_TX_TOPIC).length;
+    const safeExecutionSuccessCount = topics.filter((t) => t === SAFE_EXECUTION_SUCCESS_TOPIC).length;
+    const safeExecutionFailureCount = topics.filter((t) => t === SAFE_EXECUTION_FAILURE_TOPIC).length;
+    const nativeTransferCount = sim?.nativeTransfers?.length ?? 0;
+
+    const possibleRpcInconsistency =
+      sim != null &&
+      sim.success === false &&
+      (safeExecutionSuccessCount > 0 || nativeTransferCount > 0);
+
+    const label = `[SafeLens debug] ${evidence.safeTxHash.slice(0, 10)}… on chain ${evidence.chainId}`;
+    console.groupCollapsed(label);
+    console.info(
+      "[SafeLens debug] Keep this diagnostics block. It is intentionally verbose for bug reports and should not be removed."
+    );
+    const contextForLog = {
+      ...context,
+      rpcUrl: redactRpcUrl(context.rpcUrl),
+    };
+    console.debug("[SafeLens debug] Bug-report identifiers:", {
+      safeTxHash: evidence.safeTxHash,
+      safeAddress: evidence.safeAddress,
+      chainId: evidence.chainId,
+      txNonce: evidence.transaction.nonce,
+      packagedAt: evidence.packagedAt,
+    });
+    console.debug("[SafeLens debug] Enrichment context:", contextForLog);
+
+    if (sim) {
+      console.debug("[SafeLens debug] Simulation result:", {
+        success: sim.success,
+        returnData: sim.returnData,
+        gasUsed: sim.gasUsed,
+        blockNumber: sim.blockNumber,
+        blockTimestamp: sim.blockTimestamp,
+        traceAvailable: sim.traceAvailable,
+        logCount: sim.logs.length,
+        nativeTransferCount,
+      });
+      console.debug("[SafeLens debug] Safe execution log signals:", {
+        safeMultisigEventCount,
+        safeExecutionSuccessCount,
+        safeExecutionFailureCount,
+      });
+    } else {
+      console.debug("[SafeLens debug] Simulation is missing from exported evidence.");
+    }
+
+    if (evidence.simulationWitness) {
+      console.debug("[SafeLens debug] Simulation witness summary:", {
+        witnessOnly: evidence.simulationWitness.witnessOnly === true,
+        blockNumber: evidence.simulationWitness.blockNumber,
+        stateRoot: evidence.simulationWitness.stateRoot,
+        overriddenSlots: evidence.simulationWitness.overriddenSlots.length,
+        replayAccounts: evidence.simulationWitness.replayAccounts?.length ?? 0,
+      });
+    }
+
+    if (evidence.onchainPolicyProof) {
+      console.debug("[SafeLens debug] On-chain policy proof summary:", {
+        blockNumber: evidence.onchainPolicyProof.blockNumber,
+        stateRoot: evidence.onchainPolicyProof.stateRoot,
+        threshold: evidence.onchainPolicyProof.decodedPolicy.threshold,
+        owners: evidence.onchainPolicyProof.decodedPolicy.owners.length,
+        nonce: evidence.onchainPolicyProof.decodedPolicy.nonce,
+      });
+    }
+
+    console.debug("[SafeLens debug] Export contract summary:", evidence.exportContract);
+
+    if (possibleRpcInconsistency) {
+      console.warn(
+        "[SafeLens debug] Possible RPC inconsistency: simulation.success=false while trace/log signals indicate success effects. Include this diagnostics group in bug reports."
+      );
+    }
+    console.groupEnd();
+  } catch (error) {
+    console.warn("[SafeLens debug] Failed to print diagnostics:", error);
+  }
+}
+
 export default function AnalyzePage() {
   const [url, setUrl] = useState("");
   const [rpcUrl, setRpcUrl] = useState("");
@@ -389,7 +513,7 @@ export default function AnalyzePage() {
             : "Please provide an RPC URL for the transaction chain and retry.")
         );
 
-        return finalizeEvidenceExport(enriched, {
+        const finalized = finalizeEvidenceExport(enriched, {
           rpcProvided,
           consensusProofAttempted,
           consensusProofFailed,
@@ -400,6 +524,18 @@ export default function AnalyzePage() {
           simulationAttempted: true,
           simulationFailed: true,
         });
+        logEvidenceDebugSnapshot(finalized, {
+          rpcProvided,
+          rpcUrl: resolvedRpcUrl,
+          chainMismatch: { expected: pkg.chainId, actual: rpcChainId },
+          consensusProofAttempted,
+          consensusProofFailed,
+          onchainPolicyProofAttempted: true,
+          onchainPolicyProofFailed: true,
+          simulationAttempted: true,
+          simulationFailed: true,
+        });
+        return finalized;
       }
     }
 
@@ -455,7 +591,10 @@ export default function AnalyzePage() {
 
       simulationAttempted = true;
       try {
-        enriched = await enrichWithSimulation(enriched, { rpcUrl: resolvedRpcUrl });
+        enriched = await enrichWithSimulation(enriched, {
+          rpcUrl: resolvedRpcUrl,
+          blockNumber: enriched.onchainPolicyProof?.blockNumber,
+        });
       } catch (err) {
         simulationFailed = true;
         console.warn("Failed to simulate transaction:", err);
@@ -465,7 +604,7 @@ export default function AnalyzePage() {
       }
     }
 
-    return finalizeEvidenceExport(enriched, {
+    const finalized = finalizeEvidenceExport(enriched, {
       rpcProvided,
       consensusProofAttempted,
       consensusProofFailed,
@@ -476,6 +615,18 @@ export default function AnalyzePage() {
       simulationAttempted,
       simulationFailed,
     });
+    logEvidenceDebugSnapshot(finalized, {
+      rpcProvided,
+      rpcUrl: resolvedRpcUrl || undefined,
+      chainMismatch: null,
+      consensusProofAttempted,
+      consensusProofFailed,
+      onchainPolicyProofAttempted,
+      onchainPolicyProofFailed,
+      simulationAttempted,
+      simulationFailed,
+    });
+    return finalized;
   };
 
   const handleAnalyze = async () => {
@@ -658,35 +809,6 @@ export default function AnalyzePage() {
         </CardContent>
       </Card>
 
-      {!evidence && !pendingTxs && !loading && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Trust Assumptions</CardTitle>
-            <CardDescription>
-              Every input used to build evidence, with explicit trust level.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {generationSources.map((source) => {
-              const trust = TRUST_CONFIG[source.trust];
-              return (
-                <div
-                  key={source.id}
-                  className="rounded-md border border-border/15 bg-surface-2/40 p-3"
-                >
-                  <div className="mb-1 flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium">{source.title}</span>
-                    <span className={`text-xs ${trust.color}`}>{trust.label}</span>
-                  </div>
-                  <p className="text-xs text-muted">{source.summary}</p>
-                  <p className="mt-1 text-xs text-muted">{source.detail}</p>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
-
       {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertTitle>Error</AlertTitle>
@@ -795,6 +917,35 @@ export default function AnalyzePage() {
           <AlertTitle>Consensus Proof Warning</AlertTitle>
           <AlertDescription>{consensusWarning}</AlertDescription>
         </Alert>
+      )}
+
+      {!evidence && !pendingTxs && !loading && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Trust Assumptions</CardTitle>
+            <CardDescription>
+              Every input used to build evidence, with explicit trust level.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {generationSources.map((source) => {
+              const trust = TRUST_CONFIG[source.trust];
+              return (
+                <div
+                  key={source.id}
+                  className="rounded-md border border-border/15 bg-surface-2/40 p-3"
+                >
+                  <div className="mb-1 flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">{source.title}</span>
+                    <span className={`text-xs ${trust.color}`}>{trust.label}</span>
+                  </div>
+                  <p className="text-xs text-muted">{source.summary}</p>
+                  <p className="mt-1 text-xs text-muted">{source.detail}</p>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
       )}
 
       {evidence && <EvidenceDisplay

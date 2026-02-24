@@ -229,18 +229,10 @@ export function verifySimulationWitness(
   );
   for (const slot of witness.overriddenSlots) {
     const normalizedKey = normalizeStorageSlotKey(slot.key as Hex);
-    const expectedValue = normalizeValue(slot.value as Hex);
     const provenValue = proofsByKey.get(normalizedKey);
     if (!provenValue) {
       allOverridesProven = false;
       errors.push(`Missing storage proof for overridden slot ${normalizedKey}.`);
-      continue;
-    }
-    if (provenValue.toLowerCase() !== expectedValue.toLowerCase()) {
-      allOverridesProven = false;
-      errors.push(
-        `Overridden slot value mismatch for ${normalizedKey}: proof has ${provenValue}, witness expects ${expectedValue}.`
-      );
     }
   }
 
@@ -250,7 +242,7 @@ export function verifySimulationWitness(
     passed: allOverridesProven,
     detail: allOverridesProven
       ? `${witness.overriddenSlots.length} overridden slot(s) are covered by proof`
-      : "One or more overridden slots are missing or mismatched in proof.",
+      : "One or more overridden slots are missing from proof.",
   });
 
   return {

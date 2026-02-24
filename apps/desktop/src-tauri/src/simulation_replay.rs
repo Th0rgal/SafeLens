@@ -2,7 +2,9 @@ use revm::{
     context::{result::ExecutionResult, BlockEnv, Context, TxEnv},
     database::CacheDB,
     database_interface::EmptyDB,
-    handler::{ExecuteEvm, MainBuilder, MainContext},
+    handler::{MainBuilder, MainContext},
+    inspector::{InspectEvm, Inspector},
+    interpreter::{CallInputs, CallOutcome, CreateInputs, CreateOutcome},
     primitives::{Address, Bytes, Log, TxKind, B256, U256},
     state::{AccountInfo, Bytecode},
 };
@@ -58,6 +60,14 @@ pub struct ReplaySimulationLog {
     pub data: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayNativeTransfer {
+    pub from: String,
+    pub to: String,
+    pub value: String,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReplayWitness {
@@ -99,6 +109,8 @@ pub struct SimulationReplayVerificationResult {
     pub error: Option<String>,
     #[serde(rename = "replayLogs")]
     pub replay_logs: Option<Vec<ReplaySimulationLog>>,
+    #[serde(rename = "replayNativeTransfers")]
+    pub replay_native_transfers: Option<Vec<ReplayNativeTransfer>>,
 }
 
 #[derive(Debug)]
@@ -107,6 +119,110 @@ struct ReplayExecution {
     return_data: String,
     gas_used: u64,
     logs: Vec<ReplaySimulationLog>,
+    native_transfers: Vec<ReplayNativeTransfer>,
+}
+
+#[derive(Debug, Default)]
+struct NativeTransferInspector {
+    frame_stack: Vec<Vec<ReplayNativeTransfer>>,
+    finalized: Vec<ReplayNativeTransfer>,
+}
+
+impl NativeTransferInspector {
+    fn push_frame(&mut self) {
+        self.frame_stack.push(Vec::new());
+    }
+
+    fn settle_frame(&mut self, mut frame_transfers: Vec<ReplayNativeTransfer>) {
+        if let Some(parent_frame) = self.frame_stack.last_mut() {
+            parent_frame.append(&mut frame_transfers);
+        } else {
+            self.finalized.append(&mut frame_transfers);
+        }
+    }
+
+    fn push_transfer(&mut self, transfer: ReplayNativeTransfer) {
+        if let Some(current_frame) = self.frame_stack.last_mut() {
+            current_frame.push(transfer);
+        } else {
+            self.finalized.push(transfer);
+        }
+    }
+
+    fn into_transfers(self) -> Vec<ReplayNativeTransfer> {
+        self.finalized
+    }
+}
+
+impl<CTX, INTR> Inspector<CTX, INTR> for NativeTransferInspector
+where
+    INTR: revm::interpreter::InterpreterTypes,
+{
+    fn call(&mut self, _context: &mut CTX, _inputs: &mut CallInputs) -> Option<CallOutcome> {
+        self.push_frame();
+        None
+    }
+
+    fn call_end(&mut self, _context: &mut CTX, inputs: &CallInputs, outcome: &mut CallOutcome) {
+        let mut frame_transfers = self.frame_stack.pop().unwrap_or_default();
+
+        if outcome.instruction_result().is_ok() {
+            if let Some(value) = inputs.transfer_value() {
+                if value > U256::ZERO {
+                    frame_transfers.insert(
+                        0,
+                        ReplayNativeTransfer {
+                            from: format!("{:#x}", inputs.transfer_from()),
+                            to: format!("{:#x}", inputs.transfer_to()),
+                            value: value.to_string(),
+                        },
+                    );
+                }
+            }
+            self.settle_frame(frame_transfers);
+        }
+    }
+
+    fn create(&mut self, _context: &mut CTX, _inputs: &mut CreateInputs) -> Option<CreateOutcome> {
+        self.push_frame();
+        None
+    }
+
+    fn create_end(
+        &mut self,
+        _context: &mut CTX,
+        inputs: &CreateInputs,
+        outcome: &mut CreateOutcome,
+    ) {
+        let mut frame_transfers = self.frame_stack.pop().unwrap_or_default();
+
+        if outcome.instruction_result().is_ok() {
+            let value = inputs.value();
+            if value > U256::ZERO {
+                if let Some(created) = outcome.address {
+                    frame_transfers.insert(
+                        0,
+                        ReplayNativeTransfer {
+                            from: format!("{:#x}", inputs.caller()),
+                            to: format!("{:#x}", created),
+                            value: value.to_string(),
+                        },
+                    );
+                }
+            }
+            self.settle_frame(frame_transfers);
+        }
+    }
+
+    fn selfdestruct(&mut self, contract: Address, target: Address, value: U256) {
+        if value > U256::ZERO {
+            self.push_transfer(ReplayNativeTransfer {
+                from: format!("{:#x}", contract),
+                to: format!("{:#x}", target),
+                value: value.to_string(),
+            });
+        }
+    }
 }
 
 pub fn verify_simulation_replay(
@@ -122,6 +238,7 @@ pub fn verify_simulation_replay(
                     .to_string(),
             ),
             replay_logs: None,
+            replay_native_transfers: None,
         };
     };
 
@@ -134,6 +251,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(error),
                 replay_logs: None,
+                replay_native_transfers: None,
             };
         }
     };
@@ -150,9 +268,11 @@ pub fn verify_simulation_replay(
                 replay.success, input.simulation.success
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
+    let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
     if replay.return_data != expected_return_data {
         return SimulationReplayVerificationResult {
             executed: true,
@@ -163,10 +283,10 @@ pub fn verify_simulation_replay(
                 replay.return_data, expected_return_data
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
-    let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
     if !witness_only {
         let expected_logs = normalize_simulation_logs(&input.simulation.logs);
         let replay_logs = normalize_simulation_logs(&replay.logs);
@@ -177,6 +297,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_MISMATCH_LOGS.to_string(),
                 error: Some("Replay logs mismatch against packaged simulation logs.".to_string()),
                 replay_logs: Some(replay.logs.clone()),
+                replay_native_transfers: Some(replay.native_transfers.clone()),
             };
         }
     }
@@ -190,6 +311,7 @@ pub fn verify_simulation_replay(
                 reason: REASON_REPLAY_EXEC_ERROR.to_string(),
                 error: Some(format!("Invalid simulation.gasUsed: {err}")),
                 replay_logs: Some(replay.logs.clone()),
+                replay_native_transfers: Some(replay.native_transfers.clone()),
             };
         }
     };
@@ -204,6 +326,7 @@ pub fn verify_simulation_replay(
                 replay.gas_used, expected_gas_used
             )),
             replay_logs: Some(replay.logs.clone()),
+            replay_native_transfers: Some(replay.native_transfers.clone()),
         };
     }
 
@@ -213,6 +336,7 @@ pub fn verify_simulation_replay(
         reason: REASON_REPLAY_MATCHED.to_string(),
         error: None,
         replay_logs: Some(replay.logs),
+        replay_native_transfers: Some(replay.native_transfers),
     }
 }
 
@@ -223,35 +347,17 @@ fn execute_replay(
     let witness_only = input.simulation_witness.witness_only.unwrap_or(false);
     let mut db = CacheDB::new(EmptyDB::default());
 
-    for account in accounts {
-        let address = parse_address(&account.address, "replay account address")?;
-        let balance = parse_u256(&account.balance)
-            .map_err(|err| format!("invalid replay account balance for {address:#x}: {err}"))?;
-        let code = parse_bytes(&account.code)
-            .map_err(|err| format!("invalid replay account code for {address:#x}: {err}"))?;
-
-        db.insert_account_info(
-            address,
-            AccountInfo::new(balance, account.nonce, B256::ZERO, Bytecode::new_raw(code)),
-        );
-
-        for (slot, value) in &account.storage {
-            let slot_key = parse_u256(slot)
-                .map_err(|err| format!("invalid storage key for {address:#x}: {err}"))?;
-            let slot_value = parse_u256(value)
-                .map_err(|err| format!("invalid storage value for {address:#x}: {err}"))?;
-            db.insert_account_storage(address, slot_key, slot_value)
-                .map_err(|err| format!("failed to seed storage for {address:#x}: {err}"))?;
-        }
-    }
-
     let caller = match input.simulation_witness.replay_caller.as_deref() {
         Some(raw) => parse_address(raw, "simulationWitness.replayCaller")?,
         None => parse_address(&input.safe_address, "safeAddress")?,
     };
+    let caller_account = accounts.iter().find(|account| {
+        parse_address(&account.address, "replay account address").ok() == Some(caller)
+    });
+    let caller_nonce = caller_account.map(|account| account.nonce).unwrap_or(0);
 
     let to = parse_address(&input.transaction.to, "transaction.to")?;
-    let value = parse_u256(&input.transaction.value)
+    let inner_value = parse_u256(&input.transaction.value)
         .map_err(|err| format!("invalid transaction.value: {err}"))?;
 
     let data = match input.transaction.data.as_deref() {
@@ -291,26 +397,72 @@ fn execute_replay(
     };
 
     let gas_price = resolve_replay_gas_price(input)?;
+    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
+
+    for account in accounts {
+        let address = parse_address(&account.address, "replay account address")?;
+        let mut balance = parse_u256(&account.balance)
+            .map_err(|err| format!("invalid replay account balance for {address:#x}: {err}"))?;
+        let code = parse_bytes(&account.code)
+            .map_err(|err| format!("invalid replay account code for {address:#x}: {err}"))?;
+
+        if address == caller && balance < required_caller_balance {
+            balance = required_caller_balance;
+        }
+
+        db.insert_account_info(
+            address,
+            AccountInfo::new(balance, account.nonce, B256::ZERO, Bytecode::new_raw(code)),
+        );
+
+        for (slot, value) in &account.storage {
+            let slot_key = parse_u256(slot)
+                .map_err(|err| format!("invalid storage key for {address:#x}: {err}"))?;
+            let slot_value = parse_u256(value)
+                .map_err(|err| format!("invalid storage value for {address:#x}: {err}"))?;
+            db.insert_account_storage(address, slot_key, slot_value)
+                .map_err(|err| format!("failed to seed storage for {address:#x}: {err}"))?;
+        }
+    }
+
+    if caller_account.is_none() {
+        db.insert_account_info(
+            caller,
+            AccountInfo::new(
+                required_caller_balance,
+                caller_nonce,
+                B256::ZERO,
+                Bytecode::new_raw(Bytes::new()),
+            ),
+        );
+    }
     let tx = TxEnv::builder()
         .caller(caller)
         .kind(tx_kind)
         .gas_limit(gas_limit)
         .gas_price(gas_price)
+        .nonce(caller_nonce)
         .chain_id(Some(input.chain_id))
-        .value(value)
+        .value(inner_value)
         .data(data)
         .build()
         .map_err(|err| format!("failed to build replay tx: {err:?}"))?;
 
     let block = resolve_replay_block(input, witness_only)?;
-    let ctx = Context::mainnet().with_block(block).with_db(db);
-    let mut evm = ctx.build_mainnet();
+    let ctx = Context::mainnet()
+        .modify_cfg_chained(|cfg| {
+            cfg.chain_id = input.chain_id;
+        })
+        .with_block(block)
+        .with_db(db);
+    let mut inspector = NativeTransferInspector::default();
+    let mut evm = ctx.build_mainnet_with_inspector(&mut inspector);
     let replay = evm
-        .transact(tx)
-        .map_err(|err| format!("local replay transaction failed: {err}"))?
-        .result;
+        .inspect_one_tx(tx)
+        .map_err(|err| format!("local replay transaction failed: {err}"))?;
+    let native_transfers = inspector.into_transfers();
 
-    Ok(extract_execution(replay))
+    Ok(extract_execution(replay, native_transfers))
 }
 
 fn resolve_replay_block(
@@ -325,19 +477,6 @@ fn resolve_replay_block(
         ),
         None => Ok(default_replay_block(input.simulation.block_number)),
     }
-}
-
-fn resolve_replay_gas_price(input: &SimulationReplayInput) -> Result<u128, String> {
-    let Some(block) = input.simulation_witness.replay_block.as_ref() else {
-        return Ok(0);
-    };
-
-    let basefee = parse_u256(&block.base_fee_per_gas)
-        .map_err(|err| format!("invalid simulationWitness.replayBlock.baseFeePerGas: {err}"))?;
-    if basefee > U256::from(u128::MAX) {
-        return Err("simulationWitness.replayBlock.baseFeePerGas exceeds u128 range.".to_string());
-    }
-    Ok(basefee.to::<u128>())
 }
 
 fn build_replay_block_env(block: &ReplayBlock, block_number: u64) -> Result<BlockEnv, String> {
@@ -381,6 +520,19 @@ fn build_replay_block_env(block: &ReplayBlock, block_number: u64) -> Result<Bloc
     })
 }
 
+fn resolve_replay_gas_price(input: &SimulationReplayInput) -> Result<u128, String> {
+    let Some(block) = input.simulation_witness.replay_block.as_ref() else {
+        return Ok(0);
+    };
+
+    let basefee = parse_u256(&block.base_fee_per_gas)
+        .map_err(|err| format!("invalid simulationWitness.replayBlock.baseFeePerGas: {err}"))?;
+    if basefee > U256::from(u128::MAX) {
+        return Err("simulationWitness.replayBlock.baseFeePerGas exceeds u128 range.".to_string());
+    }
+    Ok(basefee.to::<u128>())
+}
+
 fn default_replay_block(block_number: u64) -> BlockEnv {
     BlockEnv {
         number: U256::from(block_number),
@@ -388,7 +540,10 @@ fn default_replay_block(block_number: u64) -> BlockEnv {
     }
 }
 
-fn extract_execution(result: ExecutionResult) -> ReplayExecution {
+fn extract_execution(
+    result: ExecutionResult,
+    native_transfers: Vec<ReplayNativeTransfer>,
+) -> ReplayExecution {
     match result {
         ExecutionResult::Success {
             gas_used,
@@ -400,12 +555,14 @@ fn extract_execution(result: ExecutionResult) -> ReplayExecution {
             return_data: to_hex_prefixed(output.into_data().as_ref()),
             gas_used,
             logs: logs.into_iter().map(into_simulation_log).collect(),
+            native_transfers,
         },
         ExecutionResult::Revert { gas_used, output } => ReplayExecution {
             success: false,
             return_data: to_hex_prefixed(output.as_ref()),
             gas_used,
             logs: Vec::new(),
+            native_transfers: Vec::new(),
         },
         ExecutionResult::Halt { reason, gas_used } => ReplayExecution {
             success: false,
@@ -416,6 +573,7 @@ fn extract_execution(result: ExecutionResult) -> ReplayExecution {
                 topics: vec![format!("halt:{reason:?}")],
                 data: "0x".to_string(),
             }],
+            native_transfers: Vec::new(),
         },
     }
 }
@@ -497,7 +655,7 @@ fn to_hex_prefixed(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
+    use std::{env, fs, time::Instant};
 
     fn target_account(address: &str, code: &str) -> ReplayWitnessAccount {
         ReplayWitnessAccount {
@@ -510,10 +668,14 @@ mod tests {
     }
 
     fn caller_account(address: &str) -> ReplayWitnessAccount {
+        caller_account_with_nonce(address, 0)
+    }
+
+    fn caller_account_with_nonce(address: &str, nonce: u64) -> ReplayWitnessAccount {
         ReplayWitnessAccount {
             address: address.to_string(),
             balance: "1000000000000000000".to_string(),
-            nonce: 0,
+            nonce,
             code: "0x".to_string(),
             storage: BTreeMap::new(),
         }
@@ -530,6 +692,99 @@ mod tests {
             ),
             difficulty: Some("0".to_string()),
         }
+    }
+
+    fn build_create_runtime(init_code: &[u8], create_value: u8) -> String {
+        assert!(
+            init_code.len() <= u8::MAX as usize,
+            "init code must fit PUSH1 length"
+        );
+
+        let init_len = init_code.len() as u8;
+        let mut runtime = vec![
+            0x60,
+            init_len, // PUSH1 <len>
+            0x60,
+            0x00, // PUSH1 <offset> placeholder
+            0x60,
+            0x00, // PUSH1 0
+            0x39, // CODECOPY
+            0x60,
+            init_len, // PUSH1 <len>
+            0x60,
+            0x00, // PUSH1 0
+            0x60,
+            create_value, // PUSH1 <create value>
+            0xf0,         // CREATE
+            0x00,         // STOP
+        ];
+        runtime[3] = runtime.len() as u8;
+        runtime.extend_from_slice(init_code);
+
+        format!("0x{}", hex::encode(runtime))
+    }
+
+    fn build_reverting_create_init_code_with_inner_call(
+        receiver: &str,
+        inner_value: u8,
+    ) -> Vec<u8> {
+        let receiver_bytes = parse_address(receiver, "receiver")
+            .expect("receiver must be a valid address")
+            .into_array();
+
+        let mut init_code = vec![
+            0x60,
+            0x00, // PUSH1 0 (retSize)
+            0x60,
+            0x00, // PUSH1 0 (retOffset)
+            0x60,
+            0x00, // PUSH1 0 (argsSize)
+            0x60,
+            0x00, // PUSH1 0 (argsOffset)
+            0x60,
+            inner_value, // PUSH1 <value>
+            0x73,        // PUSH20 <receiver>
+        ];
+        init_code.extend_from_slice(&receiver_bytes);
+        init_code.extend_from_slice(&[
+            0x60, 0xff, // PUSH1 255 gas
+            0xf1, // CALL
+            0x50, // POP
+            0x60, 0x00, // PUSH1 0
+            0x60, 0x00, // PUSH1 0
+            0xfd, // REVERT
+        ]);
+        init_code
+    }
+
+    fn build_create_init_code_with_inner_call(receiver: &str, inner_value: u8) -> Vec<u8> {
+        let receiver_bytes = parse_address(receiver, "receiver")
+            .expect("receiver must be a valid address")
+            .into_array();
+
+        let mut init_code = vec![
+            0x60,
+            0x00, // PUSH1 0 (retSize)
+            0x60,
+            0x00, // PUSH1 0 (retOffset)
+            0x60,
+            0x00, // PUSH1 0 (argsSize)
+            0x60,
+            0x00, // PUSH1 0 (argsOffset)
+            0x60,
+            inner_value, // PUSH1 <value>
+            0x73,        // PUSH20 <receiver>
+        ];
+        init_code.extend_from_slice(&receiver_bytes);
+        init_code.extend_from_slice(&[
+            0x60, 0xff, // PUSH1 255 gas
+            0xf1, // CALL
+            0x50, // POP
+            0x60, 0x00, // PUSH1 0
+            0x60, 0x00, // PUSH1 0
+            0xf3, // RETURN (empty runtime)
+        ]);
+        init_code
     }
 
     #[test]
@@ -641,6 +896,330 @@ mod tests {
         assert!(result.executed);
         assert!(result.success, "{result:?}");
         assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
+    fn returns_success_when_replay_matches_on_non_mainnet_chain_id() {
+        // Runtime: PUSH1 0x00 PUSH1 0x00 REVERT
+        let code = "0x60006000fd";
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: false,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: None,
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
+    fn uses_caller_nonce_from_witness_account_snapshot() {
+        // Runtime: PUSH1 0x00 PUSH1 0x00 REVERT
+        let code = "0x60006000fd";
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: false,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account_with_nonce(caller, 340),
+                    target_account(target, code),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: None,
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
+    fn replays_witness_only_native_transfer_with_high_caller_nonce() {
+        let caller = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
+        let target = "0x5bb21b30e912871d27182e7b7f9c37c888269cb2";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: "0xba260842b007fab4119c9747d709119de4257276".to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "1000000000000000000".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("0".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    ReplayWitnessAccount {
+                        address: caller.to_string(),
+                        balance: "100000000000000000000".to_string(),
+                        nonce: 340,
+                        code: "0x".to_string(),
+                        storage: BTreeMap::new(),
+                    },
+                    target_account(target, "0x"),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(3_000_000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+        assert_eq!(
+            result.replay_native_transfers,
+            Some(vec![ReplayNativeTransfer {
+                from: caller.to_string(),
+                to: target.to_string(),
+                value: "1000000000000000000".to_string(),
+            }])
+        );
+    }
+
+    #[test]
+    fn returns_mismatch_return_data_in_witness_only_mode() {
+        // Runtime: PUSH1 0x2a PUSH1 0x00 MSTORE PUSH1 0x20 PUSH1 0x00 RETURN
+        let code = "0x602a60005260206000f3";
+        let caller = "0x1000000000000000000000000000000000000001";
+        let target = "0x2000000000000000000000000000000000000002";
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 1,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: target.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(!result.success);
+        assert_eq!(result.reason, REASON_REPLAY_MISMATCH_RETURN_DATA);
+    }
+
+    #[test]
+    fn captures_create_value_transfer_in_replay_native_transfers() {
+        let caller = "0x1000000000000000000000000000000000000001";
+        let factory = "0x2000000000000000000000000000000000000002";
+        let init_code = hex::decode("60006000f3").expect("valid init code");
+        let factory_code = build_create_runtime(&init_code, 1);
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: factory.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    ReplayWitnessAccount {
+                        address: factory.to_string(),
+                        balance: "100".to_string(),
+                        nonce: 1,
+                        code: factory_code,
+                        storage: BTreeMap::new(),
+                    },
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        let transfers = result.replay_native_transfers.unwrap_or_default();
+        assert_eq!(transfers.len(), 1, "{transfers:?}");
+        assert_eq!(transfers[0].from, factory);
+        assert_eq!(transfers[0].value, "1");
+    }
+
+    #[test]
+    fn drops_inner_call_transfers_when_create_reverts() {
+        let caller = "0x3000000000000000000000000000000000000003";
+        let factory = "0x4000000000000000000000000000000000000004";
+        let receiver = "0x5000000000000000000000000000000000000005";
+        let init_code = build_reverting_create_init_code_with_inner_call(receiver, 1);
+        let factory_code = build_create_runtime(&init_code, 1);
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: factory.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("800000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "800000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    ReplayWitnessAccount {
+                        address: factory.to_string(),
+                        balance: "1000000000000000000".to_string(),
+                        nonce: 1,
+                        code: factory_code,
+                        storage: BTreeMap::new(),
+                    },
+                    target_account(receiver, "0x"),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(800000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        assert_eq!(result.replay_native_transfers, Some(Vec::new()));
+    }
+
+    #[test]
+    fn preserves_chronological_native_transfer_order_for_nested_create_calls() {
+        let caller = "0x6000000000000000000000000000000000000006";
+        let factory = "0x7000000000000000000000000000000000000007";
+        let receiver = "0x8000000000000000000000000000000000000008";
+        let init_code = build_create_init_code_with_inner_call(receiver, 1);
+        let factory_code = build_create_runtime(&init_code, 2);
+
+        let result = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: factory.to_string(),
+                value: "0".to_string(),
+                data: Some("0x".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("800000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some("0x".to_string()),
+                gas_used: "800000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    ReplayWitnessAccount {
+                        address: factory.to_string(),
+                        balance: "1000000000000000000".to_string(),
+                        nonce: 1,
+                        code: factory_code,
+                        storage: BTreeMap::new(),
+                    },
+                    target_account(receiver, "0x"),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(800000),
+                witness_only: Some(true),
+            },
+        });
+
+        assert!(result.executed);
+        assert!(result.success, "{result:?}");
+        let transfers = result.replay_native_transfers.unwrap_or_default();
+        assert_eq!(transfers.len(), 2, "{transfers:?}");
+        assert_eq!(transfers[0].from, factory);
+        assert_eq!(transfers[0].value, "2");
+        assert_eq!(transfers[1].from, transfers[0].to);
+        assert_eq!(transfers[1].to, receiver);
+        assert_eq!(transfers[1].value, "1");
     }
 
     #[test]
@@ -859,5 +1438,24 @@ mod tests {
         assert!(result.executed);
         assert!(result.success, "{result:?}");
         assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
+    fn e2e_replay_from_payload_file_when_configured() {
+        let Ok(path) = env::var("SAFELENS_E2E_REPLAY_INPUT") else {
+            return;
+        };
+
+        let raw = fs::read_to_string(&path)
+            .unwrap_or_else(|err| panic!("failed to read SAFELENS_E2E_REPLAY_INPUT={path}: {err}"));
+        let input: SimulationReplayInput = serde_json::from_str(&raw)
+            .unwrap_or_else(|err| panic!("failed to parse replay payload JSON from {path}: {err}"));
+
+        let result = verify_simulation_replay(input);
+        assert!(
+            result.executed,
+            "expected replay to execute, got: {result:?}"
+        );
+        assert!(result.success, "expected replay success, got: {result:?}");
     }
 }

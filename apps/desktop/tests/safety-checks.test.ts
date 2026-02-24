@@ -16,6 +16,18 @@ import {
   type SafetyCheck,
 } from "../src/lib/safety-checks";
 
+const SAFE = "0x0000000000000000000000000000000000000001";
+const TRANSFER_TOPIC =
+  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+function pad32(addr: string): string {
+  return `0x${addr.replace("0x", "").padStart(64, "0")}`;
+}
+
+function uint256Hex(n: bigint): string {
+  return `0x${n.toString(16).padStart(64, "0")}`;
+}
+
 function makeEvidence(consensusMode?: ConsensusMode): EvidencePackage {
   if (!consensusMode) {
     return {} as EvidencePackage;
@@ -518,7 +530,7 @@ describe("classifySimulationStatus", () => {
   it("returns error for witness-only simulation when witness proof is invalid even if replay passes", () => {
     const status = classifySimulationStatus(
       {
-        safeAddress: "0x0000000000000000000000000000000000000001",
+        safeAddress: SAFE,
         chainId: 1,
         simulation: {
           success: true,
@@ -552,6 +564,108 @@ describe("classifySimulationStatus", () => {
     expect(status.status).toBe("error");
     expect(status.reasonCode).toBe("simulation-witness-proof-failed");
     expect(status.detail).toBe("witness digest mismatch");
+  });
+
+  it("ignores packaged effects for witness-only simulation and summarizes replay logs only", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: SAFE,
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          blockNumber: 1,
+          trust: "rpc-sourced",
+          logs: [
+            {
+              address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+              topics: [
+                TRANSFER_TOPIC,
+                pad32(SAFE),
+                pad32("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+              ],
+              data: uint256Hex(1_000_000n),
+            },
+          ],
+          nativeTransfers: [
+            {
+              from: SAFE,
+              to: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              value: "1000000000000000000",
+            },
+          ],
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: true,
+        errors: [],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-matched",
+        replayLogs: [],
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("check");
+    expect(status.detail).toBe("Simulation ran successfully.");
+  });
+
+  it("includes replay-derived native transfers in witness-only simulation summary", () => {
+    const status = classifySimulationStatus(
+      {
+        safeAddress: SAFE,
+        chainId: 1,
+        simulation: {
+          success: true,
+          returnData: "0x",
+          gasUsed: "21000",
+          blockNumber: 1,
+          trust: "rpc-sourced",
+          logs: [],
+        } as EvidencePackage["simulation"],
+        simulationWitness: {
+          witnessOnly: true,
+        } as EvidencePackage["simulationWitness"],
+      } as EvidencePackage,
+      {
+        valid: true,
+        executionReverted: false,
+        errors: [],
+      } as SimulationVerificationResult,
+      {
+        valid: true,
+        errors: [],
+        checks: [],
+      } as SimulationWitnessVerificationResult,
+      {
+        executed: true,
+        success: true,
+        reason: "simulation-replay-matched",
+        replayLogs: [],
+        replayNativeTransfers: [
+          {
+            from: SAFE,
+            to: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            value: "1000000000000000000",
+          },
+        ],
+      } as SimulationReplayVerificationResult
+    );
+
+    expect(status.status).toBe("check");
+    expect(status.detail).toBe("Simulation ran successfully. 1 transfer detected.");
   });
 });
 

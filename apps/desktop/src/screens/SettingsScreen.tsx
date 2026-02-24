@@ -16,6 +16,10 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 type ChainSupportStatus = "full" | "partial" | "none";
 
+function getChainEntries(config: SettingsConfig | null): [string, ChainConfig][] {
+  return config ? Object.entries(config.chains) : [];
+}
+
 function getChainSupportStatus(chainIdRaw: string): ChainSupportStatus {
   const parsed = Number.parseInt(chainIdRaw, 10);
   if (!Number.isFinite(parsed)) return "none";
@@ -160,13 +164,10 @@ export default function SettingsScreen() {
   const { config: savedConfig, saveConfig, resetConfig } = useSettingsConfig();
   const { success: toastSuccess, warning: toastWarning } = useToast();
 
-  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>([]);
+  const [chainEntries, setChainEntries] = useState<[string, ChainConfig][]>(() => getChainEntries(savedConfig));
 
   useEffect(() => {
-    if (!savedConfig) return;
-    setChainEntries((prev) =>
-      prev.length === 0 ? Object.entries(savedConfig.chains) : prev
-    );
+    setChainEntries(getChainEntries(savedConfig));
   }, [savedConfig]);
 
   const [newChainId, setNewChainId] = useState("");
@@ -175,11 +176,15 @@ export default function SettingsScreen() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fullDraft = useMemo<SettingsConfig | null>(
-    () => savedConfig ? { ...savedConfig, chains: Object.fromEntries(chainEntries) } : null,
+    () => (savedConfig ? { ...savedConfig, chains: Object.fromEntries(chainEntries) } : null),
     [savedConfig, chainEntries],
   );
   const isModified = useMemo(
-    () => fullDraft !== null && savedConfig !== null && JSON.stringify(fullDraft) !== JSON.stringify(savedConfig),
+    () => (
+      fullDraft !== null &&
+      savedConfig !== null &&
+      JSON.stringify(fullDraft) !== JSON.stringify(savedConfig)
+    ),
     [fullDraft, savedConfig],
   );
 
@@ -208,12 +213,11 @@ export default function SettingsScreen() {
   };
 
   const handleDiscard = () => {
-    setChainEntries(Object.entries(savedConfig.chains));
+    setChainEntries(getChainEntries(savedConfig));
   };
 
   const handleReset = async () => {
     await resetConfig();
-    setChainEntries([]);
   };
 
   const handleExport = async () => {
