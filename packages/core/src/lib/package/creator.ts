@@ -172,9 +172,21 @@ export async function enrichWithSimulation(
     // Witness generation is best-effort: keep simulation artifact even when
     // RPC cannot provide proof data for witness construction.
     // Preserve the failure reason so downstream tooling can diagnose why.
+    // Redact URL-like fragments to prevent API key leakage in diagnostics.
     simulationWitness = undefined;
-    witnessGenerationError =
+    const rawMessage =
       error instanceof Error ? error.message : String(error);
+    witnessGenerationError = rawMessage.replace(
+      /https?:\/\/[^\s"',)}\]]+/gi,
+      (url) => {
+        try {
+          const parsed = new URL(url);
+          return `${parsed.protocol}//${parsed.hostname}/***`;
+        } catch {
+          return "[redacted-url]";
+        }
+      }
+    );
   }
 
   const hasReplayAccounts =
@@ -346,8 +358,8 @@ export function finalizeEvidenceExport(
     hasSimulation &&
     hasReplayCapableSimulationWitnessInputs;
   const diagnostics: EvidenceExportContract["diagnostics"] =
-    options.witnessGenerationError
-      ? { witnessGenerationError: options.witnessGenerationError }
+    options.witnessGenerationError !== undefined
+      ? { witnessGenerationError: options.witnessGenerationError || "(unknown error)" }
       : undefined;
   const exportContract: EvidenceExportContract = {
     mode: isFullyVerifiable ? "fully-verifiable" : "partial",

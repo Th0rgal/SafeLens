@@ -361,7 +361,6 @@ function logEvidenceDebugSnapshot(
   }
 ): void {
   if (
-    typeof process !== "undefined" &&
     process.env.NEXT_PUBLIC_ENABLE_DEBUG_LOGS !== "1" &&
     process.env.NODE_ENV !== "development"
   ) {
