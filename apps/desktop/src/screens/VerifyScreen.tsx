@@ -952,7 +952,14 @@ function ExecutionSafetyPanel({
       <CardContent className="space-y-3">
         <SafePolicySection evidence={evidence} />
 
-        <div className="text-xs font-medium text-muted">Simulation effects</div>
+        <div className="flex items-center gap-2 text-xs font-medium text-muted">
+          <span>Simulation effects</span>
+          {witnessOnlySimulation && simulationPassed && (
+            <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+              replay-verified
+            </span>
+          )}
+        </div>
         {simulationPassed ? (
           <>
             {transferEvents.length > 0 && (
