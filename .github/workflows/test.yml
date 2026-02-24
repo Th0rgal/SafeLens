@@ -14,41 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
+  verify-ci:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
-        with:
-          bun-version: 1.3.9
-
-      - run: bun install --frozen-lockfile
-
-      - name: Workspace lint
-        run: bun run lint
-
-  type-check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
-        with:
-          bun-version: 1.3.9
-
-      - run: bun install --frozen-lockfile
-
-      - name: TypeScript type-check
-        run: bun run type-check
-
-  rust-fmt:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -56,23 +24,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           toolchain: 1.93.1
-          components: rustfmt
+          components: rustfmt, clippy
 
-      - name: Rust formatting check
-        run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all -- --check
-
-  rust-clippy:
-    runs-on: ubuntu-latest
-    needs: [rust-fmt]
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
+      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
         with:
-          toolchain: 1.93.1
-          components: clippy
+          bun-version: 1.3.9
 
       - name: Install Linux dependencies
         run: |
@@ -87,76 +43,7 @@ jobs:
         with:
           workspaces: './apps/desktop/src-tauri -> target'
 
-      - name: Rust clippy check
-        run: cargo clippy --locked --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
-
-  rust-test:
-    runs-on: ubuntu-latest
-    needs: [rust-clippy]
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
-        with:
-          toolchain: 1.93.1
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            librsvg2-dev \
-            patchelf \
-            libssl-dev
-
-      - uses: Swatinem/rust-cache@ad397744b0d591a723ab90405b7247fac0e6b8db # v2
-        with:
-          workspaces: './apps/desktop/src-tauri -> target'
-
-      - name: Desktop Rust unit tests
-        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
-
-  test:
-    runs-on: ubuntu-latest
-    needs: [lint, type-check, rust-test]
-    timeout-minutes: 25
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
-        with:
-          bun-version: 1.3.9
-
       - run: bun install --frozen-lockfile
 
-      - name: Core tests (vitest)
-        run: bun run --cwd packages/core test
-
-      - name: CLI tests
-        run: bun run --cwd packages/cli test
-
-      - name: Generator tests
-        run: bun run --cwd apps/generator test
-
-      - name: Desktop tests
-        run: bun run --cwd apps/desktop test
-
-  build:
-    runs-on: ubuntu-latest
-    needs: [test]
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - uses: oven-sh/setup-bun@3d267786b128fe76c2f16a390aa2448b815359f3 # v2
-        with:
-          bun-version: 1.3.9
-
-      - run: bun install --frozen-lockfile
-
-      - name: Workspace production build
-        run: bun run build
+      - name: CI parity verification
+        run: bun run verify:ci
