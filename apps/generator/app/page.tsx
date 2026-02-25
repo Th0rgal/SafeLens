@@ -21,6 +21,7 @@ import {
   decodeSimulationEvents,
   decodeNativeTransfers,
   computeRemainingApprovals,
+  summarizeStateDiffs,
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
   getExportContractReasonLabel,
@@ -127,6 +128,7 @@ function EvidenceDisplay({
   const allEvents = [...nativeEvents, ...logEvents];
   const transfers = allEvents.filter((e) => e.kind !== "approval");
   const approvals = computeRemainingApprovals(allEvents);
+  const stateDiffSummary = summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress);
 
   return (
     <Card>
@@ -221,6 +223,41 @@ function EvidenceDisplay({
                       </span>
                       <span className="text-amber-400/70">to</span>
                       <AddressDisplay address={a.spender} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {stateDiffSummary.totalSlotsChanged > 0 && (
+              <div className="rounded-md border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                <div className="text-xs font-medium text-blue-300">
+                  Storage changes
+                  <span className="ml-1.5 font-normal text-blue-400/70">
+                    {stateDiffSummary.totalSlotsChanged} slot{stateDiffSummary.totalSlotsChanged !== 1 ? "s" : ""} across {stateDiffSummary.contractsChanged} contract{stateDiffSummary.contractsChanged !== 1 ? "s" : ""}
+                  </span>
+                </div>
+                {stateDiffSummary.silentContracts > 0 && (
+                  <div className="mt-1 text-[11px] text-amber-400">
+                    {stateDiffSummary.silentContracts} contract{stateDiffSummary.silentContracts !== 1 ? "s" : ""} modified storage without emitting events — review state diffs for hidden effects.
+                  </div>
+                )}
+                <div className="mt-1.5 space-y-1">
+                  {stateDiffSummary.contracts.map((c) => (
+                    <div key={c.address} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-blue-300/90">
+                      <AddressDisplay address={c.address} />
+                      <span className="text-blue-400/60">
+                        {c.slotsChanged} slot{c.slotsChanged !== 1 ? "s" : ""}
+                      </span>
+                      {c.tokenSymbol && (
+                        <span className="rounded bg-blue-500/10 px-1 py-0.5 text-[10px] font-medium text-blue-300">
+                          {c.tokenSymbol}
+                        </span>
+                      )}
+                      {!c.hasEvents && (
+                        <span className="rounded bg-amber-500/10 px-1 py-0.5 text-[10px] font-medium text-amber-400">
+                          no events
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
