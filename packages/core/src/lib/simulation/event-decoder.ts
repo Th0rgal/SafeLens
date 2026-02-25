@@ -79,6 +79,9 @@ export interface DecodedEvent {
 
 /** Extract a 20-byte address from a 32-byte log topic. */
 function topicToAddress(topic: string): string {
+  // A valid 32-byte topic is 66 chars: "0x" + 64 hex chars.
+  // slice(26) needs 40 remaining chars to produce a full address.
+  if (topic.length < 66) return "0x" + "0".repeat(40);
   return "0x" + topic.slice(26).toLowerCase();
 }
 
