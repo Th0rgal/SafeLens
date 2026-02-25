@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { summarizeSimulationEvents, computeRemainingApprovals, summarizeStateDiffs } from "../summary";
+import { summarizeSimulationEvents, computeRemainingApprovals, computeProvenBalanceChanges, summarizeStateDiffs } from "../summary";
 import { decodeSimulationEvents } from "../event-decoder";
+import { __internal as slotInternal } from "../slot-decoder";
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../../types";
 import type { DecodedEvent } from "../event-decoder";
 
@@ -468,5 +469,132 @@ describe("summarizeStateDiffs", () => {
     expect(result.contracts[0]!.slotsChanged).toBe(3);
     expect(result.contracts[1]!.slotsChanged).toBe(2);
     expect(result.contracts[2]!.slotsChanged).toBe(1);
+  });
+});
+
+// ── computeProvenBalanceChanges ─────────────────────────────────────
+
+describe("computeProvenBalanceChanges", () => {
+  const { computeMappingSlot, ERC20_LAYOUTS } = slotInternal;
+  const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f";
+  const SENDER = "0x1111111111111111111111111111111111111111";
+  const RECEIVER = "0x2222222222222222222222222222222222222222";
+
+  it("returns empty when no state diffs are provided", () => {
+    const events: DecodedEvent[] = [{
+      kind: "transfer",
+      token: DAI,
+      tokenSymbol: "DAI",
+      tokenDecimals: 18,
+      from: SENDER,
+      to: RECEIVER,
+      amountFormatted: "100 DAI",
+      amountRaw: (100n * 10n ** 18n).toString(),
+      direction: "send",
+    }];
+    const result = computeProvenBalanceChanges(events);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty when no events match any state diffs", () => {
+    const events: DecodedEvent[] = [{
+      kind: "transfer",
+      token: DAI,
+      tokenSymbol: "DAI",
+      tokenDecimals: 18,
+      from: SENDER,
+      to: RECEIVER,
+      amountFormatted: "100 DAI",
+      amountRaw: (100n * 10n ** 18n).toString(),
+      direction: "send",
+    }];
+    // State diff on a different address — no match
+    const diffs: StateDiffEntry[] = [{
+      address: DAI,
+      key: "0x" + "ff".repeat(32),
+      before: uint256Hex(500n * 10n ** 18n),
+      after: uint256Hex(400n * 10n ** 18n),
+    }];
+    const result = computeProvenBalanceChanges(events, diffs);
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns proven balance changes when Transfer matches OZ layout", () => {
+    // Compute the actual OZ balance slot for SENDER
+    const ozLayout = ERC20_LAYOUTS[0]; // oz: balanceSlot=0n
+    const senderSlot = computeMappingSlot(SENDER, ozLayout.balanceSlot);
+    const receiverSlot = computeMappingSlot(RECEIVER, ozLayout.balanceSlot);
+
+    const events: DecodedEvent[] = [{
+      kind: "transfer",
+      token: DAI,
+      tokenSymbol: "DAI",
+      tokenDecimals: 18,
+      from: SENDER,
+      to: RECEIVER,
+      amountFormatted: "100 DAI",
+      amountRaw: (100n * 10n ** 18n).toString(),
+      direction: "send",
+    }];
+    const diffs: StateDiffEntry[] = [
+      { address: DAI, key: senderSlot, before: uint256Hex(500n * 10n ** 18n), after: uint256Hex(400n * 10n ** 18n) },
+      { address: DAI, key: receiverSlot, before: uint256Hex(0n), after: uint256Hex(100n * 10n ** 18n) },
+    ];
+
+    const result = computeProvenBalanceChanges(events, diffs);
+
+    expect(result).toHaveLength(2);
+    // Sender lost 100 DAI
+    const sender = result.find(bc => bc.account === SENDER);
+    expect(sender).toBeDefined();
+    expect(sender!.deltaFormatted).toContain("-");
+    expect(sender!.deltaFormatted).toContain("100");
+    expect(sender!.layoutName).toBe("oz");
+    // Receiver gained 100 DAI
+    const receiver = result.find(bc => bc.account === RECEIVER);
+    expect(receiver).toBeDefined();
+    expect(receiver!.deltaFormatted).toContain("+");
+    expect(receiver!.deltaFormatted).toContain("100");
+  });
+
+  it("deduplicates by (token, account)", () => {
+    // If the same (token, account) pair would match multiple layouts, only the first wins
+    const ozLayout = ERC20_LAYOUTS[0];
+    const senderSlot = computeMappingSlot(SENDER, ozLayout.balanceSlot);
+
+    const events: DecodedEvent[] = [
+      {
+        kind: "transfer",
+        token: DAI,
+        tokenSymbol: "DAI",
+        tokenDecimals: 18,
+        from: SENDER,
+        to: RECEIVER,
+        amountFormatted: "50 DAI",
+        amountRaw: (50n * 10n ** 18n).toString(),
+        direction: "send",
+      },
+      // Duplicate transfer for the same sender — should not create a second entry
+      {
+        kind: "transfer",
+        token: DAI,
+        tokenSymbol: "DAI",
+        tokenDecimals: 18,
+        from: SENDER,
+        to: "0x3333333333333333333333333333333333333333",
+        amountFormatted: "50 DAI",
+        amountRaw: (50n * 10n ** 18n).toString(),
+        direction: "send",
+      },
+    ];
+    const diffs: StateDiffEntry[] = [
+      { address: DAI, key: senderSlot, before: uint256Hex(1000n * 10n ** 18n), after: uint256Hex(900n * 10n ** 18n) },
+    ];
+
+    const result = computeProvenBalanceChanges(events, diffs);
+
+    // Only one entry for the sender even though two transfers reference them
+    const senderEntries = result.filter(bc => bc.account === SENDER);
+    expect(senderEntries).toHaveLength(1);
   });
 });
