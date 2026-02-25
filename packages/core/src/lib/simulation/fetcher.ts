@@ -574,6 +574,33 @@ function traceToReplayAccounts(
   return Array.from(byAddress.values());
 }
 
+// ── Shared helpers for debug_traceCall ────────────────────────────
+
+/** State override array as used internally by the fetcher. */
+type StateOverrideArray = Array<{
+  address: Address;
+  stateDiff: Array<{ slot: Hex; value: Hex }>;
+}>;
+
+/**
+ * Convert the internal state-override array into the flat
+ * `Record<address, { stateDiff: Record<slot, value> }>` format
+ * expected by the `debug_traceCall` JSON-RPC method.
+ */
+function buildStateOverrideObj(
+  stateOverride: StateOverrideArray,
+): Record<string, { stateDiff: Record<string, string> }> {
+  const obj: Record<string, { stateDiff: Record<string, string> }> = {};
+  for (const override of stateOverride) {
+    const diffs: Record<string, string> = {};
+    for (const entry of override.stateDiff) {
+      diffs[entry.slot] = entry.value;
+    }
+    obj[override.address] = { stateDiff: diffs };
+  }
+  return obj;
+}
+
 // ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
 
 interface TraceResult {
@@ -588,24 +615,10 @@ async function tryTraceCall(
   safeAddress: Address,
   calldata: Hex,
   blockNumber: bigint,
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>
+  stateOverride: StateOverrideArray,
 ): Promise<TraceResult> {
   try {
-    // Build state override in the raw JSON-RPC format for debug_traceCall
-    const stateOverrideObj: Record<
-      string,
-      { stateDiff: Record<string, string> }
-    > = {};
-    for (const override of stateOverride) {
-      const diffs: Record<string, string> = {};
-      for (const entry of override.stateDiff) {
-        diffs[entry.slot] = entry.value;
-      }
-      stateOverrideObj[override.address] = { stateDiff: diffs };
-    }
+    const stateOverrideObj = buildStateOverrideObj(stateOverride);
 
     const callTracerConfig = {
       tracer: "callTracer",
@@ -752,23 +765,10 @@ async function tryRunPrestateTrace(
   safeAddress: Address,
   calldata: Hex,
   blockNumber: bigint,
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>
+  stateOverride: StateOverrideArray,
 ): Promise<PrestateTraceRawResult | undefined> {
   try {
-    const stateOverrideObj: Record<
-      string,
-      { stateDiff: Record<string, string> }
-    > = {};
-    for (const override of stateOverride) {
-      const diffs: Record<string, string> = {};
-      for (const entry of override.stateDiff) {
-        diffs[entry.slot] = entry.value;
-      }
-      stateOverrideObj[override.address] = { stateDiff: diffs };
-    }
+    const stateOverrideObj = buildStateOverrideObj(stateOverride);
 
     const prestateConfig = {
       tracer: "prestateTracer",
@@ -844,10 +844,7 @@ async function tryCollectStateDiffs(
   safeAddress: Address,
   calldata: Hex,
   blockNumber: bigint,
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>
+  stateOverride: StateOverrideArray,
 ): Promise<StateDiffEntry[] | undefined> {
   const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
   if (!traceResult?.pre || !traceResult?.post) {
@@ -904,11 +901,8 @@ async function tryCollectReplayAccounts(
   safeAddress: Address,
   calldata: Hex,
   blockNumber: bigint,
-  stateOverride: Array<{
-    address: Address;
-    stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>,
-  requiredAddresses: Address[]
+  stateOverride: StateOverrideArray,
+  requiredAddresses: Address[],
 ): Promise<SimulationWitness["replayAccounts"]> {
   try {
     const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
