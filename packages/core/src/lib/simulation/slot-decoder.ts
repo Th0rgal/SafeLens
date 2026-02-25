@@ -23,6 +23,7 @@ import {
 } from "viem";
 import type { StateDiffEntry } from "../types";
 import type { DecodedEvent } from "./event-decoder";
+import { formatTokenAmount } from "./format";
 
 // ── ERC-20 storage layout definitions ──────────────────────────────
 
@@ -141,38 +142,6 @@ const MAX_UINT256 = (1n << 256n) - 1n;
 function hexToUint256(hex: string): bigint {
   if (!hex || hex === "0x" || hex === "0x" + "00".repeat(32)) return 0n;
   return BigInt(hex);
-}
-
-function formatTokenAmount(
-  raw: bigint,
-  decimals: number | null,
-  symbol: string | null,
-): string {
-  if (decimals == null) {
-    const str = raw.toString();
-    return symbol ? `${str} ${symbol}` : str;
-  }
-
-  const divisor = 10n ** BigInt(decimals);
-  const whole = raw / divisor;
-  const remainder = (raw < 0n ? -raw : raw) % divisor;
-
-  const wholeStr = whole.toLocaleString("en-US");
-  const fractional = remainder
-    .toString()
-    .padStart(decimals, "0")
-    .slice(0, 4)
-    .replace(/0+$/, "");
-
-  let numStr: string;
-  if (fractional.length > 0) {
-    numStr = `${wholeStr}.${fractional}`;
-  } else if (whole === 0n && remainder > 0n) {
-    numStr = "<0.0001";
-  } else {
-    numStr = wholeStr;
-  }
-  return symbol ? `${numStr} ${symbol}` : numStr;
 }
 
 function formatDelta(
