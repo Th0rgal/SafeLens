@@ -568,3 +568,8 @@ export async function verifyEvidencePackage(
     consensusTrustDecisionReason: consensusDecision.reason,
   };
 }
+
+export const __internal = {
+  evaluateConsensusTrustDecision,
+  deriveSimulationVerificationReason,
+};

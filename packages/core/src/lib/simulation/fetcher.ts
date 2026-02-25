@@ -289,7 +289,10 @@ export async function fetchSimulation(
       });
       gasUsed = gas.toString();
     } catch {
-      // estimateGas may also fail if the node doesn't support stateOverride
+      // Expected: estimateGas may fail if the node doesn't support stateOverride
+      // on eth_estimateGas, or if the call reverts (we already checked success).
+      // Masked: transient RPC errors (rate-limit, timeout) — acceptable because
+      // gasUsed is informational only and the simulation already succeeded.
     }
   }
 
@@ -505,6 +508,8 @@ function normalizeReplayGasLimit(safeTxGas: string): number {
     }
     return Number(value);
   } catch {
+    // Expected: safeTxGas may be a non-numeric string (e.g. "0x" or empty) from
+    // malformed transaction data. Default to a reasonable gas limit for replay.
     return 3_000_000;
   }
 }
@@ -628,7 +633,10 @@ async function debugTraceCallWithOverrides(
       ] as unknown as DebugParams,
     });
   } catch {
-    // Fallback for clients that expect `stateOverride` (singular).
+    // Expected: Gnosis-style RPCs reject `stateOverrides` (plural) and require
+    // `stateOverride` (singular). The first request fails with a JSON-RPC error.
+    // Masked: transient network errors on the first attempt — acceptable because
+    // the singular retry will also fail, and the outer catch handles it.
     return await client.request({
       method: "debug_traceCall" as "eth_call",
       params: [
@@ -735,13 +743,21 @@ async function tryTraceCall(
       try {
         gasUsed = BigInt(frame.gasUsed).toString();
       } catch {
+        // Expected: malformed gasUsed hex from non-standard RPC responses.
+        // Masked: nothing critical — gasUsed is informational; the trace
+        // data (logs, native transfers) was already collected above.
         gasUsed = null;
       }
     }
 
     return { logs, nativeTransfers, gasUsed, available: true };
   } catch {
-    // debug_traceCall is not supported by all RPCs, silently fall back
+    // Expected: debug_traceCall is not supported by all RPCs (most public
+    // endpoints reject it). Returns available=false so the caller skips
+    // prestateTracer and falls back to estimateGas.
+    // Masked: transient RPC errors (rate-limit, timeout) are treated as
+    // "feature unavailable" for this simulation. This is acceptable because
+    // simulation still succeeds via eth_call — traces are an enhancement.
     return { logs: [], nativeTransfers: [], gasUsed: null, available: false };
   }
 }
@@ -787,7 +803,10 @@ async function tryRunPrestateTrace(
 
     return { raw: result, pre, post };
   } catch {
-    // prestateTracer is not supported by all RPCs, silently fall back
+    // Expected: prestateTracer is not supported by all RPCs (same as callTracer).
+    // Returns undefined so the caller skips state diff extraction.
+    // Masked: transient RPC errors — acceptable because state diffs are an
+    // enhancement over event-based heuristics, not a required feature.
     return undefined;
   }
 }
@@ -869,6 +888,11 @@ async function tryCollectReplayAccounts(
     const trace = traceResult.pre ?? (traceResult.raw as PrestateTrace);
     return traceToReplayAccounts(trace, requiredAddresses);
   } catch {
+    // Expected: prestateTracer unavailable or trace response missing required
+    // accounts. Returns undefined so the caller falls back to
+    // tryCollectSimpleTransferReplayAccounts (manual EOA snapshot).
+    // Masked: transient RPC errors — acceptable because replay accounts are
+    // a witness enhancement; the simulation itself already completed.
     return undefined;
   }
 }
@@ -925,6 +949,11 @@ async function tryCollectSimpleTransferReplayAccounts(
 
     return snapshots;
   } catch {
+    // Expected: RPC calls for balance/nonce/code may fail on nodes that don't
+    // support historical state queries at the pinned blockNumber.
+    // Masked: transient errors — acceptable because this is the last-resort
+    // fallback for simple native transfers only; the witness will be generated
+    // without replayAccounts, limiting offline replay but not blocking generation.
     return undefined;
   }
 }
