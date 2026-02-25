@@ -1,6 +1,7 @@
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../types";
 import { decodeSimulationEvents, decodeNativeTransfers, type DecodedEvent } from "./event-decoder";
 import { decodeERC20StateDiffs, type ProvenAllowance, type ProvenBalanceChange, type SlotDecoderResult } from "./slot-decoder";
+import { resolveTokenMeta } from "../tokens/well-known";
 
 export type SimulationTransferPreview = {
   direction: "send" | "receive" | "internal";
@@ -282,6 +283,7 @@ export function summarizeStateDiffs(
   stateDiffs: StateDiffEntry[] | undefined,
   events: DecodedEvent[],
   safeAddress?: string,
+  chainId?: number,
 ): StateDiffSummary {
   if (!stateDiffs || stateDiffs.length === 0) {
     return {
@@ -320,7 +322,9 @@ export function summarizeStateDiffs(
   for (const [address, slotsChanged] of byContract) {
     contracts.push({
       address,
-      tokenSymbol: tokenSymbols.get(address) ?? null,
+      tokenSymbol: tokenSymbols.get(address)
+        ?? resolveTokenMeta(address, chainId)?.symbol
+        ?? null,
       slotsChanged,
       hasEvents: eventContracts.has(address),
     });

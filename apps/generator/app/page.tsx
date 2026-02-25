@@ -134,8 +134,8 @@ function EvidenceDisplay({
     [allEvents, sim?.stateDiffs],
   );
   const stateDiffSummary = useMemo(
-    () => summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress),
-    [sim?.stateDiffs, allEvents, evidence.safeAddress],
+    () => summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress, evidence.chainId),
+    [sim?.stateDiffs, allEvents, evidence.safeAddress, evidence.chainId],
   );
 
   return (

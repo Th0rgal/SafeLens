@@ -470,6 +470,52 @@ describe("summarizeStateDiffs", () => {
     expect(result.contracts[1]!.slotsChanged).toBe(2);
     expect(result.contracts[2]!.slotsChanged).toBe(1);
   });
+
+  it("resolves silent contract symbols from well-known registry when chainId is provided", () => {
+    // USDC on mainnet has state diffs but no events (e.g. allowance consumed via transferFrom)
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_B, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, [], SAFE, 1);
+
+    expect(result.contracts[0]!.tokenSymbol).toBe("USDC");
+    expect(result.contracts[0]!.hasEvents).toBe(false);
+  });
+
+  it("resolves multi-chain token symbols for silent contracts", () => {
+    // Polygon USDC (different address from mainnet)
+    const polygonUSDC = "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359";
+    const diffs: StateDiffEntry[] = [
+      { address: polygonUSDC, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, [], undefined, 137);
+
+    expect(result.contracts[0]!.tokenSymbol).toBe("USDC");
+  });
+
+  it("prefers event-derived symbol over well-known registry", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+    // Event provides symbol "DAI" directly
+    const events = [makeEvent(TOKEN_A, "transfer", "DAI")];
+
+    const result = summarizeStateDiffs(diffs, events, undefined, 1);
+
+    expect(result.contracts[0]!.tokenSymbol).toBe("DAI");
+  });
+
+  it("returns null symbol for unknown contract even with chainId", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: RANDOM_CONTRACT, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, [], undefined, 1);
+
+    expect(result.contracts[0]!.tokenSymbol).toBeNull();
+  });
 });
 
 // ── computeProvenBalanceChanges ─────────────────────────────────────

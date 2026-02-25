@@ -14,7 +14,6 @@
 import type { SimulationLog, NativeTransfer } from "../types";
 import { formatTokenAmount } from "./format";
 import { resolveTokenMeta } from "../tokens/well-known";
-import type { TokenMeta } from "../tokens/well-known";
 
 // ── Event signatures (keccak256 hashes) ──────────────────────────────
 

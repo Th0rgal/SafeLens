@@ -830,8 +830,8 @@ function ExecutionSafetyPanel({
     [decodedEvents, evidence.simulation?.stateDiffs],
   );
   const stateDiffSummary = useMemo(
-    () => summarizeStateDiffs(evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress),
-    [evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress],
+    () => summarizeStateDiffs(evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress, evidence.chainId),
+    [evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress, evidence.chainId],
   );
 
   const simulationAvailable = Boolean(evidence.simulation);
