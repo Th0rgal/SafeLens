@@ -1,6 +1,6 @@
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../types";
 import { decodeSimulationEvents, decodeNativeTransfers, type DecodedEvent } from "./event-decoder";
-import { decodeERC20StateDiffs, type ProvenAllowance, type ProvenBalanceChange } from "./slot-decoder";
+import { decodeERC20StateDiffs, type ProvenAllowance, type ProvenBalanceChange, type SlotDecoderResult } from "./slot-decoder";
 
 export type SimulationTransferPreview = {
   direction: "send" | "receive" | "internal";
@@ -114,10 +114,17 @@ export function computeRemainingApprovals(
   events: DecodedEvent[],
   stateDiffs?: StateDiffEntry[],
 ): RemainingApproval[] {
-  // Try to decode proven allowances from state diffs
-  const provenResult = decodeERC20StateDiffs(stateDiffs, events);
+  const decoded = decodeERC20StateDiffs(stateDiffs, events);
+  return buildRemainingApprovals(events, decoded);
+}
+
+/** Build remaining approvals from a pre-decoded slot-decoder result. */
+function buildRemainingApprovals(
+  events: DecodedEvent[],
+  decoded: SlotDecoderResult,
+): RemainingApproval[] {
   const provenByPair = new Map<string, ProvenAllowance>();
-  for (const proven of provenResult.allowances) {
+  for (const proven of decoded.allowances) {
     // Keep only the first match per (token, owner, spender) — layouts are
     // tried in priority order so the first match is the best one
     const key = `${proven.token}:${proven.owner}:${proven.spender}`;
@@ -138,7 +145,7 @@ export function computeRemainingApprovals(
   const seen = new Set<string>();
 
   // First pass: emit proven approvals (state-diff source)
-  for (const [key, proven] of provenByPair) {
+  for (const [, proven] of provenByPair) {
     const pairKey = `${proven.token}:${proven.spender}`;
     seen.add(pairKey);
 
@@ -190,16 +197,46 @@ export function computeProvenBalanceChanges(
   stateDiffs?: StateDiffEntry[],
 ): ProvenBalanceChange[] {
   const result = decodeERC20StateDiffs(stateDiffs, events);
-  // Deduplicate by (token, account) — layouts are tried in priority order
+  return deduplicateBalanceChanges(result.balanceChanges);
+}
+
+function deduplicateBalanceChanges(
+  changes: ProvenBalanceChange[],
+): ProvenBalanceChange[] {
   const seen = new Set<string>();
   const deduped: ProvenBalanceChange[] = [];
-  for (const bc of result.balanceChanges) {
+  for (const bc of changes) {
     const key = `${bc.token}:${bc.account}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(bc);
   }
   return deduped;
+}
+
+/** Combined result from a single slot-decoder pass. */
+export type PostStateEffects = {
+  /** Remaining approvals (state-diff proven where available, event fallback otherwise). */
+  remainingApprovals: RemainingApproval[];
+  /** Proven balance changes backed by storage diffs. */
+  provenBalanceChanges: ProvenBalanceChange[];
+};
+
+/**
+ * Compute both remaining approvals and proven balance changes in a
+ * single `decodeERC20StateDiffs` pass. Use this instead of calling
+ * `computeRemainingApprovals` and `computeProvenBalanceChanges`
+ * separately to avoid redundant slot-decoder work.
+ */
+export function computePostStateEffects(
+  events: DecodedEvent[],
+  stateDiffs?: StateDiffEntry[],
+): PostStateEffects {
+  const decoded = decodeERC20StateDiffs(stateDiffs, events);
+  return {
+    remainingApprovals: buildRemainingApprovals(events, decoded),
+    provenBalanceChanges: deduplicateBalanceChanges(decoded.balanceChanges),
+  };
 }
 
 // ── State diff summary ────────────────────────────────────────────
