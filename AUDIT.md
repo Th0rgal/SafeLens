@@ -166,7 +166,7 @@ Settings import/export is a local trust boundary (user-supplied JSON parsed by `
 | System clock trust for `packagedAt` | Operator responsibility; no independent time source available |
 | OP Stack/Linea envelope forgery by compromised RPC | Explicitly labeled as partial trust; cannot reach fully-verifiable |
 | Contract signatures (v=0) not verified offline | Require on-chain call; flagged as warning in verification report |
-| Beacon API responses not Zod-validated (generation only) | Malformed beacon data causes runtime errors during generation, not during verification. Verification uses the Rust Helios path which has its own SSZ validation. Fixing requires defining schemas for all beacon light-client API response shapes |
+| Beacon API responses not Zod-validated (generation only) | **Fixed** (PR #173): `FinalityUpdateSchema`, `HeaderResponseSchema`, and `BootstrapSchema` now validate all beacon API consumption sites. `fetchBeaconJson` returns `Promise<unknown>` instead of `Promise<any>`. |
 
 ### Open Issues
 
