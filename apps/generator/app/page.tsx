@@ -127,7 +127,7 @@ function EvidenceDisplay({
     : [];
   const allEvents = [...nativeEvents, ...logEvents];
   const transfers = allEvents.filter((e) => e.kind !== "approval");
-  const approvals = computeRemainingApprovals(allEvents);
+  const approvals = computeRemainingApprovals(allEvents, sim?.stateDiffs);
   const stateDiffSummary = summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress);
 
   return (

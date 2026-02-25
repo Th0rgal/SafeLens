@@ -34,3 +34,10 @@ export {
   type StateDiffSummary,
   type ContractStateDiff,
 } from "./summary";
+
+export {
+  decodeERC20StateDiffs,
+  type ProvenBalanceChange,
+  type ProvenAllowance,
+  type SlotDecoderResult,
+} from "./slot-decoder";
