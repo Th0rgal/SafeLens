@@ -303,7 +303,7 @@ async function fetchBeaconProofAttempt(
   return {
     checkpoint,
     bootstrap,
-    finalityUpdate,
+    finalityUpdate: rawFinalityUpdate,
     finalizedSlot: Number(finalizedSlot),
     finalizedBlockNumber: Number(finalizedBlockNumber),
     finalizedStateRoot: finalizedStateRoot as string,
