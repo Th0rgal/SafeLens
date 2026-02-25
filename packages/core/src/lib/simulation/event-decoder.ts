@@ -69,6 +69,27 @@ const WELL_KNOWN_TOKENS: Record<string, TokenMeta> = {
   "100:0xddafbb505ad214d7b80b1f830fccc89b60fb7a83": { symbol: "USDC", decimals: 6 },
   "100:0x4ecaba5870353805a9f068101a40e0f32ed605c6": { symbol: "USDT", decimals: 6 },
   "100:0x177127622c4a00f3d409b75571e12cb3c8973d3c": { symbol: "COW", decimals: 18 },
+  // Polygon
+  "137:0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270": { symbol: "WMATIC", decimals: 18 },
+  "137:0x7ceb23fd6bc0add59e62ac25578270cff1b9f619": { symbol: "WETH", decimals: 18 },
+  "137:0x3c499c542cef5e3811e1192ce70d8cc03d5c3359": { symbol: "USDC", decimals: 6 },
+  "137:0xc2132d05d31c914a87c6611c10748aeb04b58e8f": { symbol: "USDT", decimals: 6 },
+  // Arbitrum One
+  "42161:0x82af49447d8a07e3bd95bd0d56f35241523fbab1": { symbol: "WETH", decimals: 18 },
+  "42161:0xaf88d065e77c8cc2239327c5edb3a432268e5831": { symbol: "USDC", decimals: 6 },
+  "42161:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": { symbol: "USDT", decimals: 6 },
+  // Optimism
+  "10:0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18 },
+  "10:0x0b2c639c533813f4aa9d7837caf62653d097ff85": { symbol: "USDC", decimals: 6 },
+  "10:0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": { symbol: "USDT", decimals: 6 },
+  "10:0xda10009cbd5d07dd0cecc66161fc93d7c9000da1": { symbol: "DAI", decimals: 18 },
+  // Base
+  "8453:0x4200000000000000000000000000000000000006": { symbol: "WETH", decimals: 18 },
+  "8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": { symbol: "USDC", decimals: 6 },
+  // Linea
+  "59144:0xe5d7c2a44ffddf6b295a15c148167daaaf5cf34f": { symbol: "WETH", decimals: 18 },
+  "59144:0x176211869ca2b568f2a7d4ee941e073a821ee1ff": { symbol: "USDC", decimals: 6 },
+  "59144:0xa219439258ca9da29e9cc4ce5596924745e12b93": { symbol: "USDT", decimals: 6 },
   // Sepolia
   "11155111:0xfff9976782d46cc05630d1f6ebab18b2324d6b14": { symbol: "WETH", decimals: 18 },
 };
