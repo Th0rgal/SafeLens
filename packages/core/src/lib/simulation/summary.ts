@@ -1,4 +1,4 @@
-import type { SimulationLog, NativeTransfer } from "../types";
+import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../types";
 import { decodeSimulationEvents, decodeNativeTransfers, type DecodedEvent } from "./event-decoder";
 
 export type SimulationTransferPreview = {
@@ -120,4 +120,105 @@ export function computeRemainingApprovals(
       amountFormatted: event.amountFormatted,
       isUnlimited: event.amountFormatted.toLowerCase().includes("unlimited"),
     }));
+}
+
+// ── State diff summary ────────────────────────────────────────────
+
+/** Per-contract grouping of storage slot changes. */
+export type ContractStateDiff = {
+  /** Contract address (lowercase, checksumless). */
+  address: string;
+  /** Resolved token symbol if this is a known token contract, otherwise null. */
+  tokenSymbol: string | null;
+  /** Number of storage slots that changed on this contract. */
+  slotsChanged: number;
+  /** True when this contract emitted at least one decoded event (Transfer/Approval/etc.). */
+  hasEvents: boolean;
+};
+
+/** Aggregate summary of storage-level state changes. */
+export type StateDiffSummary = {
+  /** Total number of storage slots changed across all contracts. */
+  totalSlotsChanged: number;
+  /** Number of distinct contracts whose storage was modified. */
+  contractsChanged: number;
+  /** Per-contract breakdown, sorted by slotsChanged descending. */
+  contracts: ContractStateDiff[];
+  /** Number of contracts that had storage changes but emitted no decoded events. */
+  silentContracts: number;
+};
+
+/**
+ * Summarize storage-level state diffs, correlating with decoded events.
+ *
+ * Contracts that modified storage without emitting any decoded events are
+ * flagged as "silent" — a signal that the transaction has effects not
+ * visible from event logs alone (e.g. allowance changes via transferFrom,
+ * or direct storage writes via delegatecall).
+ *
+ * @param stateDiffs  - Storage slot changes from the simulation.
+ * @param events      - Decoded events (transfers, approvals, etc.) for cross-reference.
+ * @param safeAddress - The Safe wallet address (excluded from the summary since its
+ *                      storage changes are simulation-override artifacts).
+ */
+export function summarizeStateDiffs(
+  stateDiffs: StateDiffEntry[] | undefined,
+  events: DecodedEvent[],
+  safeAddress?: string,
+): StateDiffSummary {
+  if (!stateDiffs || stateDiffs.length === 0) {
+    return {
+      totalSlotsChanged: 0,
+      contractsChanged: 0,
+      contracts: [],
+      silentContracts: 0,
+    };
+  }
+
+  const safeLower = safeAddress?.toLowerCase();
+
+  // Group diffs by contract address, excluding the Safe itself
+  const byContract = new Map<string, number>();
+  for (const diff of stateDiffs) {
+    const addr = diff.address.toLowerCase();
+    if (addr === safeLower) continue;
+    byContract.set(addr, (byContract.get(addr) ?? 0) + 1);
+  }
+
+  // Collect all contract addresses that emitted decoded events
+  const eventContracts = new Set<string>();
+  for (const event of events) {
+    eventContracts.add(event.token.toLowerCase());
+  }
+
+  // Build token symbol lookup from events
+  const tokenSymbols = new Map<string, string>();
+  for (const event of events) {
+    if (event.tokenSymbol) {
+      tokenSymbols.set(event.token.toLowerCase(), event.tokenSymbol);
+    }
+  }
+
+  const contracts: ContractStateDiff[] = [];
+  for (const [address, slotsChanged] of byContract) {
+    contracts.push({
+      address,
+      tokenSymbol: tokenSymbols.get(address) ?? null,
+      slotsChanged,
+      hasEvents: eventContracts.has(address),
+    });
+  }
+
+  // Sort by slotsChanged descending for consistent ordering
+  contracts.sort((a, b) => b.slotsChanged - a.slotsChanged);
+
+  const totalSlotsChanged = contracts.reduce((sum, c) => sum + c.slotsChanged, 0);
+  const silentContracts = contracts.filter((c) => !c.hasEvents).length;
+
+  return {
+    totalSlotsChanged,
+    contractsChanged: contracts.length,
+    contracts,
+    silentContracts,
+  };
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { summarizeSimulationEvents, computeRemainingApprovals } from "../summary";
+import { summarizeSimulationEvents, computeRemainingApprovals, summarizeStateDiffs } from "../summary";
 import { decodeSimulationEvents } from "../event-decoder";
-import type { SimulationLog, NativeTransfer } from "../../types";
+import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../../types";
+import type { DecodedEvent } from "../event-decoder";
 
 const SAFE = "0x1234567890abcdef1234567890abcdef12345678";
 const TRANSFER_TOPIC =
@@ -320,5 +321,152 @@ describe("computeRemainingApprovals", () => {
     const remaining = computeRemainingApprovals(events);
 
     expect(remaining).toHaveLength(0);
+  });
+});
+
+// ── summarizeStateDiffs ───────────────────────────────────────────
+
+describe("summarizeStateDiffs", () => {
+  const TOKEN_A = "0x6b175474e89094c44da98b954eedeac495271d0f"; // DAI
+  const TOKEN_B = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"; // USDC
+  const RANDOM_CONTRACT = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const SLOT_1 = "0x" + "00".repeat(31) + "01";
+  const SLOT_2 = "0x" + "00".repeat(31) + "02";
+  const ZERO = "0x" + "00".repeat(32);
+  const ONE = "0x" + "00".repeat(31) + "01";
+
+  function makeEvent(token: string, kind: "transfer" | "approval" = "transfer", symbol: string | null = null): DecodedEvent {
+    return {
+      kind,
+      token: token.toLowerCase(),
+      tokenSymbol: symbol,
+      tokenDecimals: 18,
+      amountFormatted: "1",
+      amountRaw: "1",
+      from: SAFE,
+      to: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      direction: "send",
+    };
+  }
+
+  it("returns empty summary when stateDiffs is undefined", () => {
+    const result = summarizeStateDiffs(undefined, []);
+    expect(result.totalSlotsChanged).toBe(0);
+    expect(result.contractsChanged).toBe(0);
+    expect(result.contracts).toEqual([]);
+    expect(result.silentContracts).toBe(0);
+  });
+
+  it("returns empty summary when stateDiffs is empty", () => {
+    const result = summarizeStateDiffs([], []);
+    expect(result.totalSlotsChanged).toBe(0);
+    expect(result.contractsChanged).toBe(0);
+  });
+
+  it("groups diffs by contract and counts slots", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+      { address: TOKEN_A, key: SLOT_2, before: ZERO, after: ONE },
+      { address: TOKEN_B, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+    const events = [makeEvent(TOKEN_A, "transfer", "DAI"), makeEvent(TOKEN_B, "transfer", "USDC")];
+
+    const result = summarizeStateDiffs(diffs, events);
+
+    expect(result.totalSlotsChanged).toBe(3);
+    expect(result.contractsChanged).toBe(2);
+    expect(result.contracts).toHaveLength(2);
+    // Sorted by slotsChanged descending
+    expect(result.contracts[0]).toMatchObject({
+      address: TOKEN_A,
+      slotsChanged: 2,
+      hasEvents: true,
+    });
+    expect(result.contracts[1]).toMatchObject({
+      address: TOKEN_B,
+      slotsChanged: 1,
+      hasEvents: true,
+    });
+  });
+
+  it("excludes the Safe address from the summary", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: SAFE, key: SLOT_1, before: ZERO, after: ONE },
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, [], SAFE);
+
+    expect(result.totalSlotsChanged).toBe(1);
+    expect(result.contractsChanged).toBe(1);
+    expect(result.contracts[0]!.address).toBe(TOKEN_A);
+  });
+
+  it("flags contracts with no events as silent", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+      { address: RANDOM_CONTRACT, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+    const events = [makeEvent(TOKEN_A, "transfer", "DAI")];
+
+    const result = summarizeStateDiffs(diffs, events, SAFE);
+
+    expect(result.silentContracts).toBe(1);
+    const silent = result.contracts.find((c) => c.address === RANDOM_CONTRACT);
+    expect(silent).toBeDefined();
+    expect(silent!.hasEvents).toBe(false);
+    expect(silent!.tokenSymbol).toBeNull();
+  });
+
+  it("resolves token symbols from events", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+    const events = [makeEvent(TOKEN_A, "transfer", "DAI")];
+
+    const result = summarizeStateDiffs(diffs, events);
+
+    expect(result.contracts[0]!.tokenSymbol).toBe("DAI");
+  });
+
+  it("handles case-insensitive address matching", () => {
+    const upperToken = TOKEN_A.toUpperCase().replace("0X", "0x") as `0x${string}`;
+    const diffs: StateDiffEntry[] = [
+      { address: upperToken, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+    const events = [makeEvent(TOKEN_A, "transfer", "DAI")];
+
+    const result = summarizeStateDiffs(diffs, events);
+
+    expect(result.contracts[0]!.hasEvents).toBe(true);
+    expect(result.contracts[0]!.tokenSymbol).toBe("DAI");
+  });
+
+  it("counts all contracts as silent when there are no events", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+      { address: TOKEN_B, key: SLOT_1, before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, []);
+
+    expect(result.silentContracts).toBe(2);
+  });
+
+  it("sorts contracts by slotsChanged descending", () => {
+    const diffs: StateDiffEntry[] = [
+      { address: TOKEN_B, key: SLOT_1, before: ZERO, after: ONE },
+      { address: TOKEN_A, key: SLOT_1, before: ZERO, after: ONE },
+      { address: TOKEN_A, key: SLOT_2, before: ZERO, after: ONE },
+      { address: RANDOM_CONTRACT, key: SLOT_1, before: ZERO, after: ONE },
+      { address: RANDOM_CONTRACT, key: SLOT_2, before: ZERO, after: ONE },
+      { address: RANDOM_CONTRACT, key: "0x" + "00".repeat(31) + "03", before: ZERO, after: ONE },
+    ];
+
+    const result = summarizeStateDiffs(diffs, []);
+
+    expect(result.contracts[0]!.slotsChanged).toBe(3);
+    expect(result.contracts[1]!.slotsChanged).toBe(2);
+    expect(result.contracts[2]!.slotsChanged).toBe(1);
   });
 });
