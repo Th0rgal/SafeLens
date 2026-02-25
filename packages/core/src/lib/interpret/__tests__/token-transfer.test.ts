@@ -36,7 +36,7 @@ describe("interpretTokenTransfer", () => {
       const details = result!.details as TokenTransferDetails;
       expect(details.token.symbol).toBe("USDC");
       expect(details.token.decimals).toBe(6);
-      expect(details.amountFormatted).toBe("1.0000 USDC");
+      expect(details.amountFormatted).toBe("1 USDC");
     });
 
     it("produces a human-readable summary", () => {
@@ -211,7 +211,7 @@ describe("interpretTokenTransfer", () => {
         "0x", 1, "1500000000000000000",
       );
       const details = result!.details as TokenTransferDetails;
-      expect(details.amountFormatted).toBe("1.5000 ETH");
+      expect(details.amountFormatted).toBe("1.5 ETH");
     });
 
     it("sets recipient to txTo", () => {
