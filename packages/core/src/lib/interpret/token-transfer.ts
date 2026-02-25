@@ -92,7 +92,7 @@ export const interpretTokenTransfer: Interpreter = (
   if (!decoded?.method || !decoded.parameters) return null;
 
   const params = decoded.parameters;
-  const token = resolveToken(txTo);
+  const token = resolveToken(txTo, chainId);
   const decimals = token.decimals ?? 18;
   const tokenLabel = token.symbol ?? txTo.slice(0, 10) + "…";
 
