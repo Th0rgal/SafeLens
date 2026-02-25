@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { formatTokenAmount } from "../token-utils";
+import { formatTokenAmount, resolveToken } from "../token-utils";
+
+describe("resolveToken", () => {
+  it("resolves mainnet WETH without chainId (fallback)", () => {
+    const token = resolveToken("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2");
+    expect(token.symbol).toBe("WETH");
+    expect(token.decimals).toBe(18);
+  });
+
+  it("resolves Polygon USDC with chainId", () => {
+    const token = resolveToken("0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 137);
+    expect(token.symbol).toBe("USDC");
+    expect(token.decimals).toBe(6);
+  });
+
+  it("returns address-only for unknown token", () => {
+    const addr = "0x0000000000000000000000000000000000000042";
+    const token = resolveToken(addr);
+    expect(token.address).toBe(addr);
+    expect(token.symbol).toBeUndefined();
+    expect(token.decimals).toBeUndefined();
+  });
+
+  it("resolves Arbitrum WETH with chainId", () => {
+    const token = resolveToken("0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", 42161);
+    expect(token.symbol).toBe("WETH");
+    expect(token.decimals).toBe(18);
+  });
+});
 
 describe("formatTokenAmount", () => {
   it("formats standard 18-decimal values (strips trailing zeros)", () => {

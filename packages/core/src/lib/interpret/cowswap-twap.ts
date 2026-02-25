@@ -81,7 +81,9 @@ export function decodeTwapOrderData(hexData: string): {
 export const interpretCowSwapTwap: Interpreter = (
   dataDecoded,
   _txTo,
-  txOperation
+  txOperation,
+  _txData,
+  chainId,
 ) => {
   if (txOperation !== 1) return null; // must be delegatecall (multiSend)
 
@@ -138,8 +140,8 @@ export const interpretCowSwapTwap: Interpreter = (
   // Decode the TWAP order data
   const order = decodeTwapOrderData(orderDataHex);
 
-  const sellToken = resolveToken(order.sellToken);
-  const buyToken = resolveToken(order.buyToken);
+  const sellToken = resolveToken(order.sellToken, chainId);
+  const buyToken = resolveToken(order.buyToken, chainId);
   const sellDecimals = sellToken.decimals ?? 18;
   const buyDecimals = buyToken.decimals ?? 18;
 
@@ -174,7 +176,7 @@ export const interpretCowSwapTwap: Interpreter = (
       (p) => p.name === "wad" || p.name === "amount" || p.name === "value"
     )?.value as string | undefined;
     if (spender && amount && approveTx.to) {
-      const approveToken = resolveToken(approveTx.to);
+      const approveToken = resolveToken(approveTx.to, chainId);
       approval = {
         token: approveToken,
         spender,
