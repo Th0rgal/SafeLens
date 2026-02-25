@@ -6,6 +6,7 @@
  */
 
 import type { TokenInfo } from "./types";
+import { formatTokenAmount as formatTokenAmountShared } from "../simulation/format";
 
 // ── Well-known tokens (Ethereum Mainnet) ─────────────────────────────
 
@@ -39,14 +40,10 @@ export function resolveToken(address: string): TokenInfo {
 /**
  * Format a raw token amount with decimals.
  *
- * Uses pure BigInt arithmetic to avoid float64 precision loss
- * (safe for any decimal count, including > 18).
+ * Delegates to the shared `formatTokenAmount` in `simulation/format.ts`
+ * which provides thousands separators, trailing-zero stripping,
+ * and "<0.0001" for dust amounts.
  */
 export function formatTokenAmount(raw: string, decimals: number): string {
-  const value = BigInt(raw);
-  const divisor = BigInt(10) ** BigInt(decimals);
-  const whole = value / divisor;
-  const remainder = value % divisor;
-  const fractional = remainder.toString().padStart(decimals, "0").slice(0, 4);
-  return `${whole}.${fractional}`;
+  return formatTokenAmountShared(BigInt(raw), decimals, null);
 }
