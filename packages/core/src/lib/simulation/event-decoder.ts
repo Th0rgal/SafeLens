@@ -12,6 +12,7 @@
  */
 
 import type { SimulationLog, NativeTransfer } from "../types";
+import { formatTokenAmount } from "./format";
 
 // ── Event signatures (keccak256 hashes) ──────────────────────────────
 
@@ -152,29 +153,9 @@ function hexToDecimal(hex: string): string {
   return BigInt("0x" + clean).toString();
 }
 
-/** Format a raw token amount with decimals. */
+/** Format a raw token amount with decimals (delegates to shared formatter). */
 function formatAmount(raw: string, decimals: number, symbol: string | null): string {
-  const value = BigInt(raw);
-  if (value === 0n) return symbol ? `0 ${symbol}` : "0";
-
-  const divisor = BigInt(10) ** BigInt(decimals);
-  const whole = value / divisor;
-  const remainder = value % divisor;
-
-  // Use commas for thousands
-  const wholeStr = whole.toLocaleString("en-US");
-  const fractional = remainder.toString().padStart(decimals, "0").slice(0, 4).replace(/0+$/, "");
-
-  let numStr: string;
-  if (fractional.length > 0) {
-    numStr = `${wholeStr}.${fractional}`;
-  } else if (whole === 0n && remainder > 0n) {
-    // Non-zero amount too small for 4 decimal places (e.g. 1 wei of WETH)
-    numStr = "<0.0001";
-  } else {
-    numStr = wholeStr;
-  }
-  return symbol ? `${numStr} ${symbol}` : numStr;
+  return formatTokenAmount(BigInt(raw), decimals, symbol);
 }
 
 /** Look up token metadata. */

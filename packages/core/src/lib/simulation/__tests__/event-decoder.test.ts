@@ -15,6 +15,10 @@ const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const APPROVAL_TOPIC =
   "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";
+const TRANSFER_SINGLE_TOPIC =
+  "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62";
+const TRANSFER_BATCH_TOPIC =
+  "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb";
 const DEPOSIT_TOPIC =
   "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c";
 const WITHDRAWAL_TOPIC =
@@ -218,6 +222,113 @@ describe("decodeSimulationEvents", () => {
       expect(events[1].direction).toBe("receive");
       expect(events[1].tokenSymbol).toBe("USDC");
     });
+  });
+});
+
+// ── ERC-1155 ──────────────────────────────────────────────────────
+
+describe("ERC-1155 TransferSingle", () => {
+  const OPERATOR = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const NFT_CONTRACT = "0x0000000000000000000000000000000000000099";
+
+  it("decodes a TransferSingle (receive)", () => {
+    const tokenId = 7n;
+    const amount = 3n;
+    // data = abi.encode(uint256 id, uint256 value)
+    const data = "0x" + tokenId.toString(16).padStart(64, "0") + amount.toString(16).padStart(64, "0");
+    const logs: SimulationLog[] = [
+      {
+        address: NFT_CONTRACT,
+        topics: [
+          TRANSFER_SINGLE_TOPIC,
+          pad32(OPERATOR),
+          pad32("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+          pad32(SAFE),
+        ],
+        data,
+      },
+    ];
+
+    const events = decodeSimulationEvents(logs, SAFE);
+    expect(events).toHaveLength(1);
+    expect(events[0].kind).toBe("erc1155-transfer");
+    expect(events[0].tokenId).toBe("7");
+    expect(events[0].amountRaw).toBe("3");
+    expect(events[0].amountFormatted).toContain("3x");
+    expect(events[0].amountFormatted).toContain("#7");
+    expect(events[0].direction).toBe("receive");
+  });
+});
+
+describe("ERC-1155 TransferBatch", () => {
+  const OPERATOR = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+  const NFT_CONTRACT = "0x0000000000000000000000000000000000000099";
+
+  it("decodes a batch with 2 items", () => {
+    // ABI layout:
+    // word 0: offset to ids array (0x40 = 64 bytes)
+    // word 1: offset to vals array (0xa0 = 160 bytes)
+    // word 2: ids length (2)
+    // word 3: ids[0] = 10
+    // word 4: ids[1] = 20
+    // word 5: vals length (2)
+    // word 6: vals[0] = 5
+    // word 7: vals[1] = 1
+    const words = [
+      64n,  // offset to ids
+      160n, // offset to vals
+      2n,   // ids length
+      10n,  // ids[0]
+      20n,  // ids[1]
+      2n,   // vals length
+      5n,   // vals[0]
+      1n,   // vals[1]
+    ];
+    const data = "0x" + words.map((w) => w.toString(16).padStart(64, "0")).join("");
+    const logs: SimulationLog[] = [
+      {
+        address: NFT_CONTRACT,
+        topics: [
+          TRANSFER_BATCH_TOPIC,
+          pad32(OPERATOR),
+          pad32(SAFE),
+          pad32("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        ],
+        data,
+      },
+    ];
+
+    const events = decodeSimulationEvents(logs, SAFE);
+    expect(events).toHaveLength(2);
+
+    expect(events[0].kind).toBe("erc1155-transfer");
+    expect(events[0].tokenId).toBe("10");
+    expect(events[0].amountRaw).toBe("5");
+    expect(events[0].direction).toBe("send");
+
+    expect(events[1].kind).toBe("erc1155-transfer");
+    expect(events[1].tokenId).toBe("20");
+    expect(events[1].amountRaw).toBe("1");
+    expect(events[1].direction).toBe("send");
+  });
+
+  it("skips malformed batch data gracefully", () => {
+    // Too-short data (< 5 words = 320 hex chars)
+    const logs: SimulationLog[] = [
+      {
+        address: NFT_CONTRACT,
+        topics: [
+          TRANSFER_BATCH_TOPIC,
+          pad32(OPERATOR),
+          pad32(SAFE),
+          pad32("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        ],
+        data: "0x" + "00".repeat(64),
+      },
+    ];
+
+    const events = decodeSimulationEvents(logs, SAFE);
+    expect(events).toHaveLength(0);
   });
 });
 
