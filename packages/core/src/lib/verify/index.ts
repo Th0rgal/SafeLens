@@ -251,6 +251,29 @@ function evaluateConsensusTrustDecision(
   return { trusted: true, reason: null };
 }
 
+/**
+ * Derive the simulation verification reason from the evidence and
+ * verification results. Extracted from the former 7-level nested
+ * ternary in buildReportSources for clarity.
+ */
+function deriveSimulationVerificationReason(
+  options: BuildReportSourcesOptions
+): SimulationVerificationReason | undefined {
+  if (!options.evidence.simulation) return undefined;
+  if (!options.evidence.simulationWitness) return "missing-simulation-witness";
+  if (!options.simulationWitnessVerification?.valid) return "simulation-witness-proof-failed";
+  if (!options.simulationReplayVerification) return "simulation-replay-not-run";
+  if (options.simulationReplayVerification.success === false) {
+    // When replay failed, propagate the specific failure reason.
+    // TypeScript can't narrow the reason based on success === false, but
+    // "simulation-replay-matched" is the success-only reason and will never
+    // appear here at runtime. Cast through Exclude for type safety.
+    const { reason } = options.simulationReplayVerification;
+    return reason as Exclude<typeof reason, "simulation-replay-matched">;
+  }
+  return "simulation-replay-world-state-unproven";
+}
+
 function buildReportSources(
   options: BuildReportSourcesOptions
 ): ReturnType<typeof buildVerificationSources> {
@@ -263,21 +286,7 @@ function buildReportSources(
     options.evidence.simulation && options.evidence.simulationWitness
       ? "rpc-sourced"
       : options.evidence.simulation?.trust;
-  const simulationVerificationReason =
-    !options.evidence.simulation
-      ? undefined
-      : !options.evidence.simulationWitness
-        ? "missing-simulation-witness"
-        : !options.simulationWitnessVerification?.valid
-          ? "simulation-witness-proof-failed"
-          : options.simulationReplayVerification
-            ? options.simulationReplayVerification.success === false
-              ? options.simulationReplayVerification.reason ===
-                "simulation-replay-matched"
-                ? "simulation-replay-exec-error"
-                : options.simulationReplayVerification.reason
-              : "simulation-replay-world-state-unproven"
-            : "simulation-replay-not-run";
+  const simulationVerificationReason = deriveSimulationVerificationReason(options);
   const decodedSteps = options.evidence.dataDecoded
     ? normalizeCallSteps(
         options.evidence.dataDecoded,

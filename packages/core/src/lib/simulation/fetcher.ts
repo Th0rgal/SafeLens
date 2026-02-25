@@ -601,6 +601,44 @@ function buildStateOverrideObj(
   return obj;
 }
 
+/**
+ * Call `debug_traceCall` with the given tracer config and state overrides.
+ * Handles the `stateOverrides` (plural) → `stateOverride` (singular) retry
+ * that some Gnosis-style RPCs require.
+ */
+async function debugTraceCallWithOverrides(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  calldata: Hex,
+  blockNumber: bigint,
+  stateOverrideObj: Record<string, { stateDiff: Record<string, string> }>,
+  tracerConfig: Record<string, unknown>,
+): Promise<unknown> {
+  const paramsBase = [
+    { to: safeAddress, data: calldata },
+    `0x${blockNumber.toString(16)}`,
+  ] as const;
+  type DebugParams = [{ to: Address; data: Hex }, string, Record<string, unknown>];
+  try {
+    return await client.request({
+      method: "debug_traceCall" as "eth_call",
+      params: [
+        ...paramsBase,
+        { ...tracerConfig, stateOverrides: stateOverrideObj },
+      ] as unknown as DebugParams,
+    });
+  } catch {
+    // Fallback for clients that expect `stateOverride` (singular).
+    return await client.request({
+      method: "debug_traceCall" as "eth_call",
+      params: [
+        ...paramsBase,
+        { ...tracerConfig, stateOverride: stateOverrideObj },
+      ] as unknown as DebugParams,
+    });
+  }
+}
+
 // ── Optional: fetch logs + gasUsed via debug_traceCall ────────────
 
 interface TraceResult {
@@ -619,52 +657,10 @@ async function tryTraceCall(
 ): Promise<TraceResult> {
   try {
     const stateOverrideObj = buildStateOverrideObj(stateOverride);
-
-    const callTracerConfig = {
-      tracer: "callTracer",
-      tracerConfig: { withLog: true },
-    } as const;
-    const paramsBase = [
-      {
-        to: safeAddress,
-        data: calldata,
-      },
-      `0x${blockNumber.toString(16)}`,
-    ] as const;
-    let result: unknown;
-    try {
-      // Gnosis-style RPCs expect `stateOverrides` (plural) for callTracer.
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...callTracerConfig,
-            stateOverrides: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    } catch {
-      // Fallback for clients that expect `stateOverride` (singular).
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...callTracerConfig,
-            stateOverride: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    }
+    const result = await debugTraceCallWithOverrides(
+      client, safeAddress, calldata, blockNumber, stateOverrideObj,
+      { tracer: "callTracer", tracerConfig: { withLog: true } },
+    );
 
     // callTracer with withLog:true nests logs inside call frames.
     // Each frame has an optional `logs` array and an optional `calls`
@@ -772,54 +768,10 @@ async function tryRunPrestateTrace(
 ): Promise<PrestateTraceRawResult | undefined> {
   try {
     const stateOverrideObj = buildStateOverrideObj(stateOverride);
-
-    const prestateConfig = {
-      tracer: "prestateTracer",
-      tracerConfig: { diffMode: true },
-    } as const;
-    const paramsBase = [
-      {
-        to: safeAddress,
-        data: calldata,
-      },
-      `0x${blockNumber.toString(16)}`,
-    ] as const;
-
-    let result: unknown;
-    try {
-      // Gnosis-style RPCs expect `stateOverrides` (plural) — try that first,
-      // matching the retry order in tryTraceCall.
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...prestateConfig,
-            stateOverrides: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    } catch {
-      // Fallback for clients that expect `stateOverride` (singular).
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...prestateConfig,
-            stateOverride: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    }
+    const result = await debugTraceCallWithOverrides(
+      client, safeAddress, calldata, blockNumber, stateOverrideObj,
+      { tracer: "prestateTracer", tracerConfig: { diffMode: true } },
+    );
 
     if (!result || typeof result !== "object") {
       return undefined;
