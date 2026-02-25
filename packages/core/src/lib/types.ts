@@ -47,11 +47,11 @@ export const safeTransactionSchema = z.object({
   baseGas: z.coerce.string().pipe(evmQuantitySchema),
   gasPrice: z.coerce.string().pipe(evmQuantitySchema),
   refundReceiver: addressSchema,
-  nonce: z.number(),
+  nonce: z.number().int(),
   executionDate: z.string().nullable(),
   submissionDate: z.string(),
   modified: z.string(),
-  blockNumber: z.number().nullable(),
+  blockNumber: z.number().int().nullable(),
   transactionHash: hashSchema.nullable(),
   safeTxHash: hashSchema,
   executor: addressSchema.nullable(),
@@ -60,11 +60,11 @@ export const safeTransactionSchema = z.object({
   ethGasPrice: z.string().nullable(),
   maxFeePerGas: z.string().nullable(),
   maxPriorityFeePerGas: z.string().nullable(),
-  gasUsed: z.number().nullable(),
+  gasUsed: z.number().int().nullable(),
   fee: z.string().nullable(),
   origin: z.string().nullable(),
   dataDecoded: z.any().nullable(),
-  confirmationsRequired: z.number(),
+  confirmationsRequired: z.number().int(),
   confirmations: z.array(
     z.object({
       owner: addressSchema,
@@ -114,7 +114,7 @@ export const accountProofSchema = z.object({
   address: addressSchema,
   balance: evmQuantitySchema,
   codeHash: hashSchema,
-  nonce: z.number(),
+  nonce: z.number().int(),
   storageHash: hashSchema,
   accountProof: z.array(hexDataSchema),
   storageProof: z.array(storageProofEntrySchema),
@@ -124,13 +124,13 @@ export type AccountProof = z.infer<typeof accountProofSchema>;
 
 // On-chain policy proof section (Phase 2 will populate these)
 export const onchainPolicyProofSchema = z.object({
-  blockNumber: z.number(),
+  blockNumber: z.number().int(),
   stateRoot: hashSchema,
   accountProof: accountProofSchema,
   decodedPolicy: z.object({
     owners: z.array(addressSchema),
-    threshold: z.number(),
-    nonce: z.number(),
+    threshold: z.number().int(),
+    nonce: z.number().int(),
     modules: z.array(addressSchema),
     guard: addressSchema,
     fallbackHandler: addressSchema,
@@ -176,7 +176,7 @@ const consensusProofBaseSchema = z.object({
   /** The EVM execution state root extracted from a finalized or verified execution payload. */
   stateRoot: hashSchema,
   /** Block number for the execution payload associated with `stateRoot`. */
-  blockNumber: z.number(),
+  blockNumber: z.number().int(),
 });
 
 // Beacon consensus proof section (Phase 4: Helios light client verification).
@@ -225,7 +225,7 @@ export const simulationSchema = z.object({
   logs: z.array(simulationLogSchema),
   nativeTransfers: z.array(nativeTransferSchema).optional(),
   stateDiffs: z.array(stateDiffEntrySchema).optional(),
-  blockNumber: z.number(),
+  blockNumber: z.number().int(),
   /** RFC3339 timestamp for the block used during simulation, when available. */
   blockTimestamp: z.string().datetime({ offset: true }).optional(),
   /** Whether debug_traceCall was available on the RPC. When false, logs and
@@ -257,9 +257,9 @@ export type SimulationReplayBlock = z.infer<typeof simulationReplayBlockSchema>;
 // This does not include a full execution proof; it anchors simulation context
 // to a proven state root and binds the simulation payload with a digest.
 export const simulationWitnessSchema = z.object({
-  chainId: z.number(),
+  chainId: z.number().int(),
   safeAddress: addressSchema,
-  blockNumber: z.number(),
+  blockNumber: z.number().int(),
   stateRoot: hashSchema,
   safeAccountProof: accountProofSchema,
   overriddenSlots: z.array(
@@ -396,13 +396,13 @@ export const evidencePackageSchema = z.object({
   version: z.union([z.literal("1.0"), z.literal("1.1"), z.literal("1.2")]),
   safeAddress: addressSchema,
   safeTxHash: hashSchema,
-  chainId: z.number(),
+  chainId: z.number().int(),
   transaction: z.object({
     to: addressSchema,
     value: evmQuantitySchema,
     data: hexDataSchema.nullable(),
     operation: z.union([z.literal(0), z.literal(1)]),
-    nonce: z.number(),
+    nonce: z.number().int(),
     safeTxGas: evmQuantitySchema,
     baseGas: evmQuantitySchema,
     gasPrice: evmQuantitySchema,
@@ -416,7 +416,7 @@ export const evidencePackageSchema = z.object({
       submissionDate: z.string(),
     })
   ),
-  confirmationsRequired: z.number(),
+  confirmationsRequired: z.number().int(),
   ethereumTxHash: hashSchema.nullable().optional(),
   dataDecoded: z.any().nullable().optional(),
   onchainPolicyProof: onchainPolicyProofSchema.optional(),
@@ -453,7 +453,7 @@ export type SafeUrlParseResult =
 
 // Paginated response from Safe Transaction Service
 export const safeTransactionListSchema = z.object({
-  count: z.number(),
+  count: z.number().int(),
   next: z.string().nullable(),
   previous: z.string().nullable(),
   results: z.array(safeTransactionSchema),

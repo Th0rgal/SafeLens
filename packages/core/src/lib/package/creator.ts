@@ -181,7 +181,7 @@ export async function enrichWithSimulation(
           ? error
           : "(unknown error)";
     witnessGenerationError = rawMessage.replace(
-      /https?:\/\/[^\s"',)}\]]+/gi,
+      /(?:https?|wss?):\/\/[^\s"',)}\]]+/gi,
       (url) => {
         try {
           const parsed = new URL(url);
