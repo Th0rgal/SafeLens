@@ -2,7 +2,7 @@ import { z } from "zod";
 import { SafeTransaction, SafeTransactionList, safeTransactionSchema, safeTransactionListSchema } from "../types";
 import { getSafeApiUrl } from "./url-parser";
 
-// Minimal schema for the Safe info endpoint — only the fields we need.
+// Minimal schema for the Safe info endpoint -- only the fields we need.
 // Validates nonce at the trust boundary to prevent a malicious API from
 // injecting arbitrary values that would affect pending-transaction filtering.
 const safeInfoNonceSchema = z.object({

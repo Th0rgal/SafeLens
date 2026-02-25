@@ -292,7 +292,7 @@ async function fetchBeaconProofAttempt(
     config.slotsPerEpoch,
   );
 
-  // Compute sync periods — bootstrap was already validated by fetchBootstrapWithFallback
+  // Compute sync periods (bootstrap was already validated by fetchBootstrapWithFallback)
   const parsedBootstrap = BootstrapSchema.parse(bootstrap);
   const bootstrapPeriod = Math.floor(
     Number(parsedBootstrap.data.header.beacon.slot) / slotsPerPeriod

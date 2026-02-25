@@ -94,7 +94,7 @@ const CONSENSUS_ERROR_DETAILS: Record<ConsensusFailureDetailCode, string> = {
   "invalid-expected-state-root":
     "Expected state root format is invalid.",
   "missing-policy-state-root":
-    "Consensus proof is present but cannot be cross-verified — no on-chain policy proof was included. Regenerate with an RPC URL for full verification.",
+    "Consensus proof is present but cannot be cross-verified. No on-chain policy proof was included. Regenerate with an RPC URL for full verification.",
 };
 
 function isConsensusFailureDetailCode(

@@ -193,7 +193,7 @@ const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
   finalityUpdate: z.string(),
   /** Beacon network identifier for selecting the correct fork config and genesis root. */
   network: z.enum(CONSENSUS_NETWORKS),
-  /** Beacon slot of the finalized header in the finality update. Informational metadata only — not consumed by the desktop verifier. */
+  /** Beacon slot of the finalized header in the finality update. Informational metadata only, not consumed by the desktop verifier. */
   finalizedSlot: z.number().int().optional(),
 });
 

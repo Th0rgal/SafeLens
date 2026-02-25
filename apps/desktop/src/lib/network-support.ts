@@ -107,7 +107,7 @@ export function buildNetworkSupportStatus(
     );
   }
 
-  // Policy proof is required for full verification — without it, the
+  // Policy proof is required for full verification -- without it, the
   // desktop verifier cannot confirm the on-chain Safe state independently.
   if (!hasOnchainPolicyProof) {
     return partial(

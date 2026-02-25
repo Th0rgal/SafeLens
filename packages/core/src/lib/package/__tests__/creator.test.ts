@@ -206,7 +206,7 @@ describe("finalizeEvidenceExport", () => {
     expect(finalized.exportContract?.status).toBe("complete");
   });
 
-  it("marks export partial when simulation witness replay inputs are missing", () => {
+  it("marks full simulation as fully-verifiable even without witness replay inputs", () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const evidence = {
       ...base,
@@ -272,12 +272,105 @@ describe("finalizeEvidenceExport", () => {
       simulationFailed: false,
     });
 
+    expect(finalized.exportContract?.mode).toBe("fully-verifiable");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(true);
+    expect(finalized.exportContract?.reasons).not.toContain("missing-simulation-witness");
+  });
+
+  it("marks witness-only package as partial when witness replay inputs are missing", () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidence = {
+      ...base,
+      transaction: {
+        ...base.transaction,
+        operation: 0 as const,
+      },
+      onchainPolicyProof: {
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        accountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        decodedPolicy: {
+          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+          threshold: 1,
+          nonce: 0,
+          modules: [],
+          guard: "0x0000000000000000000000000000000000000000",
+          fallbackHandler: "0x0000000000000000000000000000000000000000",
+          singleton: "0x0000000000000000000000000000000000000000",
+        },
+        trust: "rpc-sourced" as const,
+      },
+      consensusProof: {
+        checkpoint:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "mainnet" as const,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        blockNumber: 1,
+        finalizedSlot: 1,
+      },
+      simulation: {
+        success: true,
+        returnData: "0x",
+        gasUsed: "1",
+        logs: [],
+        blockNumber: 1,
+        trust: "rpc-sourced" as const,
+      },
+      simulationWitness: {
+        witnessOnly: true,
+        chainId: CHAIN_ID,
+        safeAddress: COWSWAP_TWAP_TX.safe,
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        safeAccountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        overriddenSlots: [],
+        simulationDigest:
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      },
+    };
+
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: true,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: true,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
     expect(finalized.exportContract?.mode).toBe("partial");
     expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
     expect(finalized.exportContract?.reasons).toContain("missing-simulation-witness");
   });
 
-  it("marks export partial when simulation witness replay block context is missing", () => {
+  it("marks full simulation as fully-verifiable even when replay block context is missing", () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const evidence = {
       ...base,
@@ -373,12 +466,12 @@ describe("finalizeEvidenceExport", () => {
       simulationFailed: false,
     });
 
-    expect(finalized.exportContract?.mode).toBe("partial");
-    expect(finalized.exportContract?.isFullyVerifiable).toBe(false);
-    expect(finalized.exportContract?.reasons).toContain("missing-simulation-witness");
+    expect(finalized.exportContract?.mode).toBe("fully-verifiable");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(true);
+    expect(finalized.exportContract?.reasons).not.toContain("missing-simulation-witness");
   });
 
-  it("marks export partial for DELEGATECALL even with replay witness inputs", () => {
+  it("marks full DELEGATECALL simulation as fully-verifiable (replay not needed)", () => {
     const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
     const evidence = {
       ...base,
@@ -433,6 +526,116 @@ describe("finalizeEvidenceExport", () => {
         trust: "rpc-sourced" as const,
       },
       simulationWitness: {
+        chainId: CHAIN_ID,
+        safeAddress: COWSWAP_TWAP_TX.safe,
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        safeAccountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        overriddenSlots: [],
+        simulationDigest:
+          "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        replayBlock: {
+          timestamp: "1700000000",
+          gasLimit: "30000000",
+          baseFeePerGas: "1",
+          beneficiary: "0x0000000000000000000000000000000000000000",
+        },
+        replayAccounts: [
+          {
+            address: COWSWAP_TWAP_TX.safe,
+            balance: "0x0",
+            nonce: 0,
+            code: "0x",
+            storage: {},
+          },
+        ],
+      },
+    };
+
+    const finalized = finalizeEvidenceExport(evidence, {
+      rpcProvided: true,
+      consensusProofAttempted: true,
+      consensusProofFailed: false,
+      onchainPolicyProofAttempted: true,
+      onchainPolicyProofFailed: false,
+      simulationAttempted: true,
+      simulationFailed: false,
+    });
+
+    expect(finalized.exportContract?.mode).toBe("fully-verifiable");
+    expect(finalized.exportContract?.isFullyVerifiable).toBe(true);
+    expect(finalized.exportContract?.reasons).not.toContain(
+      "simulation-replay-unsupported-operation"
+    );
+  });
+
+  it("marks witness-only DELEGATECALL package as partial", () => {
+    const base = createEvidencePackage(COWSWAP_TWAP_TX, CHAIN_ID, TX_URL);
+    const evidence = {
+      ...base,
+      transaction: {
+        ...base.transaction,
+        operation: 1 as const,
+      },
+      onchainPolicyProof: {
+        blockNumber: 1,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        accountProof: {
+          address: COWSWAP_TWAP_TX.safe,
+          balance: "0",
+          codeHash:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          nonce: 0,
+          storageHash:
+            "0x2222222222222222222222222222222222222222222222222222222222222222",
+          accountProof: [],
+          storageProof: [],
+        },
+        decodedPolicy: {
+          owners: [COWSWAP_TWAP_TX.confirmations[0].owner],
+          threshold: 1,
+          nonce: 0,
+          modules: [],
+          guard: "0x0000000000000000000000000000000000000000",
+          fallbackHandler: "0x0000000000000000000000000000000000000000",
+          singleton: "0x0000000000000000000000000000000000000000",
+        },
+        trust: "rpc-sourced" as const,
+      },
+      consensusProof: {
+        checkpoint:
+          "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        bootstrap: "{}",
+        updates: [],
+        finalityUpdate: "{}",
+        network: "mainnet" as const,
+        stateRoot:
+          "0xaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccddaabbccdd",
+        blockNumber: 1,
+        finalizedSlot: 1,
+      },
+      simulation: {
+        success: true,
+        returnData: "0x",
+        gasUsed: "1",
+        logs: [],
+        blockNumber: 1,
+        trust: "rpc-sourced" as const,
+      },
+      simulationWitness: {
+        witnessOnly: true,
         chainId: CHAIN_ID,
         safeAddress: COWSWAP_TWAP_TX.safe,
         blockNumber: 1,
@@ -558,7 +761,7 @@ describe("finalizeEvidenceExport", () => {
       network: "linea" as const,
     },
   ])(
-    "marks export partial when $consensusMode consensus artifact exists — only beacon is verifier-supported",
+    "marks export partial when $consensusMode consensus artifact exists (only beacon is verifier-supported)",
     ({ chainId, consensusMode, network }) => {
       const base = createEvidencePackage(COWSWAP_TWAP_TX, chainId, TX_URL);
       const evidence = {

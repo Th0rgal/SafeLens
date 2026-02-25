@@ -8,7 +8,7 @@
  * slot keys across known ERC-20 layouts and check if any match the
  * observed state diffs. When a match is found, the before/after values
  * from the state diff provide **proven** post-state balances/allowances
- * — not just event heuristics.
+ * rather than just event heuristics.
  *
  * This is the foundation for issue #105: replacing event-only approval
  * heuristics with proven post-state values.
@@ -49,7 +49,7 @@ const ERC20_LAYOUTS: ERC20StorageLayout[] = [
   { name: "vyper", balanceSlot: 1n, allowanceSlot: 2n },
   // DAI and MakerDAO tokens
   { name: "dai", balanceSlot: 2n, allowanceSlot: 3n },
-  // WETH (balance at slot 3, no standard allowance — but try 4)
+  // WETH (balance at slot 3, no standard allowance -- but try 4)
   { name: "weth", balanceSlot: 3n, allowanceSlot: 4n },
   // USDC / bridged tokens behind proxies (slot 9/10)
   { name: "usdc-proxy", balanceSlot: 9n, allowanceSlot: 10n },

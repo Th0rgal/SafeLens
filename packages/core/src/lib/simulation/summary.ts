@@ -108,7 +108,7 @@ export type RemainingApproval = {
  * When `stateDiffs` are provided, the function attempts to correlate
  * Approval events with proven storage-level data. For (token, spender)
  * pairs where a state diff match is found, the proven post-state value
- * replaces the event-based heuristic — correctly handling cases where
+ * replaces the event-based heuristic, correctly handling cases where
  * allowances are consumed via `transferFrom` without a new `Approval` event.
  */
 export function computeRemainingApprovals(
@@ -126,7 +126,7 @@ function buildRemainingApprovals(
 ): RemainingApproval[] {
   const provenByPair = new Map<string, ProvenAllowance>();
   for (const proven of decoded.allowances) {
-    // Keep only the first match per (token, owner, spender) — layouts are
+    // Keep only the first match per (token, owner, spender) -- layouts are
     // tried in priority order so the first match is the best one
     const key = `${proven.token}:${proven.owner}:${proven.spender}`;
     if (!provenByPair.has(key)) {
@@ -270,7 +270,7 @@ export type StateDiffSummary = {
  * Summarize storage-level state diffs, correlating with decoded events.
  *
  * Contracts that modified storage without emitting any decoded events are
- * flagged as "silent" — a signal that the transaction has effects not
+ * flagged as "silent", a signal that the transaction has effects not
  * visible from event logs alone (e.g. allowance changes via transferFrom,
  * or direct storage writes via delegatecall).
  *

@@ -106,14 +106,7 @@ function EvidenceDisplay({
 }) {
   const [showDetails, setShowDetails] = useState(false);
   const isFullyVerifiable = evidence.exportContract?.mode === "fully-verifiable";
-  const displayExportReasons =
-    evidence.exportContract?.reasons.filter((reason) => {
-      if (reason !== "missing-simulation-witness") return true;
-      // Only surface this when the package is explicitly witness-only.
-      // Otherwise simulation effects are still included and desktop can
-      // validate execution without requiring replay-derived effects.
-      return evidence.simulationWitness?.witnessOnly === true;
-    }) ?? [];
+  const displayExportReasons = evidence.exportContract?.reasons ?? [];
 
   // Decode simulation events (memoized to avoid recomputation on re-render)
   const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
@@ -161,10 +154,10 @@ function EvidenceDisplay({
           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             {displayExportReasons.length > 0 ? (
               displayExportReasons.map((reason) => (
-                <div key={reason}>· {getExportContractReasonLabel(reason)}</div>
+                <div key={reason}>{getExportContractReasonLabel(reason)}</div>
               ))
             ) : (
-              <div>· This package has partial verification coverage for this environment.</div>
+              <div>This package has partial verification coverage for this environment.</div>
             )}
           </div>
         )}
@@ -270,7 +263,7 @@ function EvidenceDisplay({
                 </div>
                 {stateDiffSummary.silentContracts > 0 && (
                   <div className="mt-1 text-[11px] text-amber-400">
-                    {stateDiffSummary.silentContracts} contract{stateDiffSummary.silentContracts !== 1 ? "s" : ""} modified storage without emitting events — review state diffs for hidden effects.
+                    {stateDiffSummary.silentContracts} contract{stateDiffSummary.silentContracts !== 1 ? "s" : ""} modified storage without emitting events. Review state diffs for hidden effects.
                   </div>
                 )}
                 <div className="mt-1.5 space-y-1">
@@ -351,7 +344,7 @@ function EvidenceDisplay({
                   </div>
                   {hasModules && (
                     <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
-                      <span className="font-medium text-amber-200">Modules — can bypass signatures</span>
+                      <span className="font-medium text-amber-200">Modules - can bypass signatures</span>
                       <div className="mt-1 space-y-0.5">
                         {policy.modules.map((mod) => (
                           <div key={mod}>

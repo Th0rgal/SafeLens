@@ -1441,6 +1441,103 @@ mod tests {
     }
 
     #[test]
+    fn proxy_delegatecall_fails_without_slot0_and_singleton() {
+        // Actual GnosisSafeProxy bytecode: reads slot 0 for singleton, then
+        // DELEGATECALLs. Without slot 0, it delegates to address(0) → 0x return.
+        let proxy_code = "0x608060405273ffffffffffffffffffffffffffffffffffffffff600054167fa619486e0000000000000000000000000000000000000000000000000000000060003514156050578060005260206000f35b3660008037600080366000845af43d6000803e60008114156070573d6000fd5b3d6000f3fe";
+        // Minimal singleton: returns abi.encode(true) for any call
+        let singleton_code = "0x600160005260206000f3";
+
+        let caller = "0x1000000000000000000000000000000000000001";
+        let proxy_addr = "0x2000000000000000000000000000000000000002";
+        let singleton_addr = "0x3000000000000000000000000000000000000003";
+        let expected_return = "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+        // Without slot 0 → proxy delegates to address(0) → empty return → mismatch
+        let result_without = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: proxy_addr.to_string(),
+                value: "0".to_string(),
+                data: Some("0xdeadbeef".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some(expected_return.to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    target_account(proxy_addr, proxy_code),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+        assert!(result_without.executed);
+        assert!(!result_without.success);
+        assert_eq!(result_without.reason, REASON_REPLAY_MISMATCH_RETURN_DATA);
+
+        // With slot 0 + singleton → correct delegatecall → match
+        let mut proxy_storage = BTreeMap::new();
+        proxy_storage.insert(
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
+            format!(
+                "0x000000000000000000000000{}",
+                &singleton_addr[2..]
+            ),
+        );
+
+        let result_with = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: proxy_addr.to_string(),
+                value: "0".to_string(),
+                data: Some("0xdeadbeef".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some(expected_return.to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    ReplayWitnessAccount {
+                        address: proxy_addr.to_string(),
+                        balance: "0".to_string(),
+                        nonce: 0,
+                        code: proxy_code.to_string(),
+                        storage: proxy_storage,
+                    },
+                    target_account(singleton_addr, singleton_code),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                witness_only: Some(true),
+            },
+        });
+        assert!(result_with.executed);
+        assert!(result_with.success, "{result_with:?}");
+        assert_eq!(result_with.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
     fn e2e_replay_from_payload_file_when_configured() {
         let Ok(path) = env::var("SAFELENS_E2E_REPLAY_INPUT") else {
             return;
