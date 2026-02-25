@@ -736,8 +736,11 @@ async function tryTraceCall(
     // Extract gasUsed from the top-level call frame (hex string like "0x24fc1")
     let gasUsed: string | null = null;
     if (frame.gasUsed && typeof frame.gasUsed === "string") {
-      gasUsed = parseInt(frame.gasUsed, 16).toString();
-      if (isNaN(Number(gasUsed))) gasUsed = null;
+      try {
+        gasUsed = BigInt(frame.gasUsed).toString();
+      } catch {
+        gasUsed = null;
+      }
     }
 
     return { logs, nativeTransfers, gasUsed, available: true };
