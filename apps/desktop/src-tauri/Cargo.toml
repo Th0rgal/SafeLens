@@ -15,6 +15,11 @@ tauri-plugin-dialog = "2"
 window-vibrancy = "0.6"
 
 # Helios consensus verification (Phase 4)
+# Pinned to rev 582fda3 (2026-02-18) because it includes a16z/helios#776
+# (hex-encoded blockNumber/chainId in beacon API responses), which is not yet
+# in a tagged release (latest: 0.11.0, 2025-12-16). Migrate to a version/tag
+# pin once Helios publishes a release that includes this commit.
+# See DEPENDENCIES.md for full rationale.
 helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda319ed1ecb5fb82c71f4fa755a32e01031a", package = "helios-consensus-core" }
 alloy = { version = "1.0.3", default-features = false, features = ["consensus", "ssz"] }
 tree_hash = "0.12.1"
@@ -25,6 +30,13 @@ time = { version = "0.3", features = ["parsing"] }
 revm = { version = "34", default-features = false, features = ["std"] }
 
 [patch.crates-io]
+# Fork by ncitron (top Helios contributor) removes the `ring` C dependency and
+# uses the pure-Rust `sha2` crate unconditionally. Required because Helios
+# pulls in ethereum_hashing, and `ring` causes cross-compilation issues.
+# Upstream sigp/ethereum_hashing has an unreleased `sha2` feature flag; once
+# that ships in a tagged release, replace this patch with:
+#   ethereum_hashing = { version = ">=0.9", default-features = false, features = ["sha2"] }
+# See DEPENDENCIES.md for full rationale.
 ethereum_hashing = { git = "https://github.com/ncitron/ethereum_hashing", rev = "7ee70944ed4fabe301551da8c447e4f4ae5e6c35" }
 
 [features]
