@@ -70,7 +70,7 @@ const WELL_KNOWN_TOKENS: Record<string, TokenMeta> = {
   "100:0x4ecaba5870353805a9f068101a40e0f32ed605c6": { symbol: "USDT", decimals: 6 },
   "100:0x177127622c4a00f3d409b75571e12cb3c8973d3c": { symbol: "COW", decimals: 18 },
   // Polygon
-  "137:0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270": { symbol: "WMATIC", decimals: 18 },
+  "137:0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270": { symbol: "WPOL", decimals: 18 },
   "137:0x7ceb23fd6bc0add59e62ac25578270cff1b9f619": { symbol: "WETH", decimals: 18 },
   "137:0x3c499c542cef5e3811e1192ce70d8cc03d5c3359": { symbol: "USDC", decimals: 6 },
   "137:0xc2132d05d31c914a87c6611c10748aeb04b58e8f": { symbol: "USDT", decimals: 6 },
