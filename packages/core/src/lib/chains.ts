@@ -9,11 +9,14 @@ import type { Chain } from "viem";
 import {
   mainnet,
   sepolia,
+  holesky,
+  hoodi,
   polygon,
   arbitrum,
   optimism,
   gnosis,
   base,
+  linea,
 } from "viem/chains";
 import {
   NETWORK_CAPABILITIES_BY_CHAIN_ID,
@@ -23,11 +26,14 @@ import {
 export const CHAIN_BY_ID: Record<number, Chain> = {
   1: mainnet,
   11155111: sepolia,
+  17000: holesky,
+  560048: hoodi,
   137: polygon,
   42161: arbitrum,
   10: optimism,
   100: gnosis,
   8453: base,
+  59144: linea,
 };
 
 /** Default public RPC endpoints per chain (rate-limited, best-effort). */
