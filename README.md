@@ -29,6 +29,12 @@ SafeLens generates and verifies evidence packages for Gnosis Safe multisig trans
 
 The desktop verifier ships with a CSP that restricts `connect-src` to Tauri IPC only (`ipc: http://ipc.localhost`) — no external network origins — and no shell-open capability. It cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
 
+## Project docs
+
+- Security policy: [`SECURITY.md`](SECURITY.md)
+- Contributing guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- Build verification: [`VERIFY.md`](VERIFY.md)
+
 ## Architecture and runbooks
 
 - Docs index: [`docs/README.md`](docs/README.md)
