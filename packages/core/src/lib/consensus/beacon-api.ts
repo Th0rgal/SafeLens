@@ -7,6 +7,7 @@
  * Beacon API spec: https://ethereum.github.io/beacon-APIs/
  */
 
+import { z } from "zod";
 import type { ConsensusProof } from "../types";
 import {
   CONSENSUS_NETWORKS,
@@ -15,6 +16,40 @@ import {
   NETWORK_CAPABILITIES_BY_CHAIN_ID,
   type BeaconNetworkCapability,
 } from "../networks/capabilities";
+
+// ── Zod schemas for beacon API responses ──────────────────────────
+// Validates critical fields consumed during evidence generation.
+// The Rust Helios verifier also validates during offline verification,
+// but these schemas catch malformed data early with clear error messages.
+
+const BeaconSlotSchema = z.union([z.number(), z.string()]);
+
+const FinalityUpdateSchema = z.object({
+  data: z.object({
+    finalized_header: z.object({
+      beacon: z.object({ slot: BeaconSlotSchema }),
+      execution: z.object({
+        state_root: z.string(),
+        block_number: z.union([z.number(), z.string()]),
+      }).optional(),
+    }),
+    attested_header: z.object({
+      beacon: z.object({ slot: BeaconSlotSchema }),
+    }),
+  }),
+});
+
+const HeaderResponseSchema = z.object({
+  data: z.object({ root: z.string() }),
+});
+
+const BootstrapSchema = z.object({
+  data: z.object({
+    header: z.object({
+      beacon: z.object({ slot: BeaconSlotSchema }),
+    }),
+  }),
+});
 
 function isBeaconNetworkCapability(
   network: (typeof NETWORK_CAPABILITIES_BY_CHAIN_ID)[number]
@@ -183,13 +218,14 @@ export async function fetchConsensusProof(
     try {
       const updatesResponse = await fetchBeaconJson(
         `${baseUrl}/eth/v1/beacon/light_client/updates?start_period=${result.bootstrapPeriod}&count=${Math.min(count, 128)}`
-      );
+      ) as unknown;
+      // Light client updates may be returned as an array or wrapped in { data: [...] }.
       const updatesArray = Array.isArray(updatesResponse)
         ? updatesResponse
-        : updatesResponse.data ?? updatesResponse;
+        : (updatesResponse as Record<string, unknown>).data ?? updatesResponse;
 
       const updates: string[] = [];
-      for (const update of updatesArray) {
+      for (const update of updatesArray as Array<Record<string, unknown>>) {
         const updateData = update.data ?? update;
         updates.push(JSON.stringify(updateData));
       }
@@ -227,10 +263,11 @@ async function fetchBeaconProofAttempt(
   config: BeaconNetworkConfig,
   slotsPerPeriod: number,
 ): Promise<BeaconProofAttemptResult> {
-  // Step 1: Fetch the latest finality update
-  const finalityUpdate = await fetchBeaconJson(
+  // Step 1: Fetch and validate the latest finality update
+  const rawFinalityUpdate = await fetchBeaconJson(
     `${baseUrl}/eth/v1/beacon/light_client/finality_update`
   );
+  const finalityUpdate = FinalityUpdateSchema.parse(rawFinalityUpdate);
 
   const finalizedSlot =
     finalityUpdate.data.finalized_header.beacon.slot;
@@ -255,12 +292,12 @@ async function fetchBeaconProofAttempt(
     config.slotsPerEpoch,
   );
 
-  // Compute sync periods
+  // Compute sync periods — bootstrap was already validated by fetchBootstrapWithFallback
+  const parsedBootstrap = BootstrapSchema.parse(bootstrap);
   const bootstrapPeriod = Math.floor(
-    Number((bootstrap as { data: { header: { beacon: { slot: number } } } }).data.header.beacon.slot) / slotsPerPeriod
+    Number(parsedBootstrap.data.header.beacon.slot) / slotsPerPeriod
   );
-  const attestedSlot =
-    (finalityUpdate as { data: { attested_header: { beacon: { slot: number } } } }).data.attested_header.beacon.slot;
+  const attestedSlot = finalityUpdate.data.attested_header.beacon.slot;
   const attestedPeriod = Math.floor(Number(attestedSlot) / slotsPerPeriod);
 
   return {
@@ -344,12 +381,21 @@ async function fetchHeaderRoot(
   const response = await fetchBeaconJson(
     `${baseUrl}/eth/v1/beacon/headers/${slot}`
   );
-  return response.data.root as string;
+  const parsed = HeaderResponseSchema.parse(response);
+  return parsed.data.root;
 }
 
 /** Check whether an error is an HTTP 404 from the beacon API. */
 function isHttpNotFound(err: unknown): boolean {
   return err instanceof Error && err.message.includes("404");
+}
+
+/** Extract the `.data` envelope from a beacon API response (already Zod-validated). */
+function extractBeaconData(response: unknown): unknown {
+  if (response && typeof response === "object" && "data" in response) {
+    return (response as Record<string, unknown>).data;
+  }
+  return response;
 }
 
 /** Assemble a ConsensusProof from the fetched beacon data. */
@@ -361,9 +407,9 @@ function buildConsensusProof(
   return {
     consensusMode: "beacon",
     checkpoint: result.checkpoint as `0x${string}`,
-    bootstrap: JSON.stringify((result.bootstrap as { data: unknown }).data),
+    bootstrap: JSON.stringify(extractBeaconData(result.bootstrap)),
     updates,
-    finalityUpdate: JSON.stringify((result.finalityUpdate as { data: unknown }).data),
+    finalityUpdate: JSON.stringify(extractBeaconData(result.finalityUpdate)),
     network: config.network,
     stateRoot: result.finalizedStateRoot as `0x${string}`,
     blockNumber: result.finalizedBlockNumber,
@@ -372,10 +418,9 @@ function buildConsensusProof(
 }
 
 /** Fetch JSON from a beacon chain API endpoint with error handling.
- * Note: Beacon API responses are not Zod-validated — malformed data causes runtime
- * errors during generation, not verification. The Rust Helios path handles SSZ
- * validation during offline verification. */
-async function fetchBeaconJson(url: string): Promise<any> {
+ * Structural validation is handled by Zod schemas at call sites.
+ * The Rust Helios verifier also validates SSZ during offline verification. */
+async function fetchBeaconJson(url: string): Promise<unknown> {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
   });
