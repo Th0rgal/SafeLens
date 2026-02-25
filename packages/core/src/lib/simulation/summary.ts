@@ -1,5 +1,6 @@
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../types";
 import { decodeSimulationEvents, decodeNativeTransfers, type DecodedEvent } from "./event-decoder";
+import { decodeERC20StateDiffs, type ProvenAllowance } from "./slot-decoder";
 
 export type SimulationTransferPreview = {
   direction: "send" | "receive" | "internal";
@@ -92,6 +93,8 @@ export type RemainingApproval = {
   spender: string;
   amountFormatted: string;
   isUnlimited: boolean;
+  /** "event" when based on Approval events only, "state-diff" when proven from storage. */
+  source: "event" | "state-diff";
 };
 
 /**
@@ -100,10 +103,30 @@ export type RemainingApproval = {
  * For each (token, spender) pair, only the last Approval event matters
  * (it overwrites any previous allowance). If the final amount is zero,
  * the approval was revoked during execution and is excluded.
+ *
+ * When `stateDiffs` are provided, the function attempts to correlate
+ * Approval events with proven storage-level data. For (token, spender)
+ * pairs where a state diff match is found, the proven post-state value
+ * replaces the event-based heuristic — correctly handling cases where
+ * allowances are consumed via `transferFrom` without a new `Approval` event.
  */
 export function computeRemainingApprovals(
   events: DecodedEvent[],
+  stateDiffs?: StateDiffEntry[],
 ): RemainingApproval[] {
+  // Try to decode proven allowances from state diffs
+  const provenResult = decodeERC20StateDiffs(stateDiffs, events);
+  const provenByPair = new Map<string, ProvenAllowance>();
+  for (const proven of provenResult.allowances) {
+    // Keep only the first match per (token, owner, spender) — layouts are
+    // tried in priority order so the first match is the best one
+    const key = `${proven.token}:${proven.owner}:${proven.spender}`;
+    if (!provenByPair.has(key)) {
+      provenByPair.set(key, proven);
+    }
+  }
+
+  // Build event-based approvals as before
   const lastByPair = new Map<string, DecodedEvent>();
   for (const event of events) {
     if (event.kind === "approval") {
@@ -111,15 +134,48 @@ export function computeRemainingApprovals(
     }
   }
 
-  return Array.from(lastByPair.values())
-    .filter((event) => event.amountRaw !== "0")
-    .map((event) => ({
+  const results: RemainingApproval[] = [];
+  const seen = new Set<string>();
+
+  // First pass: emit proven approvals (state-diff source)
+  for (const [key, proven] of provenByPair) {
+    const pairKey = `${proven.token}:${proven.spender}`;
+    seen.add(pairKey);
+
+    const afterValue = proven.after === ("0x" + "00".repeat(32))
+      ? 0n
+      : BigInt(proven.after);
+
+    if (afterValue === 0n) continue; // revoked
+
+    results.push({
+      token: proven.token,
+      tokenSymbol: proven.tokenSymbol,
+      spender: proven.spender,
+      amountFormatted: proven.afterFormatted,
+      isUnlimited: proven.afterFormatted.toLowerCase().includes("unlimited"),
+      source: "state-diff",
+    });
+  }
+
+  // Second pass: emit event-based approvals for pairs without proven data
+  for (const event of lastByPair.values()) {
+    const pairKey = `${event.token}:${event.to}`;
+    if (seen.has(pairKey)) continue; // already handled by proven data
+
+    if (event.amountRaw === "0") continue;
+
+    results.push({
       token: event.token,
       tokenSymbol: event.tokenSymbol,
       spender: event.to,
       amountFormatted: event.amountFormatted,
       isUnlimited: event.amountFormatted.toLowerCase().includes("unlimited"),
-    }));
+      source: "event",
+    });
+  }
+
+  return results;
 }
 
 // ── State diff summary ────────────────────────────────────────────

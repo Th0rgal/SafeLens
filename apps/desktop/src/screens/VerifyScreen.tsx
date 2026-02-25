@@ -826,8 +826,8 @@ function ExecutionSafetyPanel({
     [decodedEvents],
   );
   const remainingApprovals = useMemo(
-    () => computeRemainingApprovals(decodedEvents),
-    [decodedEvents],
+    () => computeRemainingApprovals(decodedEvents, evidence.simulation?.stateDiffs),
+    [decodedEvents, evidence.simulation?.stateDiffs],
   );
   const stateDiffSummary = useMemo(
     () => summarizeStateDiffs(evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress),
