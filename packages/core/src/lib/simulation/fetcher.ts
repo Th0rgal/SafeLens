@@ -7,9 +7,8 @@
  * success/revert status and return data without needing real signatures.
  *
  * Optionally fetches event logs via `debug_traceCall` when the RPC node
- * supports it. Note: state diffs require `prestateTracer` with diffMode,
- * which is not yet implemented, the `stateDiffs` field in the schema
- * will be undefined for now.
+ * supports it. When `prestateTracer` with `diffMode` is available,
+ * storage-level state diffs are extracted and attached to the simulation.
  */
 
 import {
@@ -40,6 +39,7 @@ import {
 } from "../proof/safe-layout";
 import type {
   Simulation,
+  StateDiffEntry,
   NativeTransfer,
   SimulationWitness,
   TrustClassification,
@@ -293,6 +293,20 @@ export async function fetchSimulation(
     }
   }
 
+  // ── Step 6: Try prestateTracer for storage-level state diffs ────
+  // Only attempt when debug_traceCall is available (confirmed by step 5).
+
+  let stateDiffs: StateDiffEntry[] | undefined;
+  if (traceResult.available) {
+    stateDiffs = await tryCollectStateDiffs(
+      client,
+      safeAddress,
+      calldata,
+      block.number,
+      viemStateOverride
+    );
+  }
+
   // ── Build result ────────────────────────────────────────────────
 
   const { nativeTransfers } = traceResult;
@@ -303,6 +317,7 @@ export async function fetchSimulation(
     gasUsed,
     logs: traceResult.logs,
     nativeTransfers: nativeTransfers.length > 0 ? nativeTransfers : undefined,
+    stateDiffs: stateDiffs && stateDiffs.length > 0 ? stateDiffs : undefined,
     blockNumber,
     blockTimestamp: new Date(Number(block.timestamp) * 1000).toISOString(),
     trust: "rpc-sourced" as TrustClassification,
@@ -719,7 +734,20 @@ async function tryTraceCall(
   }
 }
 
-async function tryCollectReplayAccounts(
+// ── Shared prestateTracer RPC helper ────────────────────────────────
+
+interface PrestateTraceRawResult {
+  raw: unknown;
+  pre: PrestateTrace | undefined;
+  post: PrestateTrace | undefined;
+}
+
+/**
+ * Run `debug_traceCall` with `prestateTracer` / `diffMode: true`.
+ * Handles state-override conversion and plural/singular retry.
+ * Returns the raw result together with parsed `pre`/`post` when available.
+ */
+async function tryRunPrestateTrace(
   client: ReturnType<typeof createPublicClient>,
   safeAddress: Address,
   calldata: Hex,
@@ -727,9 +755,8 @@ async function tryCollectReplayAccounts(
   stateOverride: Array<{
     address: Address;
     stateDiff: Array<{ slot: Hex; value: Hex }>;
-  }>,
-  requiredAddresses: Address[]
-): Promise<SimulationWitness["replayAccounts"]> {
+  }>
+): Promise<PrestateTraceRawResult | undefined> {
   try {
     const stateOverrideObj: Record<
       string,
@@ -754,23 +781,11 @@ async function tryCollectReplayAccounts(
       },
       `0x${blockNumber.toString(16)}`,
     ] as const;
+
     let result: unknown;
     try {
-      result = await client.request({
-        method: "debug_traceCall" as "eth_call",
-        params: [
-          ...paramsBase,
-          {
-            ...prestateConfig,
-            stateOverride: stateOverrideObj,
-          },
-        ] as unknown as [
-          { to: Address; data: Hex },
-          string,
-          Record<string, unknown>,
-        ],
-      });
-    } catch {
+      // Gnosis-style RPCs expect `stateOverrides` (plural) — try that first,
+      // matching the retry order in tryTraceCall.
       result = await client.request({
         method: "debug_traceCall" as "eth_call",
         params: [
@@ -785,20 +800,124 @@ async function tryCollectReplayAccounts(
           Record<string, unknown>,
         ],
       });
+    } catch {
+      // Fallback for clients that expect `stateOverride` (singular).
+      result = await client.request({
+        method: "debug_traceCall" as "eth_call",
+        params: [
+          ...paramsBase,
+          {
+            ...prestateConfig,
+            stateOverride: stateOverrideObj,
+          },
+        ] as unknown as [
+          { to: Address; data: Hex },
+          string,
+          Record<string, unknown>,
+        ],
+      });
     }
 
-    const raw = result as unknown;
-    if (!raw || typeof raw !== "object") {
+    if (!result || typeof result !== "object") {
       return undefined;
     }
 
-    const rawRecord = raw as Record<string, unknown>;
-    const pre = rawRecord.pre;
-    const trace =
-      pre && typeof pre === "object"
-        ? (pre as PrestateTrace)
-        : (raw as PrestateTrace);
+    const rawRecord = result as Record<string, unknown>;
+    const pre = rawRecord.pre && typeof rawRecord.pre === "object"
+      ? (rawRecord.pre as PrestateTrace)
+      : undefined;
+    const post = rawRecord.post && typeof rawRecord.post === "object"
+      ? (rawRecord.post as PrestateTrace)
+      : undefined;
 
+    return { raw: result, pre, post };
+  } catch {
+    // prestateTracer is not supported by all RPCs, silently fall back
+    return undefined;
+  }
+}
+
+// ── Optional: extract storage-level state diffs via prestateTracer ──
+
+async function tryCollectStateDiffs(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  calldata: Hex,
+  blockNumber: bigint,
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>
+): Promise<StateDiffEntry[] | undefined> {
+  const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
+  if (!traceResult?.pre || !traceResult?.post) {
+    return undefined;
+  }
+  return extractStateDiffs(traceResult.pre, traceResult.post);
+}
+
+function extractStateDiffs(
+  pre: PrestateTrace,
+  post: PrestateTrace
+): StateDiffEntry[] {
+  const diffs: StateDiffEntry[] = [];
+  const ZERO = "0x" + "00".repeat(32);
+
+  // Collect all addresses that appear in either pre or post
+  const addresses = new Set([
+    ...Object.keys(pre),
+    ...Object.keys(post),
+  ]);
+
+  for (const address of addresses) {
+    if (!isAddressLike(address)) continue;
+    const normalizedAddr = normalizeHex(address).toLowerCase();
+
+    const preStorage = pre[address]?.storage ?? {};
+    const postStorage = post[address]?.storage ?? {};
+
+    // Collect all slots that appear in either pre or post for this address
+    const slots = new Set([
+      ...Object.keys(preStorage),
+      ...Object.keys(postStorage),
+    ]);
+
+    for (const slot of slots) {
+      const before = normalizeWordHex(preStorage[slot] ?? ZERO);
+      const after = normalizeWordHex(postStorage[slot] ?? ZERO);
+      if (before !== after) {
+        diffs.push({
+          address: normalizedAddr as Address,
+          key: normalizeWordHex(slot) as `0x${string}`,
+          before: before as `0x${string}`,
+          after: after as `0x${string}`,
+        });
+      }
+    }
+  }
+
+  return diffs;
+}
+
+async function tryCollectReplayAccounts(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  calldata: Hex,
+  blockNumber: bigint,
+  stateOverride: Array<{
+    address: Address;
+    stateDiff: Array<{ slot: Hex; value: Hex }>;
+  }>,
+  requiredAddresses: Address[]
+): Promise<SimulationWitness["replayAccounts"]> {
+  try {
+    const traceResult = await tryRunPrestateTrace(client, safeAddress, calldata, blockNumber, stateOverride);
+    if (!traceResult) {
+      return undefined;
+    }
+    // Use `pre` when available (diffMode response), otherwise fall back to
+    // the raw result (non-diffMode or single-object response).
+    const trace = traceResult.pre ?? (traceResult.raw as PrestateTrace);
     return traceToReplayAccounts(trace, requiredAddresses);
   } catch {
     return undefined;
@@ -864,4 +983,5 @@ async function tryCollectSimpleTransferReplayAccounts(
 export const __internal = {
   traceToReplayAccounts,
   normalizeReplayGasLimit,
+  extractStateDiffs,
 };
