@@ -31,6 +31,7 @@ The desktop verifier ships with a CSP that restricts `connect-src` to Tauri IPC 
 
 ## Architecture and runbooks
 
+- Dependency audit: [`DEPENDENCIES.md`](DEPENDENCIES.md)
 - Docs index: [`docs/README.md`](docs/README.md)
 - Interpreter precedence contract: [`docs/architecture/interpretation-precedence.md`](docs/architecture/interpretation-precedence.md)
 - Verification source contract: [`docs/architecture/verification-source-contract.md`](docs/architecture/verification-source-contract.md)
