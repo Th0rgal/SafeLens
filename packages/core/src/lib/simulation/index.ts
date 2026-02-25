@@ -27,6 +27,7 @@ export {
 export {
   summarizeSimulationEvents,
   computeRemainingApprovals,
+  computeProvenBalanceChanges,
   summarizeStateDiffs,
   type SimulationEventsSummary,
   type SimulationTransferPreview,

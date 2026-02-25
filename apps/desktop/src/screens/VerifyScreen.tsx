@@ -11,6 +11,7 @@ import {
   decodeSimulationEvents,
   decodeNativeTransfers,
   computeRemainingApprovals,
+  computeProvenBalanceChanges,
   summarizeStateDiffs,
   normalizeCallSteps,
   verifyCalldata,
@@ -829,6 +830,10 @@ function ExecutionSafetyPanel({
     () => computeRemainingApprovals(decodedEvents, evidence.simulation?.stateDiffs),
     [decodedEvents, evidence.simulation?.stateDiffs],
   );
+  const provenBalances = useMemo(
+    () => computeProvenBalanceChanges(decodedEvents, evidence.simulation?.stateDiffs),
+    [decodedEvents, evidence.simulation?.stateDiffs],
+  );
   const stateDiffSummary = useMemo(
     () => summarizeStateDiffs(evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress),
     [evidence.simulation?.stateDiffs, decodedEvents, evidence.safeAddress],
@@ -1011,6 +1016,25 @@ function ExecutionSafetyPanel({
                   : "No token movements detected."}
               </div>
             )}
+            {provenBalances.length > 0 && (
+              <div className="rounded-md border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
+                <div className="text-xs font-medium text-cyan-300">
+                  Proven balance changes
+                  <span className="ml-1.5 font-normal text-cyan-400/70">from storage</span>
+                </div>
+                <div className="mt-1.5 space-y-1.5">
+                  {provenBalances.map((bc, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-cyan-300/90">
+                      <span className={bc.deltaFormatted.startsWith("-") ? "font-medium text-red-400" : "font-medium text-emerald-400"}>
+                        {bc.deltaFormatted}
+                      </span>
+                      <span className="text-cyan-400/60">on</span>
+                      <AddressDisplay address={bc.account} chainId={evidence.chainId} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {remainingApprovals.length > 0 && (
               <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
                 <div className="text-xs font-medium text-amber-200">
@@ -1024,6 +1048,11 @@ function ExecutionSafetyPanel({
                       </span>
                       <span className="text-amber-400/70">to</span>
                       <AddressDisplay address={approval.spender} chainId={evidence.chainId} />
+                      {approval.source === "state-diff" && (
+                        <span className="rounded bg-cyan-500/15 px-1 py-0.5 text-[10px] font-medium text-cyan-400">
+                          proven
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

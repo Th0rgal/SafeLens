@@ -1,6 +1,6 @@
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../types";
 import { decodeSimulationEvents, decodeNativeTransfers, type DecodedEvent } from "./event-decoder";
-import { decodeERC20StateDiffs, type ProvenAllowance } from "./slot-decoder";
+import { decodeERC20StateDiffs, type ProvenAllowance, type ProvenBalanceChange } from "./slot-decoder";
 
 export type SimulationTransferPreview = {
   direction: "send" | "receive" | "internal";
@@ -176,6 +176,30 @@ export function computeRemainingApprovals(
   }
 
   return results;
+}
+
+/**
+ * Extract proven ERC-20 balance changes from state diffs, deduplicated
+ * by (token, account). The first matching layout per pair wins.
+ *
+ * Returns an empty array when state diffs are unavailable or no matches
+ * are found.
+ */
+export function computeProvenBalanceChanges(
+  events: DecodedEvent[],
+  stateDiffs?: StateDiffEntry[],
+): ProvenBalanceChange[] {
+  const result = decodeERC20StateDiffs(stateDiffs, events);
+  // Deduplicate by (token, account) — layouts are tried in priority order
+  const seen = new Set<string>();
+  const deduped: ProvenBalanceChange[] = [];
+  for (const bc of result.balanceChanges) {
+    const key = `${bc.token}:${bc.account}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(bc);
+  }
+  return deduped;
 }
 
 // ── State diff summary ────────────────────────────────────────────
