@@ -10,8 +10,7 @@ import {
   buildCoreExecutionSafetyFields,
   decodeSimulationEvents,
   decodeNativeTransfers,
-  computeRemainingApprovals,
-  computeProvenBalanceChanges,
+  computePostStateEffects,
   summarizeStateDiffs,
   normalizeCallSteps,
   verifyCalldata,
@@ -826,12 +825,8 @@ function ExecutionSafetyPanel({
     () => decodedEvents.filter((e) => e.kind !== "approval"),
     [decodedEvents],
   );
-  const remainingApprovals = useMemo(
-    () => computeRemainingApprovals(decodedEvents, evidence.simulation?.stateDiffs),
-    [decodedEvents, evidence.simulation?.stateDiffs],
-  );
-  const provenBalances = useMemo(
-    () => computeProvenBalanceChanges(decodedEvents, evidence.simulation?.stateDiffs),
+  const { remainingApprovals, provenBalanceChanges: provenBalances } = useMemo(
+    () => computePostStateEffects(decodedEvents, evidence.simulation?.stateDiffs),
     [decodedEvents, evidence.simulation?.stateDiffs],
   );
   const stateDiffSummary = useMemo(

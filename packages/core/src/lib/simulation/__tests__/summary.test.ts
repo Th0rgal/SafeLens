@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeSimulationEvents, computeRemainingApprovals, computeProvenBalanceChanges, summarizeStateDiffs } from "../summary";
+import { summarizeSimulationEvents, computeRemainingApprovals, computeProvenBalanceChanges, computePostStateEffects, summarizeStateDiffs } from "../summary";
 import { decodeSimulationEvents } from "../event-decoder";
 import { __internal as slotInternal } from "../slot-decoder";
 import type { SimulationLog, NativeTransfer, StateDiffEntry } from "../../types";
@@ -596,5 +596,112 @@ describe("computeProvenBalanceChanges", () => {
     // Only one entry for the sender even though two transfers reference them
     const senderEntries = result.filter(bc => bc.account === SENDER);
     expect(senderEntries).toHaveLength(1);
+  });
+});
+
+// ── computePostStateEffects ─────────────────────────────────────────
+
+describe("computePostStateEffects", () => {
+  const { computeMappingSlot, computeNestedMappingSlot, ERC20_LAYOUTS } = slotInternal;
+  const DAI = "0x6b175474e89094c44da98b954eedeac495271d0f";
+  const SENDER = "0x1111111111111111111111111111111111111111";
+  const RECEIVER = "0x2222222222222222222222222222222222222222";
+  const SPENDER = "0xcccccccccccccccccccccccccccccccccccccccc";
+
+  it("returns both balance changes and approvals in a single call", () => {
+    const ozLayout = ERC20_LAYOUTS[0]; // oz: balanceSlot=0n, allowanceSlot=1n
+    const senderSlot = computeMappingSlot(SENDER, ozLayout.balanceSlot);
+    const receiverSlot = computeMappingSlot(RECEIVER, ozLayout.balanceSlot);
+    const allowanceSlot = computeNestedMappingSlot(SENDER, SPENDER, ozLayout.allowanceSlot);
+
+    const events: DecodedEvent[] = [
+      {
+        kind: "transfer",
+        token: DAI,
+        tokenSymbol: "DAI",
+        tokenDecimals: 18,
+        from: SENDER,
+        to: RECEIVER,
+        amountFormatted: "100 DAI",
+        amountRaw: (100n * 10n ** 18n).toString(),
+        direction: "send",
+      },
+      {
+        kind: "approval",
+        token: DAI,
+        tokenSymbol: "DAI",
+        tokenDecimals: 18,
+        from: SENDER,
+        to: SPENDER,
+        amountFormatted: "500 DAI",
+        amountRaw: (500n * 10n ** 18n).toString(),
+        direction: "send",
+      },
+    ];
+
+    const diffs: StateDiffEntry[] = [
+      { address: DAI, key: senderSlot, before: uint256Hex(1000n * 10n ** 18n), after: uint256Hex(900n * 10n ** 18n) },
+      { address: DAI, key: receiverSlot, before: uint256Hex(0n), after: uint256Hex(100n * 10n ** 18n) },
+      { address: DAI, key: allowanceSlot, before: uint256Hex(600n * 10n ** 18n), after: uint256Hex(500n * 10n ** 18n) },
+    ];
+
+    const result = computePostStateEffects(events, diffs);
+
+    // Should have balance changes for sender and receiver
+    expect(result.provenBalanceChanges.length).toBeGreaterThanOrEqual(2);
+    expect(result.provenBalanceChanges.find(bc => bc.account === SENDER)).toBeDefined();
+    expect(result.provenBalanceChanges.find(bc => bc.account === RECEIVER)).toBeDefined();
+
+    // Should have a proven approval
+    expect(result.remainingApprovals).toHaveLength(1);
+    expect(result.remainingApprovals[0]!.source).toBe("state-diff");
+    expect(result.remainingApprovals[0]!.spender).toBe(SPENDER);
+  });
+
+  it("matches computeRemainingApprovals + computeProvenBalanceChanges individually", () => {
+    const ozLayout = ERC20_LAYOUTS[0];
+    const senderSlot = computeMappingSlot(SENDER, ozLayout.balanceSlot);
+
+    const events: DecodedEvent[] = [{
+      kind: "transfer",
+      token: DAI,
+      tokenSymbol: "DAI",
+      tokenDecimals: 18,
+      from: SENDER,
+      to: RECEIVER,
+      amountFormatted: "100 DAI",
+      amountRaw: (100n * 10n ** 18n).toString(),
+      direction: "send",
+    }];
+
+    const diffs: StateDiffEntry[] = [
+      { address: DAI, key: senderSlot, before: uint256Hex(500n * 10n ** 18n), after: uint256Hex(400n * 10n ** 18n) },
+    ];
+
+    const combined = computePostStateEffects(events, diffs);
+    const separateApprovals = computeRemainingApprovals(events, diffs);
+    const separateBalances = computeProvenBalanceChanges(events, diffs);
+
+    // Results should be equivalent
+    expect(combined.remainingApprovals).toEqual(separateApprovals);
+    expect(combined.provenBalanceChanges).toEqual(separateBalances);
+  });
+
+  it("returns empty results when no state diffs provided", () => {
+    const events: DecodedEvent[] = [{
+      kind: "transfer",
+      token: DAI,
+      tokenSymbol: "DAI",
+      tokenDecimals: 18,
+      from: SENDER,
+      to: RECEIVER,
+      amountFormatted: "100 DAI",
+      amountRaw: (100n * 10n ** 18n).toString(),
+      direction: "send",
+    }];
+
+    const result = computePostStateEffects(events);
+    expect(result.remainingApprovals).toHaveLength(0);
+    expect(result.provenBalanceChanges).toHaveLength(0);
   });
 });

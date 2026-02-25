@@ -28,10 +28,12 @@ export {
   summarizeSimulationEvents,
   computeRemainingApprovals,
   computeProvenBalanceChanges,
+  computePostStateEffects,
   summarizeStateDiffs,
   type SimulationEventsSummary,
   type SimulationTransferPreview,
   type RemainingApproval,
+  type PostStateEffects,
   type StateDiffSummary,
   type ContractStateDiff,
 } from "./summary";

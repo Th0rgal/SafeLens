@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,7 @@ import {
   UNSUPPORTED_CONSENSUS_MODE_ERROR_CODE,
   decodeSimulationEvents,
   decodeNativeTransfers,
-  computeRemainingApprovals,
-  computeProvenBalanceChanges,
+  computePostStateEffects,
   summarizeStateDiffs,
   DEFAULT_SETTINGS_CONFIG,
   buildGenerationSources,
@@ -116,21 +115,28 @@ function EvidenceDisplay({
       return evidence.simulationWitness?.witnessOnly === true;
     }) ?? [];
 
-  // Decode simulation events
+  // Decode simulation events (memoized to avoid recomputation on re-render)
   const nativeSymbol = DEFAULT_SETTINGS_CONFIG.chains?.[String(evidence.chainId)]?.nativeTokenSymbol ?? "ETH";
   const sim = evidence.simulation;
   const witnessOnlySimulation = evidence.simulationWitness?.witnessOnly === true;
-  const logEvents = sim
-    ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
-    : [];
-  const nativeEvents = sim?.nativeTransfers?.length
-    ? decodeNativeTransfers(sim.nativeTransfers, evidence.safeAddress, nativeSymbol)
-    : [];
-  const allEvents = [...nativeEvents, ...logEvents];
-  const transfers = allEvents.filter((e) => e.kind !== "approval");
-  const approvals = computeRemainingApprovals(allEvents, sim?.stateDiffs);
-  const provenBalances = computeProvenBalanceChanges(allEvents, sim?.stateDiffs);
-  const stateDiffSummary = summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress);
+  const allEvents = useMemo(() => {
+    const logEvents = sim
+      ? decodeSimulationEvents(sim.logs, evidence.safeAddress, evidence.chainId)
+      : [];
+    const nativeEvents = sim?.nativeTransfers?.length
+      ? decodeNativeTransfers(sim.nativeTransfers, evidence.safeAddress, nativeSymbol)
+      : [];
+    return [...nativeEvents, ...logEvents];
+  }, [sim, evidence.safeAddress, evidence.chainId, nativeSymbol]);
+  const transfers = useMemo(() => allEvents.filter((e) => e.kind !== "approval"), [allEvents]);
+  const { remainingApprovals: approvals, provenBalanceChanges: provenBalances } = useMemo(
+    () => computePostStateEffects(allEvents, sim?.stateDiffs),
+    [allEvents, sim?.stateDiffs],
+  );
+  const stateDiffSummary = useMemo(
+    () => summarizeStateDiffs(sim?.stateDiffs, allEvents, evidence.safeAddress),
+    [sim?.stateDiffs, allEvents, evidence.safeAddress],
+  );
 
   return (
     <Card>
