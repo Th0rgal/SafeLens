@@ -2,6 +2,22 @@
 
 Why each dependency exists. Organized by package and split into verification-path (security-critical) vs UI/tooling (non-critical).
 
+## Reviewer workflow
+
+Generate a dependency snapshot and compare it with the committed baseline:
+
+```bash
+bash scripts/audit/deps.sh
+```
+
+Artifacts:
+
+- Current snapshot: `docs/audit/dependency-footprint.md`
+- Baseline snapshot: `docs/audit/dependency-footprint.baseline.md`
+- Drift diff: `docs/audit/dependency-footprint.diff`
+
+Any dependency drift should be reviewed together with rationale updates in this file.
+
 ## Verification Path (security-critical)
 
 These dependencies are in the trust boundary, they handle crypto, schema validation, or EVM execution.

@@ -29,11 +29,24 @@ SafeLens generates and verifies evidence packages for Gnosis Safe multisig trans
 
 The desktop verifier ships with a CSP that restricts `connect-src` to Tauri IPC only (`ipc: http://ipc.localhost`), with no external network origins and no shell-open capability. It cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
 
+## Independent verification stack
+
+SafeLens is one verifier in a multi-tool workflow, not a single source of truth.
+
+- Tool 1: Independent Safe hash verifiers (for example `safe-tx-hashes-util`) validate digest expectations.
+- Tool 2: Hardware wallet screen validates the hash shown at signing time.
+- Tool 3: Foundry or local node simulation validates execution expectations.
+- Tool 4: SafeLens validates offline package integrity, signatures, and optional proofs.
+
+For high-value operations, use at least two independent tools and compare outputs.
+
 ## Project docs
 
 - Security policy: [`SECURITY.md`](SECURITY.md)
 - Contributing guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Build verification: [`VERIFY.md`](VERIFY.md)
+- Release integrity checks: [`RELEASE_INTEGRITY.md`](RELEASE_INTEGRITY.md)
+- Auditor packet: [`docs/audit/AUDITOR_PACKET.md`](docs/audit/AUDITOR_PACKET.md)
 
 ## Architecture and runbooks
 

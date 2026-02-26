@@ -209,8 +209,12 @@ Use these as the reviewer baseline:
    - `bun test --filter @safelens/core`
 3. Run desktop Rust tests:
    - `cd apps/desktop/src-tauri && cargo test`
+4. Generate dependency footprint and compare drift:
+   - `bash scripts/audit/deps.sh`
 
 Expected result: all commands pass without skipped security-critical suites.
+
+Auditor packet entrypoint: `docs/audit/AUDITOR_PACKET.md`.
 
 For live issue status, use the canonical tracker:
 `https://github.com/Th0rgal/SafeLens/issues`
