@@ -106,6 +106,7 @@ async function main() {
       replayAccounts: witness.replayAccounts,
       replayCaller: witness.replayCaller,
       replayGasLimit: witness.replayGasLimit,
+      replayCalldata: witness.replayCalldata,
       witnessOnly: true,
     },
   };

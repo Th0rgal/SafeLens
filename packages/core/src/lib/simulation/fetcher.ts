@@ -484,6 +484,7 @@ export async function fetchSimulationWitness(
     replayAccounts: resolvedReplayAccounts,
     replayCaller: SIMULATION_ACCOUNT.address,
     replayGasLimit: normalizeReplayGasLimit(transaction.safeTxGas),
+    replayCalldata: calldata,
   };
 }
 

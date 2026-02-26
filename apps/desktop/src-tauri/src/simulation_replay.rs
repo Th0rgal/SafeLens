@@ -75,6 +75,7 @@ pub struct ReplayWitness {
     pub replay_accounts: Option<Vec<ReplayWitnessAccount>>,
     pub replay_caller: Option<String>,
     pub replay_gas_limit: Option<u64>,
+    pub replay_calldata: Option<String>,
     pub witness_only: Option<bool>,
 }
 
@@ -356,48 +357,70 @@ fn execute_replay(
     });
     let caller_nonce = caller_account.map(|account| account.nonce).unwrap_or(0);
 
-    let to = parse_address(&input.transaction.to, "transaction.to")?;
-    let inner_value = parse_u256(&input.transaction.value)
-        .map_err(|err| format!("invalid transaction.value: {err}"))?;
+    // When replayCalldata is present, call execTransaction on the Safe proxy
+    // instead of the inner transaction directly. This ensures the replay return
+    // data matches the simulation's execTransaction return (e.g. abi.encode(true)).
+    let has_replay_calldata = input.simulation_witness.replay_calldata.is_some();
 
-    let data = match input.transaction.data.as_deref() {
-        Some(raw) => parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?,
-        None => Bytes::new(),
-    };
-
-    let gas_limit = match input.simulation_witness.replay_gas_limit {
-        Some(limit) => limit,
-        None => match input.transaction.safe_tx_gas.as_deref() {
+    let (tx_target, tx_value, tx_data, gas_limit) = if let Some(ref raw_calldata) =
+        input.simulation_witness.replay_calldata
+    {
+        let safe_addr = parse_address(&input.safe_address, "safeAddress")?;
+        let calldata = parse_bytes(raw_calldata)
+            .map_err(|err| format!("invalid simulationWitness.replayCalldata: {err}"))?;
+        let limit = input.simulation_witness.replay_gas_limit.unwrap_or(10_000_000);
+        (safe_addr, U256::ZERO, calldata, limit)
+    } else {
+        let to = parse_address(&input.transaction.to, "transaction.to")?;
+        let inner_value = parse_u256(&input.transaction.value)
+            .map_err(|err| format!("invalid transaction.value: {err}"))?;
+        let data = match input.transaction.data.as_deref() {
             Some(raw) => {
-                let parsed = parse_u256(raw)
-                    .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
-                let capped = parsed.min(U256::from(u64::MAX));
-                let as_u64 = capped.to::<u64>();
-                if as_u64 == 0 {
-                    3_000_000
-                } else {
-                    as_u64
-                }
+                parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?
             }
-            None => 3_000_000,
-        },
+            None => Bytes::new(),
+        };
+        let limit = match input.simulation_witness.replay_gas_limit {
+            Some(limit) => limit,
+            None => match input.transaction.safe_tx_gas.as_deref() {
+                Some(raw) => {
+                    let parsed = parse_u256(raw)
+                        .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
+                    let capped = parsed.min(U256::from(u64::MAX));
+                    let as_u64 = capped.to::<u64>();
+                    if as_u64 == 0 {
+                        3_000_000
+                    } else {
+                        as_u64
+                    }
+                }
+                None => 3_000_000,
+            },
+        };
+        (to, inner_value, data, limit)
     };
 
-    let tx_kind = match input.transaction.operation {
-        0 => TxKind::Call(to),
-        1 => return Err(
-            "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
-                .to_string(),
-        ),
-        value => {
-            return Err(format!(
-                "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
-            ))
+    let tx_kind = if has_replay_calldata {
+        TxKind::Call(tx_target)
+    } else {
+        match input.transaction.operation {
+            0 => TxKind::Call(tx_target),
+            1 => {
+                return Err(
+                    "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
+                        .to_string(),
+                )
+            }
+            value => {
+                return Err(format!(
+                    "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
+                ))
+            }
         }
     };
 
     let gas_price = resolve_replay_gas_price(input)?;
-    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
+    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + tx_value;
 
     for account in accounts {
         let address = parse_address(&account.address, "replay account address")?;
@@ -443,8 +466,8 @@ fn execute_replay(
         .gas_price(gas_price)
         .nonce(caller_nonce)
         .chain_id(Some(input.chain_id))
-        .value(inner_value)
-        .data(data)
+        .value(tx_value)
+        .data(tx_data)
         .build()
         .map_err(|err| format!("failed to build replay tx: {err:?}"))?;
 
@@ -811,6 +834,7 @@ mod tests {
                 replay_accounts: None,
                 replay_caller: None,
                 replay_gas_limit: None,
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -848,6 +872,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -889,6 +914,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -927,6 +953,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -968,6 +995,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -1013,6 +1041,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(3_000_000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1059,6 +1088,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1106,6 +1136,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1158,6 +1189,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(800000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1207,6 +1239,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(800000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1249,6 +1282,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -1338,6 +1372,7 @@ mod tests {
                         ]),
                         replay_caller: Some(caller.to_string()),
                         replay_gas_limit: Some(500000),
+                        replay_calldata: None,
                         witness_only: None,
                     },
                 };
@@ -1387,6 +1422,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1431,6 +1467,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1479,6 +1516,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1529,6 +1567,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
