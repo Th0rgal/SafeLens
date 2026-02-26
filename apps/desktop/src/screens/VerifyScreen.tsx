@@ -573,7 +573,7 @@ function SafePolicySection({ evidence }: { evidence: EvidencePackage }) {
         {/* Modules warning */}
         {hasModules && (
           <div className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300">
-            <div className="font-medium text-amber-200">Modules enabled — can bypass signatures</div>
+            <div className="font-medium text-amber-200">Modules enabled - can bypass signatures</div>
             <div className="mt-1 space-y-0.5">
               {policy.modules.map((mod) => (
                 <div key={mod}>
@@ -754,7 +754,7 @@ function ExecutionSafetyPanel({
         status: "error" as const,
       }
     : hasWarning && allDataAbsent
-      ? { label: "Skipped", description: "Generated without an RPC URL — some verification data is unavailable.", status: "skipped" as const }
+      ? { label: "Skipped", description: "Generated without an RPC URL. Some verification data is unavailable.", status: "skipped" as const }
       : hasWarning || replayPending || signaturesPending || signaturesUnsupported
         ? {
             label: "Partially Verified",
@@ -1066,7 +1066,7 @@ function ExecutionSafetyPanel({
                 </div>
                 {stateDiffSummary.silentContracts > 0 && (
                   <div className="mt-1 text-[11px] text-amber-400">
-                    {stateDiffSummary.silentContracts} contract{stateDiffSummary.silentContracts !== 1 ? "s" : ""} modified storage without emitting events — review state diffs for hidden effects.
+                    {stateDiffSummary.silentContracts} contract{stateDiffSummary.silentContracts !== 1 ? "s" : ""} modified storage without emitting events. Review state diffs for hidden effects.
                   </div>
                 )}
                 <div className="mt-1.5 space-y-1.5">
@@ -1111,7 +1111,7 @@ function ExecutionSafetyPanel({
           </div>
         ) : (
           <div className="rounded-md border border-border/15 glass-subtle px-3 py-2 text-xs text-muted">
-            Simulation not available — {getSimulationUnavailableReason(evidence).toLowerCase()}
+            Simulation not available: {getSimulationUnavailableReason(evidence).toLowerCase()}
           </div>
         )}
 

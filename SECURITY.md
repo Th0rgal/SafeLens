@@ -51,3 +51,23 @@ Out of scope:
 ## Trust Model
 
 See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full trust model and [`AUDIT.md`](AUDIT.md) for the security architecture.
+
+## Threat Model Summary
+
+### Protects against
+
+| Scenario | Condition |
+|---|---|
+| Malicious or incorrect Safe API payload | Offline verifier recomputes safeTxHash and checks signatures |
+| Hash substitution in exported evidence | Claimed hash is never trusted, verifier recomputes from transaction fields |
+| Malformed policy proof artifacts | MPT proofs are validated locally before trust upgrades |
+| Desktop data exfiltration during verification | CSP and Tauri config block external network access |
+
+### Does not protect against
+
+| Scenario | Reason |
+|---|---|
+| Compromised airgapped machine | Local runtime and OS are in the trusted computing base |
+| Compromised RPC used during generation | Generation is network-connected and treated as untrusted input collection |
+| Compromised Foundry/local node simulation tooling | External simulation tools are out of SafeLens trust boundary |
+| Unsupported signature schemes fully verified offline | Some signature modes require on-chain validation and are reported as warnings |

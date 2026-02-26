@@ -4,14 +4,19 @@ This document lists every trust assumption SafeLens makes today.
 
 SafeLens classifies each source as:
 
-- `proof-verified`: validated against cryptographic Merkle/consensus proofs
+- `consensus-verified` (legacy): backward-compatibility enum value for older exports; new reports use mode-specific consensus levels
+- `consensus-verified-beacon`: state root verified with beacon light-client BLS checks
+- `consensus-verified-opstack`: OP Stack envelope integrity verified (not beacon-equivalent)
+- `consensus-verified-linea`: Linea envelope integrity verified (not beacon-equivalent)
+- `proof-verified`: validated against cryptographic Merkle proofs
 - `self-verified`: validated locally with deterministic code
 - `rpc-sourced`: accepted from an RPC endpoint (e.g., generation-time simulation/witness inputs)
 - `api-sourced`: accepted from remote API responses
 - `user-provided`: accepted from local operator input or local files
 
 Each section of the evidence package carries its own trust classification,
-allowing progressive trust upgrades (e.g., `api-sourced` to `proof-verified`)
+allowing progressive trust upgrades (e.g., `api-sourced` to `proof-verified`,
+or `rpc-sourced` to `consensus-verified-beacon`)
 as proof infrastructure is added.
 
 ## Evidence Generation (`apps/generator`, CLI `analyze`)
@@ -33,7 +38,7 @@ as proof infrastructure is added.
 | Signature scheme coverage | api-sourced when unsupported signatures exist | Contract signatures / pre-approved hashes are not fully verified locally | Use on-chain or Safe-native validation when unsupported signatures appear |
 | Safe owners and threshold | api-sourced (upgradable to proof-verified) | `confirmations` and `confirmationsRequired` in evidence reflect on-chain state | Include `onchainPolicyProof` to upgrade to proof-verified |
 | On-chain policy proof | proof-verified when present, disabled otherwise | Merkle storage proofs for owners, threshold, nonce, modules, guard, fallback handler, singleton are valid against provided state root | Verify state root against finalized beacon chain consensus (Phase 4) |
-| Transaction simulation | rpc-sourced by default, upgradeable to proof-verified | Generation-time RPC simulation/witness inputs may be wrong until witness and local replay checks pass | Include `simulationWitness` and run desktop replay verification to upgrade simulation trust |
+| Transaction simulation | rpc-sourced | Generation-time RPC simulation/witness inputs may be wrong until witness and local replay checks pass | Include `simulationWitness` and run desktop replay verification to prove deterministic consistency against provided witness inputs. Trust remains `rpc-sourced` until replay world-state accounts are fully state-root proven |
 | Decoded calldata metadata | api-sourced | Human-readable decode (`dataDecoded`) may be incorrect | Treat raw calldata + hash as canonical; decode independently when needed |
 | Local settings labels | user-provided | Address/contract labels are accurate | Keep settings under change control and review diffs |
 
@@ -56,11 +61,15 @@ without these sections is fully supported and behaves identically to before.
 
 From highest to lowest assurance:
 
-1. **proof-verified**: Validated against cryptographic proofs (Merkle storage proofs, consensus proofs)
-2. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
-3. **rpc-sourced**: Accepted from an RPC endpoint (including generation-time simulation/witness inputs without full local replay confirmation)
-4. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
-5. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
+1. **consensus-verified-beacon**: State root verified with beacon BLS sync committee checks
+2. **consensus-verified-opstack**: OP Stack envelope integrity checks (not beacon-equivalent)
+3. **consensus-verified-linea**: Linea envelope integrity checks (not beacon-equivalent)
+4. **consensus-verified** (legacy): Backward-compatibility label from older exports, superseded by mode-specific consensus labels in current output
+5. **proof-verified**: Validated against cryptographic Merkle proofs
+6. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
+7. **rpc-sourced**: Accepted from an RPC endpoint (including generation-time simulation/witness inputs without full local replay confirmation)
+8. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
+9. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
 
 ## Desktop Airgap Scope
 

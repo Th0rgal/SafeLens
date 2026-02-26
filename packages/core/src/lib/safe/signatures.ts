@@ -58,7 +58,7 @@ export async function verifySignature(
     return { status: valid ? "valid" : "invalid", recoveredSigner };
   } catch (err) {
     // ECDSA recovery can fail for malformed signatures (invalid curve points,
-    // out-of-range s values, etc). This is not an internal error — it means the
+    // out-of-range s values, etc). This is not an internal error -- it means the
     // signature data is cryptographically invalid. We surface the underlying
     // reason so auditors/users can distinguish "can't verify this type" from
     // "verification threw an error".

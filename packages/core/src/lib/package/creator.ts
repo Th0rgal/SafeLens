@@ -308,6 +308,11 @@ export function finalizeEvidenceExport(
   const hasReplaySupportedOperation = evidence.transaction.operation === 0;
   const hasReplayCapableSimulationWitnessInputs =
     hasReplaySupportedOperation && hasSimulationWitnessReplayInputs;
+  // For witness-only packages the desktop verifier must replay the simulation
+  // locally, so replay-capable inputs are required. For full simulations the
+  // results are embedded in the package and verified structurally. Replay
+  // inputs are informational only and must not gate the fully-verifiable flag.
+  const witnessOnly = evidence.simulationWitness?.witnessOnly === true;
   const reasons = new Set<ExportContractReason>();
 
   if (!hasConsensusProofArtifact) {
@@ -350,17 +355,20 @@ export function finalizeEvidenceExport(
     } else {
       reasons.add("missing-simulation");
     }
-  } else if (!hasReplaySupportedOperation) {
+  } else if (witnessOnly && !hasReplaySupportedOperation) {
     reasons.add("simulation-replay-unsupported-operation");
-  } else if (!hasSimulationWitnessReplayInputs) {
+  } else if (witnessOnly && !hasSimulationWitnessReplayInputs) {
     reasons.add("missing-simulation-witness");
   }
+
+  const simulationReplayOk = hasSimulation &&
+    (witnessOnly ? hasReplayCapableSimulationWitnessInputs : true);
 
   const isFullyVerifiable =
     hasVerifierSupportedConsensusProof &&
     hasOnchainPolicyProof &&
     hasSimulation &&
-    hasReplayCapableSimulationWitnessInputs;
+    simulationReplayOk;
   const diagnostics: EvidenceExportContract["diagnostics"] =
     options.witnessGenerationError !== undefined
       ? { witnessGenerationError: options.witnessGenerationError || "(unknown error)" }

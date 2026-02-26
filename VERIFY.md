@@ -2,6 +2,8 @@
 
 How to confirm that a released binary matches the source code.
 
+For release integrity policy and immutable tag checks, see [`RELEASE_INTEGRITY.md`](RELEASE_INTEGRITY.md).
+
 ## Checksum Verification
 
 Every [GitHub release](https://github.com/Th0rgal/SafeLens/releases) includes a `SHA256SUMS.txt` file listing the SHA-256 hash of each artifact.
@@ -68,6 +70,18 @@ Release builds run in GitHub Actions ([`release.yml`](.github/workflows/release.
 
 All CI runners use the same pinned toolchain versions (Bun 1.3.9, Rust 1.93.1) and `--frozen-lockfile` to ensure deterministic dependency resolution.
 
+## Tag and Release Integrity
+
+Before trusting a release artifact, verify the release tag points to the expected commit:
+
+```bash
+git fetch --tags origin
+git rev-list -n 1 v0.4.0
+git rev-parse origin/main
+```
+
+Then verify the published artifact checksum against `SHA256SUMS.txt`.
+
 ## Reproducibility Limitations
 
 Tauri/Rust builds are not yet fully bit-for-bit reproducible across environments due to:
@@ -76,7 +90,7 @@ Tauri/Rust builds are not yet fully bit-for-bit reproducible across environments
 - **Timestamps**: Some build tools embed timestamps in binaries
 - **System libraries**: Linked system libraries (WebKit, OpenSSL) differ across OS versions
 
-The `SHA256SUMS.txt` file in each release is the canonical reference. If you build locally and get a different hash, the above factors are the likely cause — not a supply-chain compromise. The source code itself can always be audited directly.
+The `SHA256SUMS.txt` file in each release is the canonical reference. If local hashes differ, investigate code signing, timestamps, and system library differences before drawing conclusions.
 
 ## Reporting Discrepancies
 

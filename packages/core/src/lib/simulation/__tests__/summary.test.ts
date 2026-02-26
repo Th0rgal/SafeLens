@@ -554,7 +554,7 @@ describe("computeProvenBalanceChanges", () => {
       amountRaw: (100n * 10n ** 18n).toString(),
       direction: "send",
     }];
-    // State diff on a different address — no match
+    // State diff on a different address -- no match
     const diffs: StateDiffEntry[] = [{
       address: DAI,
       key: "0x" + "ff".repeat(32),
@@ -620,7 +620,7 @@ describe("computeProvenBalanceChanges", () => {
         amountRaw: (50n * 10n ** 18n).toString(),
         direction: "send",
       },
-      // Duplicate transfer for the same sender — should not create a second entry
+      // Duplicate transfer for the same sender -- should not create a second entry
       {
         kind: "transfer",
         token: DAI,

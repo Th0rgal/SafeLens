@@ -28,6 +28,7 @@ import { computeSafeTxHash } from "../safe/hash";
 import { CHAIN_BY_ID, DEFAULT_RPC_URLS, getExecutionCapability } from "../chains";
 import {
   SENTINEL,
+  SLOT_SINGLETON,
   SLOT_OWNER_COUNT,
   SLOT_THRESHOLD,
   SLOT_NONCE,
@@ -291,7 +292,7 @@ export async function fetchSimulation(
     } catch {
       // Expected: estimateGas may fail if the node doesn't support stateOverride
       // on eth_estimateGas, or if the call reverts (we already checked success).
-      // Masked: transient RPC errors (rate-limit, timeout) — acceptable because
+      // Masked: transient RPC errors (rate-limit, timeout) -- acceptable because
       // gasUsed is informational only and the simulation already succeeded.
     }
   }
@@ -435,6 +436,20 @@ export async function fetchSimulationWitness(
   );
   const resolvedReplayAccounts = replayAccounts ?? fallbackReplayAccounts;
 
+  // The prestateTracer with diffMode:true only captures MODIFIED state.
+  // Slots that are only READ during execution (slot 0 / singleton pointer,
+  // override slots like ownerCount/threshold/owners that don't change) are
+  // missing. The fallback path has the same gap. Augment both.
+  if (resolvedReplayAccounts) {
+    await augmentReplayAccountsForSafe(
+      client,
+      safeAddress,
+      resolvedReplayAccounts,
+      stateDiff,
+      blockNumber
+    );
+  }
+
   return {
     chainId,
     safeAddress,
@@ -469,6 +484,7 @@ export async function fetchSimulationWitness(
     replayAccounts: resolvedReplayAccounts,
     replayCaller: SIMULATION_ACCOUNT.address,
     replayGasLimit: normalizeReplayGasLimit(transaction.safeTxGas),
+    replayCalldata: calldata,
   };
 }
 
@@ -477,6 +493,83 @@ export async function fetchSimulationWitness(
 /** Ensure a hex string starts with 0x (some RPC nodes return bare hex). */
 function normalizeHex(value: string): string {
   return value.startsWith("0x") ? value : `0x${value}`;
+}
+
+/**
+ * Ensure replay accounts contain everything the local EVM needs to execute
+ * the Safe's `execTransaction` call. Both the prestateTracer (diffMode:true
+ * only captures modified state) and the simple-transfer fallback can produce
+ * accounts missing:
+ *
+ * 1. Slot 0 (singleton pointer) -- read-only, never modified.
+ * 2. Override slots that are only READ during execution (ownerCount,
+ *    threshold, owners, guard, fallback handler, modules).
+ * 3. The singleton contract itself (accessed via DELEGATECALL, code never
+ *    modified so absent from diffMode traces).
+ */
+async function augmentReplayAccountsForSafe(
+  client: ReturnType<typeof createPublicClient>,
+  safeAddress: Address,
+  accounts: NonNullable<SimulationWitness["replayAccounts"]>,
+  stateDiff: Array<{ slot: Hex; value: Hex }>,
+  blockNumber: bigint
+): Promise<void> {
+  const safeAccount = accounts.find(
+    (a) => a.address.toLowerCase() === safeAddress.toLowerCase()
+  );
+  if (!safeAccount) return;
+
+  // 1. Ensure all override slots are present. The prestateTracer with
+  //    diffMode only returns slots that were MODIFIED during execution.
+  //    Override slots that are only READ (ownerCount, threshold, owners,
+  //    guard, fallback handler, modules) would be missing.
+  for (const entry of stateDiff) {
+    if (!(entry.slot in safeAccount.storage)) {
+      safeAccount.storage[entry.slot] = entry.value;
+    }
+  }
+
+  // 2. Ensure slot 0 (singleton/masterCopy) is present. The Safe proxy's
+  //    bytecode reads SLOAD(0) to find the implementation address for
+  //    DELEGATECALL. Without this, the replay delegates to address(0).
+  const singletonSlotKey = slotToKey(SLOT_SINGLETON);
+  if (!(singletonSlotKey in safeAccount.storage)) {
+    const value = await client.getStorageAt({
+      address: safeAddress,
+      slot: singletonSlotKey,
+      blockNumber,
+    });
+    if (value) {
+      safeAccount.storage[singletonSlotKey] = value;
+    }
+  }
+
+  // 3. Ensure the singleton contract is present so the DELEGATECALL has
+  //    code to execute. Its own storage is unused (DELEGATECALL runs in
+  //    the proxy's storage context).
+  const singletonSlotValue = safeAccount.storage[singletonSlotKey];
+  if (!singletonSlotValue) return;
+
+  const singletonAddr = ("0x" + singletonSlotValue.slice(26)).toLowerCase() as Address;
+  if (singletonAddr === "0x0000000000000000000000000000000000000000") return;
+
+  const hasSingleton = accounts.some(
+    (a) => a.address.toLowerCase() === singletonAddr
+  );
+  if (hasSingleton) return;
+
+  const [balance, nonce, code] = await Promise.all([
+    client.getBalance({ address: singletonAddr as Address, blockNumber }),
+    client.getTransactionCount({ address: singletonAddr as Address, blockNumber }),
+    client.getCode({ address: singletonAddr as Address, blockNumber }),
+  ]);
+  accounts.push({
+    address: singletonAddr,
+    balance: normalizeHex(toHex(balance)),
+    nonce,
+    code: code && code !== "0x" ? normalizeHex(code) : "0x",
+    storage: {},
+  });
 }
 
 /**
@@ -635,7 +728,7 @@ async function debugTraceCallWithOverrides(
   } catch {
     // Expected: Gnosis-style RPCs reject `stateOverrides` (plural) and require
     // `stateOverride` (singular). The first request fails with a JSON-RPC error.
-    // Masked: transient network errors on the first attempt — acceptable because
+    // Masked: transient network errors on the first attempt -- acceptable because
     // the singular retry will also fail, and the outer catch handles it.
     return await client.request({
       method: "debug_traceCall" as "eth_call",
@@ -744,7 +837,7 @@ async function tryTraceCall(
         gasUsed = BigInt(frame.gasUsed).toString();
       } catch {
         // Expected: malformed gasUsed hex from non-standard RPC responses.
-        // Masked: nothing critical — gasUsed is informational; the trace
+        // Masked: nothing critical -- gasUsed is informational; the trace
         // data (logs, native transfers) was already collected above.
         gasUsed = null;
       }
@@ -757,7 +850,7 @@ async function tryTraceCall(
     // prestateTracer and falls back to estimateGas.
     // Masked: transient RPC errors (rate-limit, timeout) are treated as
     // "feature unavailable" for this simulation. This is acceptable because
-    // simulation still succeeds via eth_call — traces are an enhancement.
+    // simulation still succeeds via eth_call -- traces are an enhancement.
     return { logs: [], nativeTransfers: [], gasUsed: null, available: false };
   }
 }
@@ -805,7 +898,7 @@ async function tryRunPrestateTrace(
   } catch {
     // Expected: prestateTracer is not supported by all RPCs (same as callTracer).
     // Returns undefined so the caller skips state diff extraction.
-    // Masked: transient RPC errors — acceptable because state diffs are an
+    // Masked: transient RPC errors -- acceptable because state diffs are an
     // enhancement over event-based heuristics, not a required feature.
     return undefined;
   }
@@ -891,7 +984,7 @@ async function tryCollectReplayAccounts(
     // Expected: prestateTracer unavailable or trace response missing required
     // accounts. Returns undefined so the caller falls back to
     // tryCollectSimpleTransferReplayAccounts (manual EOA snapshot).
-    // Masked: transient RPC errors — acceptable because replay accounts are
+    // Masked: transient RPC errors -- acceptable because replay accounts are
     // a witness enhancement; the simulation itself already completed.
     return undefined;
   }
@@ -919,13 +1012,38 @@ async function tryCollectSimpleTransferReplayAccounts(
       return undefined;
     }
 
-    const safeOverrideStorage = Object.fromEntries(
+    // Read slot 0 (singleton/masterCopy) from the Safe. The proxy's bytecode
+    // does SLOAD(0) to find the implementation address, then DELEGATECALLs to it.
+    // Without this, the local replay delegatecalls to address(0) and gets 0x.
+    const singletonSlotKey = slotToKey(SLOT_SINGLETON);
+    const singletonSlotValue = await client.getStorageAt({
+      address: safeAddress,
+      slot: singletonSlotKey,
+      blockNumber,
+    });
+    const singletonAddress = (
+      singletonSlotValue
+        ? ("0x" + singletonSlotValue.slice(26)) as Address   // last 20 bytes
+        : undefined
+    );
+
+    const safeOverrideStorage: Record<string, string> = Object.fromEntries(
       buildSafeStateDiff(transaction.nonce, SIMULATION_ACCOUNT.address).map((entry) => [
         entry.slot,
         entry.value,
       ])
     );
+    // Include the real on-chain singleton pointer so the proxy can delegatecall.
+    if (singletonSlotValue) {
+      safeOverrideStorage[singletonSlotKey] = singletonSlotValue;
+    }
+
     const addresses: Address[] = [safeAddress, recipient, SIMULATION_ACCOUNT.address];
+    // Include the singleton contract so the delegatecall has code to execute.
+    if (singletonAddress && singletonAddress !== "0x0000000000000000000000000000000000000000") {
+      addresses.push(singletonAddress);
+    }
+
     const snapshots = await Promise.all(
       addresses.map(async (address) => {
         const [balance, nonce, code] = await Promise.all([
@@ -951,7 +1069,7 @@ async function tryCollectSimpleTransferReplayAccounts(
   } catch {
     // Expected: RPC calls for balance/nonce/code may fail on nodes that don't
     // support historical state queries at the pinned blockNumber.
-    // Masked: transient errors — acceptable because this is the last-resort
+    // Masked: transient errors -- acceptable because this is the last-resort
     // fallback for simple native transfers only; the witness will be generated
     // without replayAccounts, limiting offline replay but not blocking generation.
     return undefined;

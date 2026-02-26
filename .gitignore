@@ -53,3 +53,6 @@ next-env.d.ts
 # screenshots
 ui-*.png
 safelens-*.png
+
+# Generated audit drift output
+docs/audit/dependency-footprint.diff

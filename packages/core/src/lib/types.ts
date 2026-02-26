@@ -193,7 +193,7 @@ const beaconConsensusProofSchema = consensusProofBaseSchema.extend({
   finalityUpdate: z.string(),
   /** Beacon network identifier for selecting the correct fork config and genesis root. */
   network: z.enum(CONSENSUS_NETWORKS),
-  /** Beacon slot of the finalized header in the finality update. Informational metadata only — not consumed by the desktop verifier. */
+  /** Beacon slot of the finalized header in the finality update. Informational metadata only, not consumed by the desktop verifier. */
   finalizedSlot: z.number().int().optional(),
 });
 
@@ -281,6 +281,10 @@ export const simulationWitnessSchema = z.object({
   ).optional(),
   replayCaller: addressSchema.optional(),
   replayGasLimit: z.number().int().positive().optional(),
+  /** ABI-encoded execTransaction calldata. When present, the local replay
+   * calls the Safe proxy with this calldata instead of the inner transaction
+   * directly, so the return data matches the simulation's execTransaction. */
+  replayCalldata: hexDataSchema.optional(),
   /** When true, packaged simulation effects (logs/nativeTransfers) are retained
    * but must be re-derived from local replay during verification. Set by the
    * creator when witness contains complete replay inputs (world-state accounts

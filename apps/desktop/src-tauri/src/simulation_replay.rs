@@ -75,6 +75,7 @@ pub struct ReplayWitness {
     pub replay_accounts: Option<Vec<ReplayWitnessAccount>>,
     pub replay_caller: Option<String>,
     pub replay_gas_limit: Option<u64>,
+    pub replay_calldata: Option<String>,
     pub witness_only: Option<bool>,
 }
 
@@ -356,48 +357,72 @@ fn execute_replay(
     });
     let caller_nonce = caller_account.map(|account| account.nonce).unwrap_or(0);
 
-    let to = parse_address(&input.transaction.to, "transaction.to")?;
-    let inner_value = parse_u256(&input.transaction.value)
-        .map_err(|err| format!("invalid transaction.value: {err}"))?;
+    // When replayCalldata is present, call execTransaction on the Safe proxy
+    // instead of the inner transaction directly. This ensures the replay return
+    // data matches the simulation's execTransaction return (e.g. abi.encode(true)).
+    let has_replay_calldata = input.simulation_witness.replay_calldata.is_some();
 
-    let data = match input.transaction.data.as_deref() {
-        Some(raw) => parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?,
-        None => Bytes::new(),
-    };
-
-    let gas_limit = match input.simulation_witness.replay_gas_limit {
-        Some(limit) => limit,
-        None => match input.transaction.safe_tx_gas.as_deref() {
-            Some(raw) => {
-                let parsed = parse_u256(raw)
-                    .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
-                let capped = parsed.min(U256::from(u64::MAX));
-                let as_u64 = capped.to::<u64>();
-                if as_u64 == 0 {
-                    3_000_000
-                } else {
-                    as_u64
+    let (tx_target, tx_value, tx_data, gas_limit) =
+        if let Some(ref raw_calldata) = input.simulation_witness.replay_calldata {
+            let safe_addr = parse_address(&input.safe_address, "safeAddress")?;
+            let calldata = parse_bytes(raw_calldata)
+                .map_err(|err| format!("invalid simulationWitness.replayCalldata: {err}"))?;
+            let limit = input
+                .simulation_witness
+                .replay_gas_limit
+                .unwrap_or(10_000_000);
+            (safe_addr, U256::ZERO, calldata, limit)
+        } else {
+            let to = parse_address(&input.transaction.to, "transaction.to")?;
+            let inner_value = parse_u256(&input.transaction.value)
+                .map_err(|err| format!("invalid transaction.value: {err}"))?;
+            let data = match input.transaction.data.as_deref() {
+                Some(raw) => {
+                    parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?
                 }
-            }
-            None => 3_000_000,
-        },
-    };
+                None => Bytes::new(),
+            };
+            let limit = match input.simulation_witness.replay_gas_limit {
+                Some(limit) => limit,
+                None => match input.transaction.safe_tx_gas.as_deref() {
+                    Some(raw) => {
+                        let parsed = parse_u256(raw)
+                            .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
+                        let capped = parsed.min(U256::from(u64::MAX));
+                        let as_u64 = capped.to::<u64>();
+                        if as_u64 == 0 {
+                            3_000_000
+                        } else {
+                            as_u64
+                        }
+                    }
+                    None => 3_000_000,
+                },
+            };
+            (to, inner_value, data, limit)
+        };
 
-    let tx_kind = match input.transaction.operation {
-        0 => TxKind::Call(to),
-        1 => return Err(
-            "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
-                .to_string(),
-        ),
-        value => {
-            return Err(format!(
-                "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
-            ))
+    let tx_kind = if has_replay_calldata {
+        TxKind::Call(tx_target)
+    } else {
+        match input.transaction.operation {
+            0 => TxKind::Call(tx_target),
+            1 => {
+                return Err(
+                    "transaction.operation=1 (DELEGATECALL) is not replay-supported in the local verifier."
+                        .to_string(),
+                )
+            }
+            value => {
+                return Err(format!(
+                    "invalid transaction.operation: expected 0 (CALL) or 1 (DELEGATECALL), got {value}"
+                ))
+            }
         }
     };
 
     let gas_price = resolve_replay_gas_price(input)?;
-    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + inner_value;
+    let required_caller_balance = (U256::from(gas_limit) * U256::from(gas_price)) + tx_value;
 
     for account in accounts {
         let address = parse_address(&account.address, "replay account address")?;
@@ -443,8 +468,8 @@ fn execute_replay(
         .gas_price(gas_price)
         .nonce(caller_nonce)
         .chain_id(Some(input.chain_id))
-        .value(inner_value)
-        .data(data)
+        .value(tx_value)
+        .data(tx_data)
         .build()
         .map_err(|err| format!("failed to build replay tx: {err:?}"))?;
 
@@ -811,6 +836,7 @@ mod tests {
                 replay_accounts: None,
                 replay_caller: None,
                 replay_gas_limit: None,
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -848,6 +874,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -889,6 +916,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -927,6 +955,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -968,6 +997,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -1013,6 +1043,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(3_000_000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1059,6 +1090,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1106,6 +1138,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1158,6 +1191,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(800000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1207,6 +1241,7 @@ mod tests {
                 ]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(800000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1249,6 +1284,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: None,
             },
         });
@@ -1338,6 +1374,7 @@ mod tests {
                         ]),
                         replay_caller: Some(caller.to_string()),
                         replay_gas_limit: Some(500000),
+                        replay_calldata: None,
                         witness_only: None,
                     },
                 };
@@ -1387,6 +1424,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, "0x")]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1431,6 +1469,7 @@ mod tests {
                 replay_accounts: Some(vec![caller_account(caller), target_account(target, code)]),
                 replay_caller: Some(caller.to_string()),
                 replay_gas_limit: Some(500000),
+                replay_calldata: None,
                 witness_only: Some(true),
             },
         });
@@ -1438,6 +1477,101 @@ mod tests {
         assert!(result.executed);
         assert!(result.success, "{result:?}");
         assert_eq!(result.reason, REASON_REPLAY_MATCHED);
+    }
+
+    #[test]
+    fn proxy_delegatecall_fails_without_slot0_and_singleton() {
+        // Actual GnosisSafeProxy bytecode: reads slot 0 for singleton, then
+        // DELEGATECALLs. Without slot 0, it delegates to address(0) → 0x return.
+        let proxy_code = "0x608060405273ffffffffffffffffffffffffffffffffffffffff600054167fa619486e0000000000000000000000000000000000000000000000000000000060003514156050578060005260206000f35b3660008037600080366000845af43d6000803e60008114156070573d6000fd5b3d6000f3fe";
+        // Minimal singleton: returns abi.encode(true) for any call
+        let singleton_code = "0x600160005260206000f3";
+
+        let caller = "0x1000000000000000000000000000000000000001";
+        let proxy_addr = "0x2000000000000000000000000000000000000002";
+        let singleton_addr = "0x3000000000000000000000000000000000000003";
+        let expected_return = "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+        // Without slot 0 → proxy delegates to address(0) → empty return → mismatch
+        let result_without = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: proxy_addr.to_string(),
+                value: "0".to_string(),
+                data: Some("0xdeadbeef".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some(expected_return.to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    target_account(proxy_addr, proxy_code),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                replay_calldata: None,
+                witness_only: Some(true),
+            },
+        });
+        assert!(result_without.executed);
+        assert!(!result_without.success);
+        assert_eq!(result_without.reason, REASON_REPLAY_MISMATCH_RETURN_DATA);
+
+        // With slot 0 + singleton → correct delegatecall → match
+        let mut proxy_storage = BTreeMap::new();
+        proxy_storage.insert(
+            "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            format!("0x000000000000000000000000{}", &singleton_addr[2..]),
+        );
+
+        let result_with = verify_simulation_replay(SimulationReplayInput {
+            chain_id: 100,
+            safe_address: caller.to_string(),
+            transaction: ReplayTransaction {
+                to: proxy_addr.to_string(),
+                value: "0".to_string(),
+                data: Some("0xdeadbeef".to_string()),
+                operation: 0,
+                safe_tx_gas: Some("500000".to_string()),
+            },
+            simulation: ReplaySimulation {
+                success: true,
+                return_data: Some(expected_return.to_string()),
+                gas_used: "500000".to_string(),
+                block_number: 1,
+                logs: Vec::new(),
+            },
+            simulation_witness: ReplayWitness {
+                replay_block: Some(replay_block("1")),
+                replay_accounts: Some(vec![
+                    caller_account(caller),
+                    ReplayWitnessAccount {
+                        address: proxy_addr.to_string(),
+                        balance: "0".to_string(),
+                        nonce: 0,
+                        code: proxy_code.to_string(),
+                        storage: proxy_storage,
+                    },
+                    target_account(singleton_addr, singleton_code),
+                ]),
+                replay_caller: Some(caller.to_string()),
+                replay_gas_limit: Some(500000),
+                replay_calldata: None,
+                witness_only: Some(true),
+            },
+        });
+        assert!(result_with.executed);
+        assert!(result_with.success, "{result_with:?}");
+        assert_eq!(result_with.reason, REASON_REPLAY_MATCHED);
     }
 
     #[test]

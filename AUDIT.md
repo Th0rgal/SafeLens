@@ -9,8 +9,8 @@ Four components in a monorepo:
 | Component | Role | Network access |
 |---|---|---|
 | `packages/core` | Shared crypto verification library (TS) | None during verify |
-| `apps/generator` | Next.js web app — creates evidence packages | Yes (Safe API, RPC, Beacon) |
-| `apps/desktop` | Tauri app — airgapped verification | No external network origins; CSP allows only Tauri IPC (`ipc:` and `http://ipc.localhost`) |
+| `apps/generator` | Next.js web app, creates evidence packages | Yes (Safe API, RPC, Beacon) |
+| `apps/desktop` | Tauri app, airgapped verification | No external network origins; CSP allows only Tauri IPC (`ipc:` and `http://ipc.localhost`) |
 | `packages/cli` | CLI wrapper over core | Yes for creation, none for verify |
 
 ### Data Flow
@@ -28,17 +28,19 @@ User Input (Safe URL/address)
   → Finalize export contract (fully-verifiable | partial)
   → Export JSON
 
-Verification (desktop/CLI, offline):
+Verification (shared offline checks in CLI and desktop):
   → Zod schema validation
   → Recompute safeTxHash from tx fields (CRITICAL: never trust package's hash)
   → ECDSA signature recovery against recomputed hash
   → MPT verification of on-chain policy proof against state root
   → MPT verification of simulation witness anchoring + digest
+  → Emit trust-classified verification report
+
+Verification (desktop-only offline checks):
   → Local `revm` replay of simulation witness world state (desktop path)
   → Replay witness world state locally and compare replay-derived effects against packaged simulation effects
   → BLS sync committee verification of consensus proof (Rust/Helios)
   → Cross-validate: consensus state root == policy proof state root
-  → Emit trust-classified verification report
 ```
 
 ## Trust Model
@@ -68,7 +70,7 @@ Any failure → stays `rpc-sourced`. See `evaluateConsensusTrustDecision()` in `
 
 ### OP Stack / Linea Trust Boundary
 
-OP Stack and Linea consensus proofs are RPC-sourced execution header reads — **not** independent consensus verification. A compromised RPC can forge both sides.
+OP Stack and Linea consensus proofs are RPC-sourced execution header reads, **not** independent consensus verification. A compromised RPC can forge both sides.
 
 **Defense**: These modes cannot promote packages to `fully-verifiable`. The creator enforces `hasVerifierSupportedConsensusProof = hasConsensusProofArtifact && proofConsensusMode === "beacon"` (`creator.ts:228-229`).
 
@@ -78,7 +80,7 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 
 - **Library**: Helios consensus-core (Rust, `consensus.rs`)
 - **Algorithm**: BLS12-381 aggregate signatures over beacon block headers
-- **Chain**: beacon block root → execution payload root → EVM state root
+- **Chain**: beacon block root -> execution payload root -> EVM state root
 - **Threshold**: >2/3 of 512-member sync committee
 - **Only finalized headers accepted**
 - **Fork-aware**: Chain-specific genesis roots and fork schedules bundled
@@ -88,11 +90,11 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 - **Library**: Custom viem-based verifier (`proof/mpt.ts`, `proof/verify-policy.ts`)
 - **Verifies**: Account proof against state root, storage proofs against storage root
 - **Safe slots verified**: singleton, owners (linked list), modules (linked list), threshold, nonce, guard, fallback handler
-- **Completeness**: Linked list walks are validated (sentinel → items → sentinel)
+- **Completeness**: Linked list walks are validated (sentinel -> items -> sentinel)
 
 ### ECDSA Signatures
 
-- **Schemes**: `v=27/28` (EIP-712), `v=31/32` (eth_sign wrapped), `v=0/1` (contract/pre-approved, unsupported → warning)
+- **Schemes**: `v=27/28` (EIP-712), `v=31/32` (eth_sign wrapped), `v=0/1` (contract/pre-approved, unsupported -> warning)
 - **Defense**: Always verified against **recomputed** safeTxHash, not the package's claimed hash
 
 ### EIP-712 Hashing
@@ -103,7 +105,16 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 
 ## Attack Surface
 
+### Quick Auditor Read
+
+- Generation phase: Network is on. Outputs are claims collected from API/RPC/Beacon sources. Mismatch risk is expected here.
+- Verification phase: Network is off. The verifier recomputes hashes and checks proofs/signatures locally.
+- Not problematic: A generation-time claim differs from local verification and is downgraded to `rpc-sourced` or `api-sourced`.
+- Problematic: Verification accepts a claim without required recomputation/proof checks, or upgrades trust when proof/root linkage fails.
+
 ### Generation Phase (network-connected)
+
+This phase is where remote data enters the package. Treat this phase as data collection, not final truth. Data can be malformed or dishonest, so every field that matters must be rechecked in offline verification.
 
 | Input | Validation | Risk |
 |---|---|---|
@@ -111,16 +122,18 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 | Safe API response | Zod `safeTransactionSchema` | Malformed payloads |
 | RPC `eth_getProof` | Zod `accountProofSchema` | Malformed proofs |
 | RPC `eth_call` | ABI decoding (viem) | Invalid return data |
-| Beacon API response | Rust SSZ deserialization | Malformed BLS data |
-| Custom RPC URL | URL validation | SSRF (client-side only) |
+| Beacon API response | TypeScript parser + Zod schemas (`beacon-api.ts`) | Malformed consensus payloads |
+| Custom RPC URL | URL validation and operator-controlled input | Untrusted endpoint input (desktop UI and CLI host context) |
 
 ### Verification Phase (airgapped)
+
+This phase is where claims are checked without network access. The verifier recomputes deterministic values and validates proofs. Anything that cannot be independently proven remains explicitly labeled as lower trust.
 
 | Input | Validation | Risk |
 |---|---|---|
 | Evidence package JSON | Zod schema | Type confusion, malformed data |
 | safeTxHash (claimed) | Recomputed, never trusted | **Hash substitution attack** |
-| Signatures | Length check + ECDSA recovery | Invalid/malleabile signatures |
+| Signatures | Length check + ECDSA recovery | Invalid/malleable signatures |
 | Consensus proof | BLS verification (Rust) | Forged committee signatures |
 | Settings file | Zod schema | Malformed user config |
 
@@ -138,14 +151,14 @@ Defense against **hash substitution**: A malicious generator could provide valid
 
 ### Why a known private key for simulation?
 
-Simulation uses Hardhat account #0 (`0xac09...ff80`) — universally known and never controls real funds. Safe here because:
+Simulation uses Hardhat account #0 (`0xac09...ff80`), universally known and never controls real funds. Safe here because:
 - Only used in `eth_call` (read-only RPC method)
 - State overrides plant this as the sole 1-of-1 owner
 - Never used with `eth_sendRawTransaction`
 
 ### Why separate beacon vs non-beacon trust paths?
 
-Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads — a compromised RPC can forge them. Different trust levels reflect this.
+Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads, and a compromised RPC can forge them. Different trust levels reflect this.
 
 ### Why offline verification?
 
@@ -166,52 +179,6 @@ Settings import/export is a local trust boundary (user-supplied JSON parsed by `
 | System clock trust for `packagedAt` | Operator responsibility; no independent time source available |
 | OP Stack/Linea envelope forgery by compromised RPC | Explicitly labeled as partial trust; cannot reach fully-verifiable |
 | Contract signatures (v=0) not verified offline | Require on-chain call; flagged as warning in verification report |
-| Beacon API responses not Zod-validated (generation only) | **Fixed** (PR #173): `FinalityUpdateSchema`, `HeaderResponseSchema`, and `BootstrapSchema` now validate all beacon API consumption sites. `fetchBeaconJson` returns `Promise<unknown>` instead of `Promise<any>`. |
-
-### Open Issues
-
-Canonical source: GitHub issues for this repo
-`https://github.com/Th0rgal/SafeLens/issues`
-
-Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
-
-| Issue | Severity | Scope |
-|---|---|---|
-| #105 Infer proven post-state balance/allowance deltas (replace event-only approval heuristic) | Medium | simulation interpretation correctness |
-
-### Closed Issues (previously listed)
-
-| Issue | Resolution |
-|---|---|
-| #135 `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Fixed: `finalizedSlot` is now optional (`z.number().int().optional()`) with doc comment clarifying it is informational metadata not consumed by the desktop verifier |
-| #134 Generator emits verbose evidence debug logs in production without opt-in | Fixed in PR #143: debug logs gated behind `NEXT_PUBLIC_ENABLE_DEBUG_LOGS` / `NODE_ENV === "development"` |
-| #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Fixed in PR #146: AUDIT.md data flow description synchronized with runtime behavior |
-| #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Fixed in PR #146: witness-only semantics clarified with cross-reference to verification-source-contract |
-| #131 Docs mismatch: `TRUST_ASSUMPTIONS` pins evidence package to v1.1 | Fixed in PR #146: version pinning updated to `v1.0/v1.1/v1.2` |
-| #127 RPC URL sanitizer misses case-variant credential params | Fixed: `redactRpcUrl` in `rpc-redaction.ts` handles URL-pattern redaction; witness errors also redact URLs via regex |
-| #125 Stale consensus-mode schema comment misstates desktop verifier support | Fixed in PR #146: comment updated to document beacon/opstack/linea support |
-| #123 Stale `simulationWitness.witnessOnly` schema comment contradicts runtime behavior | Fixed in PR #146: comment updated with when/why context |
-| #120 Docs mismatch: README/TRUST_ASSUMPTIONS claim `connect-src 'none'` | Fixed in PR #146: CSP documentation corrected to match Tauri IPC-only policy |
-| #119 Architecture doc mismatch: witness-only simulation effects no longer omitted | Fixed in PR #146: architecture contract synchronized with package creator behavior |
-| #118 Witness-only verification gap: VerifyScreen can display unverified packaged simulation effects | Fixed in PR #147: effects gated on `replayPassed` and badge gated on `simulationPassed` |
-| #117 Witness generation errors are silently swallowed in `enrichWithSimulation` | Fixed in PR #143: `enrichWithSimulation` returns `{ evidence, witnessGenerationError? }` with URL redaction |
-| #113 `AUDIT.md` claims `connect-src 'none'` but production CSP allows Tauri IPC origins | Fixed in PR #146: CSP claim corrected |
-| #106 Settings loader silently falls back to defaults on read/parse/schema errors | Fixed in PR #144: `loadSettingsConfig` returns `SettingsLoadResult { config, warning? }` with typed warnings surfaced in desktop UI and CLI stderr |
-| #137 `simulationWitness.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #136 `simulationWitness.chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #130 `simulation.blockNumber` accepts non-integers but desktop replay expects `u64` | Fixed: schema now enforces `z.number().int()` |
-| #129 `onchain decodedPolicy.nonce` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #126 `onchainPolicyProof.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #121 `transaction.nonce` accepts non-integers and verifier throws `RangeError` | Fixed: schema now enforces `z.number().int()` |
-| #116 `onchain decodedPolicy.threshold` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #115 `consensusProof.blockNumber` accepts non-integers but desktop verifier requires u64 | Fixed: schema now enforces `z.number().int()` |
-| #114 `confirmationsRequired` accepts fractional values | Fixed: schema now enforces `z.number().int()` |
-| #112 `accountProof` nonce accepts non-integers and can crash verifier | Fixed: schema now enforces `z.number().int()` |
-| #111 Safe URL parser accepts conflicting Safe addresses in transaction URL | Fixed: address consistency validation added |
-| #110 Evidence package `chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #109 Evidence package `nonce` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #108 Safe API nonce schema accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #103 Frontend style regression after Tailwind 4 migration | Closed: dependency versions are LTS/stable; CSS entry point migration is a configuration adjustment |
 
 ### Replay Status
 
@@ -221,39 +188,51 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 | Deterministic mismatch reason codes for replay failures | Implemented |
 | Replay latency benchmark harness (`p50`/`p95`) | Implemented (`benchmark_replay_latency_profiles`) |
 
-### Resolved In Current Branch
-
-| Issue | Resolution |
-|---|---|
-| `fail_result()` dropped accumulated checks in non-beacon envelope verifier | Fixed by returning `fail_result_with_context(...)` for post-envelope validation failures (invalid expected policy root, missing/invalid `packagePackagedAt`). Existing checks and verified envelope context are now preserved. |
-| Future-dated envelope timestamp freshness ambiguity | Explicitly rejected when skew exceeds `NON_BEACON_MAX_FUTURE_SKEW_SECS`; covered by regression tests in `consensus.rs`. |
-| State-root normalization mismatch risk in envelope verification | Roots are normalized through `parse_b256` + canonical hex formatting before comparison. |
-
 ## External Dependencies
 
 | Dependency | Version | Why trusted | Risk |
 |---|---|---|---|
 | viem | ^2.x | Standard EVM library, wide adoption, typed | RLP/ABI decoding bugs |
-| zod | ^3.x | Schema validation, no network access | Validation bypass |
-| helios-consensus-core | (Rust) | a]16z-maintained Ethereum light client | BLS verification bugs |
+| zod | ^4.x | Schema validation, no network access | Validation bypass |
+| helios-consensus-core | (Rust) | a16z-maintained Ethereum light client | BLS verification bugs |
 | alloy-primitives | (Rust) | Standard Ethereum types | Type handling bugs |
 
 All verification-path dependencies are local-only (no network access). Generation-path additionally uses viem's HTTP transport.
+
+## Auditor Workflow
+
+Use these as the reviewer baseline:
+
+1. Run full CI parity checks:
+   - `bun run verify:ci`
+2. Run core package tests:
+   - `bun test --filter @safelens/core`
+3. Run desktop Rust tests:
+   - `cd apps/desktop/src-tauri && cargo test`
+4. Generate dependency footprint and compare drift:
+   - `bash scripts/audit/deps.sh`
+
+Expected result: all commands pass without skipped security-critical suites.
+
+Auditor packet entrypoint: `docs/audit/AUDITOR_PACKET.md`.
+
+For live issue status, use the canonical tracker:
+`https://github.com/Th0rgal/SafeLens/issues`
 
 ## File Map (Security-Critical)
 
 ```
 packages/core/src/lib/
-  types.ts              — Zod schemas (trust boundary definitions)
-  safe/hash.ts          — EIP-712 safeTxHash computation
-  safe/signatures.ts    — ECDSA signature recovery
-  proof/verify-policy.ts — MPT proof verification
-  proof/mpt.ts          — Merkle Patricia Trie verifier
-  verify/index.ts       — Verification orchestration + trust decisions
-  package/creator.ts    — Evidence package creation + export contract
-  trust/sources.ts      — Trust classification logic
-  consensus/index.ts    — Consensus proof fetching (beacon + execution)
+  types.ts              : Zod schemas (trust boundary definitions)
+  safe/hash.ts          : EIP-712 safeTxHash computation
+  safe/signatures.ts    : ECDSA signature recovery
+  proof/verify-policy.ts : MPT proof verification
+  proof/mpt.ts          : Merkle Patricia Trie verifier
+  verify/index.ts       : Verification orchestration + trust decisions
+  package/creator.ts    : Evidence package creation + export contract
+  trust/sources.ts      : Trust classification logic
+  consensus/index.ts    : Consensus proof fetching (beacon + execution)
 
 apps/desktop/src-tauri/src/
-  consensus.rs          — BLS verification + non-beacon envelope checks
+  consensus.rs          : BLS verification + non-beacon envelope checks
 ```

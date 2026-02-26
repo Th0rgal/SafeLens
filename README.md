@@ -21,19 +21,32 @@
 SafeLens generates and verifies evidence packages for Gnosis Safe multisig transactions. Paste a Safe transaction URL into the [generator](https://safelens.lfg.rs/), download the `evidence.json`, then verify signatures and hashes offline using the desktop app or CLI.
 
 - **Generate** an `evidence.json` package from any Safe transaction URL
-- **Verify** signatures, hashes, and enriched proofs locally with zero network access
+- **Verify** signatures, hashes, enriched proofs, and local transaction replay checks with zero network access
 - **Clear signing** via built-in and ERC-7730 interpreters for human-readable transaction details
 - **Consensus checks** via embedded Helios verifier for beacon-mode consensus proofs
 
 ## Trust model
 
-The desktop verifier ships with a CSP that restricts `connect-src` to Tauri IPC only (`ipc: http://ipc.localhost`) — no external network origins — and no shell-open capability. It cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
+The desktop verifier ships with a CSP that restricts `connect-src` to Tauri IPC only (`ipc: http://ipc.localhost`), with no external network origins and no shell-open capability. It cannot make network requests during verification. All crypto runs locally using bundled libraries. See [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) for the full model.
+
+## Independent verification stack
+
+SafeLens is one verifier in a multi-tool workflow, not a single source of truth.
+
+- Tool 1: Independent Safe hash verifiers (for example `safe-tx-hashes-util`) validate digest expectations.
+- Tool 2: Hardware wallet screen validates the hash shown at signing time.
+- Tool 3: Foundry or local node simulation validates execution expectations.
+- Tool 4: SafeLens validates offline package integrity, signatures, and optional proofs.
+
+For high-value operations, use at least two independent tools and compare outputs.
 
 ## Project docs
 
 - Security policy: [`SECURITY.md`](SECURITY.md)
 - Contributing guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Build verification: [`VERIFY.md`](VERIFY.md)
+- Release integrity checks: [`RELEASE_INTEGRITY.md`](RELEASE_INTEGRITY.md)
+- Auditor packet: [`docs/audit/AUDITOR_PACKET.md`](docs/audit/AUDITOR_PACKET.md)
 
 ## Architecture and runbooks
 

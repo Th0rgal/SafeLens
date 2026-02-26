@@ -2,9 +2,25 @@
 
 Why each dependency exists. Organized by package and split into verification-path (security-critical) vs UI/tooling (non-critical).
 
+## Reviewer workflow
+
+Generate a dependency snapshot and compare it with the committed baseline:
+
+```bash
+bash scripts/audit/deps.sh
+```
+
+Artifacts:
+
+- Current snapshot: `docs/audit/dependency-footprint.md`
+- Baseline snapshot: `docs/audit/dependency-footprint.baseline.md`
+- Drift diff: `docs/audit/dependency-footprint.diff`
+
+Any dependency drift should be reviewed together with rationale updates in this file.
+
 ## Verification Path (security-critical)
 
-These dependencies are in the trust boundary — they handle crypto, schema validation, or EVM execution.
+These dependencies are in the trust boundary, they handle crypto, schema validation, or EVM execution.
 
 ### packages/core (TypeScript)
 
@@ -76,7 +92,7 @@ These dependencies are not in the verification trust boundary. They handle rende
 | `next` | ^14.2 | React framework. Serves the generator web app. |
 | `react` / `react-dom` | ^18.3 | UI rendering. |
 | `lucide-react` | ^0.454 | Icons. |
-| `class-variance-authority` / `clsx` / `tailwind-merge` | — | CSS utilities (same as desktop). |
+| `class-variance-authority` / `clsx` / `tailwind-merge` | n/a | CSS utilities (same as desktop). |
 
 ### apps/generator (dev)
 
@@ -111,7 +127,7 @@ helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda3
 
 The pinned commit (`582fda3`, 2026-02-18) includes a fix for hex-encoded `blockNumber` and `chainId` fields in beacon API responses ([helios#776](https://github.com/a16z/helios/pull/776)). The latest tagged Helios release is `0.11.0` (2025-12-16), which does not include this fix. SafeLens needs it because beacon finality update responses from some clients return numeric fields as hex strings.
 
-**Commit provenance:** The commit is on the `main` branch of `a16z/helios`, 17 commits ahead of the `0.11.0` tag. It will be included in the next Helios release.
+**Commit provenance:** The commit is on the `main` branch of `a16z/helios`, 17 commits ahead of the `0.11.0` tag.
 
 **Action item:** When Helios publishes a release that includes commit `582fda3`, migrate from `rev = "..."` to a version or tag pin.
 
