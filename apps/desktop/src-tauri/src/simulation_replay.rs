@@ -1527,12 +1527,8 @@ mod tests {
         // With slot 0 + singleton → correct delegatecall → match
         let mut proxy_storage = BTreeMap::new();
         proxy_storage.insert(
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-                .to_string(),
-            format!(
-                "0x000000000000000000000000{}",
-                &singleton_addr[2..]
-            ),
+            "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            format!("0x000000000000000000000000{}", &singleton_addr[2..]),
         );
 
         let result_with = verify_simulation_replay(SimulationReplayInput {
