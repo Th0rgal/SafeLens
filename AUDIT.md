@@ -122,8 +122,8 @@ This phase is where remote data enters the package. Treat this phase as data col
 | Safe API response | Zod `safeTransactionSchema` | Malformed payloads |
 | RPC `eth_getProof` | Zod `accountProofSchema` | Malformed proofs |
 | RPC `eth_call` | ABI decoding (viem) | Invalid return data |
-| Beacon API response | Rust SSZ deserialization | Malformed BLS data |
-| Custom RPC URL | URL validation | SSRF (client-side only) |
+| Beacon API response | TypeScript parser + Zod schemas (`beacon-api.ts`) | Malformed consensus payloads |
+| Custom RPC URL | URL validation and operator-controlled input | Untrusted endpoint input (desktop UI and CLI host context) |
 
 ### Verification Phase (airgapped)
 

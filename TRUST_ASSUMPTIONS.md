@@ -4,6 +4,7 @@ This document lists every trust assumption SafeLens makes today.
 
 SafeLens classifies each source as:
 
+- `consensus-verified` (legacy): backward-compatibility enum value for older exports; new reports use mode-specific consensus levels
 - `consensus-verified-beacon`: state root verified with beacon light-client BLS checks
 - `consensus-verified-opstack`: OP Stack envelope integrity verified (not beacon-equivalent)
 - `consensus-verified-linea`: Linea envelope integrity verified (not beacon-equivalent)
@@ -63,11 +64,12 @@ From highest to lowest assurance:
 1. **consensus-verified-beacon**: State root verified with beacon BLS sync committee checks
 2. **consensus-verified-opstack**: OP Stack envelope integrity checks (not beacon-equivalent)
 3. **consensus-verified-linea**: Linea envelope integrity checks (not beacon-equivalent)
-4. **proof-verified**: Validated against cryptographic Merkle proofs
-5. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
-6. **rpc-sourced**: Accepted from an RPC endpoint (including generation-time simulation/witness inputs without full local replay confirmation)
-7. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
-8. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
+4. **consensus-verified** (legacy): Backward-compatibility label from older exports, superseded by mode-specific consensus labels in current output
+5. **proof-verified**: Validated against cryptographic Merkle proofs
+6. **self-verified**: Validated locally with deterministic code (EIP-712 hash, ECDSA recovery)
+7. **rpc-sourced**: Accepted from an RPC endpoint (including generation-time simulation/witness inputs without full local replay confirmation)
+8. **api-sourced**: Accepted from a remote API (Safe Transaction Service)
+9. **user-provided**: Accepted from local operator input (URLs, settings, timestamps)
 
 ## Desktop Airgap Scope
 

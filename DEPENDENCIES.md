@@ -111,7 +111,7 @@ helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda3
 
 The pinned commit (`582fda3`, 2026-02-18) includes a fix for hex-encoded `blockNumber` and `chainId` fields in beacon API responses ([helios#776](https://github.com/a16z/helios/pull/776)). The latest tagged Helios release is `0.11.0` (2025-12-16), which does not include this fix. SafeLens needs it because beacon finality update responses from some clients return numeric fields as hex strings.
 
-**Commit provenance:** The commit is on the `main` branch of `a16z/helios`, 17 commits ahead of the `0.11.0` tag. It will be included in the next Helios release.
+**Commit provenance:** The commit is on the `main` branch of `a16z/helios`, 17 commits ahead of the `0.11.0` tag.
 
 **Action item:** When Helios publishes a release that includes commit `582fda3`, migrate from `rev = "..."` to a version or tag pin.
 
