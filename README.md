@@ -21,7 +21,7 @@
 SafeLens generates and verifies evidence packages for Gnosis Safe multisig transactions. Paste a Safe transaction URL into the [generator](https://safelens.lfg.rs/), download the `evidence.json`, then verify signatures and hashes offline using the desktop app or CLI.
 
 - **Generate** an `evidence.json` package from any Safe transaction URL
-- **Verify** signatures, hashes, and enriched proofs locally with zero network access
+- **Verify** signatures, hashes, enriched proofs, and local transaction replay checks with zero network access
 - **Clear signing** via built-in and ERC-7730 interpreters for human-readable transaction details
 - **Consensus checks** via embedded Helios verifier for beacon-mode consensus proofs
 
