@@ -120,7 +120,7 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 |---|---|---|
 | Evidence package JSON | Zod schema | Type confusion, malformed data |
 | safeTxHash (claimed) | Recomputed, never trusted | **Hash substitution attack** |
-| Signatures | Length check + ECDSA recovery | Invalid/malleabile signatures |
+| Signatures | Length check + ECDSA recovery | Invalid/malleable signatures |
 | Consensus proof | BLS verification (Rust) | Forged committee signatures |
 | Settings file | Zod schema | Malformed user config |
 
@@ -166,52 +166,6 @@ Settings import/export is a local trust boundary (user-supplied JSON parsed by `
 | System clock trust for `packagedAt` | Operator responsibility; no independent time source available |
 | OP Stack/Linea envelope forgery by compromised RPC | Explicitly labeled as partial trust; cannot reach fully-verifiable |
 | Contract signatures (v=0) not verified offline | Require on-chain call; flagged as warning in verification report |
-| Beacon API responses not Zod-validated (generation only) | **Fixed** (PR #173): `FinalityUpdateSchema`, `HeaderResponseSchema`, and `BootstrapSchema` now validate all beacon API consumption sites. `fetchBeaconJson` returns `Promise<unknown>` instead of `Promise<any>`. |
-
-### Open Issues
-
-Canonical source: GitHub issues for this repo
-`https://github.com/Th0rgal/SafeLens/issues`
-
-Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
-
-| Issue | Severity | Scope |
-|---|---|---|
-| #105 Infer proven post-state balance/allowance deltas (replace event-only approval heuristic) | Medium | simulation interpretation correctness |
-
-### Closed Issues (previously listed)
-
-| Issue | Resolution |
-|---|---|
-| #135 `consensusProof.finalizedSlot` is schema-required but ignored by desktop verifier | Fixed: `finalizedSlot` is now optional (`z.number().int().optional()`) with doc comment clarifying it is informational metadata not consumed by the desktop verifier |
-| #134 Generator emits verbose evidence debug logs in production without opt-in | Fixed in PR #143: debug logs gated behind `NEXT_PUBLIC_ENABLE_DEBUG_LOGS` / `NODE_ENV === "development"` |
-| #133 Docs mismatch: `AUDIT.md` witness-only simulation effects flow is stale | Fixed in PR #146: AUDIT.md data flow description synchronized with runtime behavior |
-| #132 Docs mismatch: `TRUST_ASSUMPTIONS` witness-only simulation effects contract is stale | Fixed in PR #146: witness-only semantics clarified with cross-reference to verification-source-contract |
-| #131 Docs mismatch: `TRUST_ASSUMPTIONS` pins evidence package to v1.1 | Fixed in PR #146: version pinning updated to `v1.0/v1.1/v1.2` |
-| #127 RPC URL sanitizer misses case-variant credential params | Fixed: `redactRpcUrl` in `rpc-redaction.ts` handles URL-pattern redaction; witness errors also redact URLs via regex |
-| #125 Stale consensus-mode schema comment misstates desktop verifier support | Fixed in PR #146: comment updated to document beacon/opstack/linea support |
-| #123 Stale `simulationWitness.witnessOnly` schema comment contradicts runtime behavior | Fixed in PR #146: comment updated with when/why context |
-| #120 Docs mismatch: README/TRUST_ASSUMPTIONS claim `connect-src 'none'` | Fixed in PR #146: CSP documentation corrected to match Tauri IPC-only policy |
-| #119 Architecture doc mismatch: witness-only simulation effects no longer omitted | Fixed in PR #146: architecture contract synchronized with package creator behavior |
-| #118 Witness-only verification gap: VerifyScreen can display unverified packaged simulation effects | Fixed in PR #147: effects gated on `replayPassed` and badge gated on `simulationPassed` |
-| #117 Witness generation errors are silently swallowed in `enrichWithSimulation` | Fixed in PR #143: `enrichWithSimulation` returns `{ evidence, witnessGenerationError? }` with URL redaction |
-| #113 `AUDIT.md` claims `connect-src 'none'` but production CSP allows Tauri IPC origins | Fixed in PR #146: CSP claim corrected |
-| #106 Settings loader silently falls back to defaults on read/parse/schema errors | Fixed in PR #144: `loadSettingsConfig` returns `SettingsLoadResult { config, warning? }` with typed warnings surfaced in desktop UI and CLI stderr |
-| #137 `simulationWitness.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #136 `simulationWitness.chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #130 `simulation.blockNumber` accepts non-integers but desktop replay expects `u64` | Fixed: schema now enforces `z.number().int()` |
-| #129 `onchain decodedPolicy.nonce` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #126 `onchainPolicyProof.blockNumber` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #121 `transaction.nonce` accepts non-integers and verifier throws `RangeError` | Fixed: schema now enforces `z.number().int()` |
-| #116 `onchain decodedPolicy.threshold` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #115 `consensusProof.blockNumber` accepts non-integers but desktop verifier requires u64 | Fixed: schema now enforces `z.number().int()` |
-| #114 `confirmationsRequired` accepts fractional values | Fixed: schema now enforces `z.number().int()` |
-| #112 `accountProof` nonce accepts non-integers and can crash verifier | Fixed: schema now enforces `z.number().int()` |
-| #111 Safe URL parser accepts conflicting Safe addresses in transaction URL | Fixed: address consistency validation added |
-| #110 Evidence package `chainId` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #109 Evidence package `nonce` accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #108 Safe API nonce schema accepts non-integers | Fixed: schema now enforces `z.number().int()` |
-| #103 Frontend style regression after Tailwind 4 migration | Closed: dependency versions are LTS/stable; CSS entry point migration is a configuration adjustment |
 
 ### Replay Status
 
@@ -221,24 +175,32 @@ Snapshot as of **2026-02-24** (synchronized with GitHub issue tracker):
 | Deterministic mismatch reason codes for replay failures | Implemented |
 | Replay latency benchmark harness (`p50`/`p95`) | Implemented (`benchmark_replay_latency_profiles`) |
 
-### Resolved In Current Branch
-
-| Issue | Resolution |
-|---|---|
-| `fail_result()` dropped accumulated checks in non-beacon envelope verifier | Fixed by returning `fail_result_with_context(...)` for post-envelope validation failures (invalid expected policy root, missing/invalid `packagePackagedAt`). Existing checks and verified envelope context are now preserved. |
-| Future-dated envelope timestamp freshness ambiguity | Explicitly rejected when skew exceeds `NON_BEACON_MAX_FUTURE_SKEW_SECS`; covered by regression tests in `consensus.rs`. |
-| State-root normalization mismatch risk in envelope verification | Roots are normalized through `parse_b256` + canonical hex formatting before comparison. |
-
 ## External Dependencies
 
 | Dependency | Version | Why trusted | Risk |
 |---|---|---|---|
 | viem | ^2.x | Standard EVM library, wide adoption, typed | RLP/ABI decoding bugs |
-| zod | ^3.x | Schema validation, no network access | Validation bypass |
+| zod | ^4.x | Schema validation, no network access | Validation bypass |
 | helios-consensus-core | (Rust) | a]16z-maintained Ethereum light client | BLS verification bugs |
 | alloy-primitives | (Rust) | Standard Ethereum types | Type handling bugs |
 
 All verification-path dependencies are local-only (no network access). Generation-path additionally uses viem's HTTP transport.
+
+## Auditor Workflow
+
+Use these as the reviewer baseline:
+
+1. Run full CI parity checks:
+   - `bun run verify:ci`
+2. Run core package tests:
+   - `bun test --filter @safelens/core`
+3. Run desktop Rust tests:
+   - `cd apps/desktop/src-tauri && cargo test`
+
+Expected result: all commands pass without skipped security-critical suites.
+
+For live issue status, use the canonical tracker:
+`https://github.com/Th0rgal/SafeLens/issues`
 
 ## File Map (Security-Critical)
 
