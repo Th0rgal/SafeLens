@@ -362,43 +362,45 @@ fn execute_replay(
     // data matches the simulation's execTransaction return (e.g. abi.encode(true)).
     let has_replay_calldata = input.simulation_witness.replay_calldata.is_some();
 
-    let (tx_target, tx_value, tx_data, gas_limit) = if let Some(ref raw_calldata) =
-        input.simulation_witness.replay_calldata
-    {
-        let safe_addr = parse_address(&input.safe_address, "safeAddress")?;
-        let calldata = parse_bytes(raw_calldata)
-            .map_err(|err| format!("invalid simulationWitness.replayCalldata: {err}"))?;
-        let limit = input.simulation_witness.replay_gas_limit.unwrap_or(10_000_000);
-        (safe_addr, U256::ZERO, calldata, limit)
-    } else {
-        let to = parse_address(&input.transaction.to, "transaction.to")?;
-        let inner_value = parse_u256(&input.transaction.value)
-            .map_err(|err| format!("invalid transaction.value: {err}"))?;
-        let data = match input.transaction.data.as_deref() {
-            Some(raw) => {
-                parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?
-            }
-            None => Bytes::new(),
-        };
-        let limit = match input.simulation_witness.replay_gas_limit {
-            Some(limit) => limit,
-            None => match input.transaction.safe_tx_gas.as_deref() {
+    let (tx_target, tx_value, tx_data, gas_limit) =
+        if let Some(ref raw_calldata) = input.simulation_witness.replay_calldata {
+            let safe_addr = parse_address(&input.safe_address, "safeAddress")?;
+            let calldata = parse_bytes(raw_calldata)
+                .map_err(|err| format!("invalid simulationWitness.replayCalldata: {err}"))?;
+            let limit = input
+                .simulation_witness
+                .replay_gas_limit
+                .unwrap_or(10_000_000);
+            (safe_addr, U256::ZERO, calldata, limit)
+        } else {
+            let to = parse_address(&input.transaction.to, "transaction.to")?;
+            let inner_value = parse_u256(&input.transaction.value)
+                .map_err(|err| format!("invalid transaction.value: {err}"))?;
+            let data = match input.transaction.data.as_deref() {
                 Some(raw) => {
-                    let parsed = parse_u256(raw)
-                        .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
-                    let capped = parsed.min(U256::from(u64::MAX));
-                    let as_u64 = capped.to::<u64>();
-                    if as_u64 == 0 {
-                        3_000_000
-                    } else {
-                        as_u64
-                    }
+                    parse_bytes(raw).map_err(|err| format!("invalid transaction.data: {err}"))?
                 }
-                None => 3_000_000,
-            },
+                None => Bytes::new(),
+            };
+            let limit = match input.simulation_witness.replay_gas_limit {
+                Some(limit) => limit,
+                None => match input.transaction.safe_tx_gas.as_deref() {
+                    Some(raw) => {
+                        let parsed = parse_u256(raw)
+                            .map_err(|err| format!("invalid transaction.safeTxGas: {err}"))?;
+                        let capped = parsed.min(U256::from(u64::MAX));
+                        let as_u64 = capped.to::<u64>();
+                        if as_u64 == 0 {
+                            3_000_000
+                        } else {
+                            as_u64
+                        }
+                    }
+                    None => 3_000_000,
+                },
+            };
+            (to, inner_value, data, limit)
         };
-        (to, inner_value, data, limit)
-    };
 
     let tx_kind = if has_replay_calldata {
         TxKind::Call(tx_target)
