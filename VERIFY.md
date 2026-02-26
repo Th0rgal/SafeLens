@@ -76,7 +76,7 @@ Tauri/Rust builds are not yet fully bit-for-bit reproducible across environments
 - **Timestamps**: Some build tools embed timestamps in binaries
 - **System libraries**: Linked system libraries (WebKit, OpenSSL) differ across OS versions
 
-The `SHA256SUMS.txt` file in each release is the canonical reference. If you build locally and get a different hash, the above factors are the likely cause — not a supply-chain compromise. The source code itself can always be audited directly.
+The `SHA256SUMS.txt` file in each release is the canonical reference. If you build locally and get a different hash, the above factors are the likely cause, not a supply-chain compromise. The source code itself can always be audited directly.
 
 ## Reporting Discrepancies
 

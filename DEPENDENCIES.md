@@ -4,7 +4,7 @@ Why each dependency exists. Organized by package and split into verification-pat
 
 ## Verification Path (security-critical)
 
-These dependencies are in the trust boundary — they handle crypto, schema validation, or EVM execution.
+These dependencies are in the trust boundary, they handle crypto, schema validation, or EVM execution.
 
 ### packages/core (TypeScript)
 
@@ -76,7 +76,7 @@ These dependencies are not in the verification trust boundary. They handle rende
 | `next` | ^14.2 | React framework. Serves the generator web app. |
 | `react` / `react-dom` | ^18.3 | UI rendering. |
 | `lucide-react` | ^0.454 | Icons. |
-| `class-variance-authority` / `clsx` / `tailwind-merge` | — | CSS utilities (same as desktop). |
+| `class-variance-authority` / `clsx` / `tailwind-merge` | n/a | CSS utilities (same as desktop). |
 
 ### apps/generator (dev)
 

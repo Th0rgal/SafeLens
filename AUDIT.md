@@ -9,8 +9,8 @@ Four components in a monorepo:
 | Component | Role | Network access |
 |---|---|---|
 | `packages/core` | Shared crypto verification library (TS) | None during verify |
-| `apps/generator` | Next.js web app — creates evidence packages | Yes (Safe API, RPC, Beacon) |
-| `apps/desktop` | Tauri app — airgapped verification | No external network origins; CSP allows only Tauri IPC (`ipc:` and `http://ipc.localhost`) |
+| `apps/generator` | Next.js web app, creates evidence packages | Yes (Safe API, RPC, Beacon) |
+| `apps/desktop` | Tauri app, airgapped verification | No external network origins; CSP allows only Tauri IPC (`ipc:` and `http://ipc.localhost`) |
 | `packages/cli` | CLI wrapper over core | Yes for creation, none for verify |
 
 ### Data Flow
@@ -28,17 +28,19 @@ User Input (Safe URL/address)
   → Finalize export contract (fully-verifiable | partial)
   → Export JSON
 
-Verification (desktop/CLI, offline):
+Verification (shared offline checks in CLI and desktop):
   → Zod schema validation
   → Recompute safeTxHash from tx fields (CRITICAL: never trust package's hash)
   → ECDSA signature recovery against recomputed hash
   → MPT verification of on-chain policy proof against state root
   → MPT verification of simulation witness anchoring + digest
+  → Emit trust-classified verification report
+
+Verification (desktop-only offline checks):
   → Local `revm` replay of simulation witness world state (desktop path)
   → Replay witness world state locally and compare replay-derived effects against packaged simulation effects
   → BLS sync committee verification of consensus proof (Rust/Helios)
   → Cross-validate: consensus state root == policy proof state root
-  → Emit trust-classified verification report
 ```
 
 ## Trust Model
@@ -68,7 +70,7 @@ Any failure → stays `rpc-sourced`. See `evaluateConsensusTrustDecision()` in `
 
 ### OP Stack / Linea Trust Boundary
 
-OP Stack and Linea consensus proofs are RPC-sourced execution header reads — **not** independent consensus verification. A compromised RPC can forge both sides.
+OP Stack and Linea consensus proofs are RPC-sourced execution header reads, **not** independent consensus verification. A compromised RPC can forge both sides.
 
 **Defense**: These modes cannot promote packages to `fully-verifiable`. The creator enforces `hasVerifierSupportedConsensusProof = hasConsensusProofArtifact && proofConsensusMode === "beacon"` (`creator.ts:228-229`).
 
@@ -78,7 +80,7 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 
 - **Library**: Helios consensus-core (Rust, `consensus.rs`)
 - **Algorithm**: BLS12-381 aggregate signatures over beacon block headers
-- **Chain**: beacon block root → execution payload root → EVM state root
+- **Chain**: beacon block root -> execution payload root -> EVM state root
 - **Threshold**: >2/3 of 512-member sync committee
 - **Only finalized headers accepted**
 - **Fork-aware**: Chain-specific genesis roots and fork schedules bundled
@@ -88,11 +90,11 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 - **Library**: Custom viem-based verifier (`proof/mpt.ts`, `proof/verify-policy.ts`)
 - **Verifies**: Account proof against state root, storage proofs against storage root
 - **Safe slots verified**: singleton, owners (linked list), modules (linked list), threshold, nonce, guard, fallback handler
-- **Completeness**: Linked list walks are validated (sentinel → items → sentinel)
+- **Completeness**: Linked list walks are validated (sentinel -> items -> sentinel)
 
 ### ECDSA Signatures
 
-- **Schemes**: `v=27/28` (EIP-712), `v=31/32` (eth_sign wrapped), `v=0/1` (contract/pre-approved, unsupported → warning)
+- **Schemes**: `v=27/28` (EIP-712), `v=31/32` (eth_sign wrapped), `v=0/1` (contract/pre-approved, unsupported -> warning)
 - **Defense**: Always verified against **recomputed** safeTxHash, not the package's claimed hash
 
 ### EIP-712 Hashing
@@ -103,7 +105,16 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 
 ## Attack Surface
 
+### Quick Auditor Read
+
+- Generation phase: Network is on. Outputs are claims collected from API/RPC/Beacon sources. Mismatch risk is expected here.
+- Verification phase: Network is off. The verifier recomputes hashes and checks proofs/signatures locally.
+- Not problematic: A generation-time claim differs from local verification and is downgraded to `rpc-sourced` or `api-sourced`.
+- Problematic: Verification accepts a claim without required recomputation/proof checks, or upgrades trust when proof/root linkage fails.
+
 ### Generation Phase (network-connected)
+
+This phase is where remote data enters the package. Treat this phase as data collection, not final truth. Data can be malformed or dishonest, so every field that matters must be rechecked in offline verification.
 
 | Input | Validation | Risk |
 |---|---|---|
@@ -115,6 +126,8 @@ OP Stack and Linea consensus proofs are RPC-sourced execution header reads — *
 | Custom RPC URL | URL validation | SSRF (client-side only) |
 
 ### Verification Phase (airgapped)
+
+This phase is where claims are checked without network access. The verifier recomputes deterministic values and validates proofs. Anything that cannot be independently proven remains explicitly labeled as lower trust.
 
 | Input | Validation | Risk |
 |---|---|---|
@@ -138,14 +151,14 @@ Defense against **hash substitution**: A malicious generator could provide valid
 
 ### Why a known private key for simulation?
 
-Simulation uses Hardhat account #0 (`0xac09...ff80`) — universally known and never controls real funds. Safe here because:
+Simulation uses Hardhat account #0 (`0xac09...ff80`), universally known and never controls real funds. Safe here because:
 - Only used in `eth_call` (read-only RPC method)
 - State overrides plant this as the sole 1-of-1 owner
 - Never used with `eth_sendRawTransaction`
 
 ### Why separate beacon vs non-beacon trust paths?
 
-Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads — a compromised RPC can forge them. Different trust levels reflect this.
+Beacon light client provides independent cryptographic verification (BLS aggregate signatures from >2/3 of sync committee). OP Stack/Linea envelopes are just RPC header reads, and a compromised RPC can forge them. Different trust levels reflect this.
 
 ### Why offline verification?
 
@@ -181,7 +194,7 @@ Settings import/export is a local trust boundary (user-supplied JSON parsed by `
 |---|---|---|---|
 | viem | ^2.x | Standard EVM library, wide adoption, typed | RLP/ABI decoding bugs |
 | zod | ^4.x | Schema validation, no network access | Validation bypass |
-| helios-consensus-core | (Rust) | a]16z-maintained Ethereum light client | BLS verification bugs |
+| helios-consensus-core | (Rust) | a16z-maintained Ethereum light client | BLS verification bugs |
 | alloy-primitives | (Rust) | Standard Ethereum types | Type handling bugs |
 
 All verification-path dependencies are local-only (no network access). Generation-path additionally uses viem's HTTP transport.
@@ -206,16 +219,16 @@ For live issue status, use the canonical tracker:
 
 ```
 packages/core/src/lib/
-  types.ts              — Zod schemas (trust boundary definitions)
-  safe/hash.ts          — EIP-712 safeTxHash computation
-  safe/signatures.ts    — ECDSA signature recovery
-  proof/verify-policy.ts — MPT proof verification
-  proof/mpt.ts          — Merkle Patricia Trie verifier
-  verify/index.ts       — Verification orchestration + trust decisions
-  package/creator.ts    — Evidence package creation + export contract
-  trust/sources.ts      — Trust classification logic
-  consensus/index.ts    — Consensus proof fetching (beacon + execution)
+  types.ts              : Zod schemas (trust boundary definitions)
+  safe/hash.ts          : EIP-712 safeTxHash computation
+  safe/signatures.ts    : ECDSA signature recovery
+  proof/verify-policy.ts : MPT proof verification
+  proof/mpt.ts          : Merkle Patricia Trie verifier
+  verify/index.ts       : Verification orchestration + trust decisions
+  package/creator.ts    : Evidence package creation + export contract
+  trust/sources.ts      : Trust classification logic
+  consensus/index.ts    : Consensus proof fetching (beacon + execution)
 
 apps/desktop/src-tauri/src/
-  consensus.rs          — BLS verification + non-beacon envelope checks
+  consensus.rs          : BLS verification + non-beacon envelope checks
 ```

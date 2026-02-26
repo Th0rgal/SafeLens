@@ -14,8 +14,8 @@ bun install
 |------|-------------|
 | `packages/core` | Shared crypto verification library (TypeScript) |
 | `packages/cli` | CLI wrapper over core logic |
-| `apps/generator` | Next.js web app — creates evidence packages |
-| `apps/desktop` | Tauri + Vite desktop app — airgapped verification |
+| `apps/generator` | Next.js web app, creates evidence packages |
+| `apps/desktop` | Tauri + Vite desktop app, airgapped verification |
 
 ## Running Locally
 
@@ -54,6 +54,6 @@ SafeLens is a security tool. Changes to these areas require extra scrutiny:
 
 ## Architecture
 
-- [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md) — full trust model
-- [`AUDIT.md`](AUDIT.md) — security architecture and attack surface
-- [`docs/`](docs/) — architecture contracts and runbooks
+- [`TRUST_ASSUMPTIONS.md`](TRUST_ASSUMPTIONS.md), full trust model
+- [`AUDIT.md`](AUDIT.md), security architecture and attack surface
+- [`docs/`](docs/), architecture contracts and runbooks
