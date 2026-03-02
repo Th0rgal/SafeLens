@@ -4,11 +4,11 @@ Single entrypoint for reviewers who need fast, reproducible validation.
 
 ## Required docs
 
-- `AUDIT.md`
-- `TRUST_ASSUMPTIONS.md`
-- `DEPENDENCIES.md`
-- `VERIFY.md`
-- `RELEASE_INTEGRITY.md`
+- [`AUDIT.md`](../../AUDIT.md)
+- [`TRUST_ASSUMPTIONS.md`](../../TRUST_ASSUMPTIONS.md)
+- [`DEPENDENCIES.md`](../../DEPENDENCIES.md)
+- [`VERIFY.md`](../../VERIFY.md)
+- [`RELEASE_INTEGRITY.md`](../../RELEASE_INTEGRITY.md)
 
 ## Quick verification commands
 

@@ -117,6 +117,20 @@ These dependencies are not in the verification trust boundary. They handle rende
 | `typescript` | Type checking. |
 | `@types/node` | Node.js type definitions. |
 
+## Version Pinning Strategy
+
+SafeLens uses **lockfiles as the source of truth** for exact dependency versions. CI enforces `bun install --frozen-lockfile` and `cargo --locked`, so every build resolves the same dependency tree regardless of the version ranges declared in `package.json` or `Cargo.toml`.
+
+The version ranges in the tables above express **compatibility constraints**, not installed versions:
+
+- **Security-critical TypeScript deps** (`viem`, `zod`) use `^` (minor-compatible) ranges. The lockfile pins the exact installed version; the range defines the upper bound for `bun update`.
+- **Security-critical Rust deps** use caret-compatible version ranges (e.g., `revm = "34"`, `alloy = "1.0.3"`) or git rev pins (`helios-consensus-core` at rev `582fda3`). `Cargo.lock` is committed and enforced in CI, so the actual resolved versions are fixed regardless of the range width.
+- **UI/tooling deps** use `^` ranges. These are outside the trust boundary and receive normal semver updates.
+
+**Why not pin exact versions in manifests?** Exact pins in `package.json` / `Cargo.toml` are redundant with lockfiles and prevent receiving patch-level security fixes on routine updates. The lockfile already guarantees reproducibility; the manifest range controls the upgrade ceiling.
+
+**Auditor action:** To verify the exact dependency versions used in any build, inspect `bun.lock` and `apps/desktop/src-tauri/Cargo.lock` directly, or run `bash scripts/audit/deps.sh` to generate a human-readable snapshot.
+
 ## Helios Pinning Rationale
 
 ```toml

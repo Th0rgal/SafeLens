@@ -25,6 +25,7 @@ To reproduce a release build locally and compare against the published artifact:
 
 ### Prerequisites
 
+- [Bash](https://www.gnu.org/software/bash/) 3.2+ (ships with macOS; Linux distros typically include 4.x+)
 - [Bun](https://bun.sh) v1.3.9+
 - [Rust](https://rustup.rs/) 1.93.1 (match the exact toolchain used in CI)
 - Platform-specific dependencies:
