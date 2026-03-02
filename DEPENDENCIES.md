@@ -124,7 +124,7 @@ SafeLens uses **lockfiles as the source of truth** for exact dependency versions
 The version ranges in the tables above express **compatibility constraints**, not installed versions:
 
 - **Security-critical TypeScript deps** (`viem`, `zod`) use `^` (minor-compatible) ranges. The lockfile pins the exact installed version; the range defines the upper bound for `bun update`.
-- **Security-critical Rust deps** use exact versions or git rev pins (e.g., `helios-consensus-core` at rev `582fda3`). `Cargo.lock` is committed and enforced in CI.
+- **Security-critical Rust deps** use caret-compatible version ranges (e.g., `revm = "34"`, `alloy = "1.0.3"`) or git rev pins (`helios-consensus-core` at rev `582fda3`). `Cargo.lock` is committed and enforced in CI, so the actual resolved versions are fixed regardless of the range width.
 - **UI/tooling deps** use `^` ranges. These are outside the trust boundary and receive normal semver updates.
 
 **Why not pin exact versions in manifests?** Exact pins in `package.json` / `Cargo.toml` are redundant with lockfiles and prevent receiving patch-level security fixes on routine updates. The lockfile already guarantees reproducibility; the manifest range controls the upgrade ceiling.
