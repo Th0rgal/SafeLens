@@ -12,7 +12,7 @@ serde_json = "1"
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
-window-vibrancy = "0.6"
+window-vibrancy = "0.7"
 
 # Helios consensus verification (Phase 4)
 # Pinned to rev 582fda3 (2026-02-18) because it includes a16z/helios#776
@@ -21,13 +21,13 @@ window-vibrancy = "0.6"
 # pin once Helios publishes a release that includes this commit.
 # See DEPENDENCIES.md for full rationale.
 helios-consensus-core = { git = "https://github.com/a16z/helios", rev = "582fda319ed1ecb5fb82c71f4fa755a32e01031a", package = "helios-consensus-core" }
-alloy = { version = "1.0.3", default-features = false, features = ["consensus", "ssz"] }
+alloy = { version = "1.8.3", default-features = false, features = ["consensus", "ssz"] }
 tree_hash = "0.12.1"
 eyre = "0.6.8"
 hex = "0.4"
 typenum = "1"
 time = { version = "0.3", features = ["parsing"] }
-revm = { version = "34", default-features = false, features = ["std"] }
+revm = { version = "36", default-features = false, features = ["std"] }
 
 [patch.crates-io]
 # Fork by ncitron (top Helios contributor) removes the `ring` C dependency and
